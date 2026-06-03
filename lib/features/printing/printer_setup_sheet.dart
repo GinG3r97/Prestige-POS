@@ -52,11 +52,18 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       _scanning = true;
       _status = null;
     });
-    final on = await BtPrinter.isEnabled();
-    final devices = on ? await BtPrinter.scan() : <BtDevice>[];
+    // The BLE adapter often reports "off" right at launch before it's ready —
+    // retry a few times before believing it.
+    var on = await BtPrinter.isEnabled();
+    for (var i = 0; i < 3 && !on; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      on = await BtPrinter.isEnabled();
+    }
+    // Scan regardless — if we find devices, Bluetooth is clearly on.
+    final devices = await BtPrinter.scan();
     if (!mounted) return;
     setState(() {
-      _btOn = on;
+      _btOn = on || devices.isNotEmpty;
       _devices = devices;
       _scanning = false;
     });

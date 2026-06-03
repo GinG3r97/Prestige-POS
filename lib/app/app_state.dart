@@ -16,6 +16,7 @@ import '../models/employee.dart' hide Member;
 import '../models/inventory.dart';
 import '../models/member.dart';
 import '../models/mock_data.dart';
+import '../features/printing/bt_printer.dart';
 import '../models/order.dart' as o;
 import '../models/printer_config.dart';
 import '../models/payroll.dart';
@@ -1806,9 +1807,32 @@ class AppState extends ChangeNotifier {
       _printer = (rows as List).isNotEmpty
           ? PrinterConfig.fromRow(rows.first as Map<String, dynamic>)
           : null;
+      // Warm up the saved Bluetooth printer in the background so the first
+      // print after launch connects instantly — no manual reconnect needed.
+      _warmUpPrinter();
     } catch (e) {
       if (kDebugMode) debugPrint('Load printer failed: $e');
     }
+  }
+
+  /// Best-effort background reconnect to the saved BLE printer. Retries a few
+  /// times because the Bluetooth adapter is often not ready right at launch.
+  void _warmUpPrinter() {
+    final p = _printer;
+    if (p == null ||
+        p.transport != PrinterTransport.bluetooth ||
+        (p.bluetoothId ?? '').isEmpty) {
+      return;
+    }
+    unawaited(() async {
+      for (var attempt = 0; attempt < 5; attempt++) {
+        if (await BtPrinter.isConnected) return;
+        if (await BtPrinter.isEnabled()) {
+          if (await BtPrinter.connect(p.bluetoothId!)) return;
+        }
+        await Future.delayed(Duration(milliseconds: 800 + attempt * 600));
+      }
+    }());
   }
 
   /// Saves the chosen Bluetooth printer as the store's single default printer
