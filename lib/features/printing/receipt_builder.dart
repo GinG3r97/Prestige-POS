@@ -54,7 +54,7 @@ class ReceiptBuilder {
     }
 
     // ─── Header ───
-    bytes.addAll(g.text(tenant.businessName,
+    bytes.addAll(g.text(_san(tenant.businessName),
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
@@ -62,7 +62,7 @@ class ReceiptBuilder {
           width: PosTextSize.size2,
         )));
     if (tenant.address.trim().isNotEmpty) {
-      bytes.addAll(g.text(tenant.address.trim(),
+      bytes.addAll(g.text(_san(tenant.address.trim()),
           styles: const PosStyles(align: PosAlign.center)));
     }
     // Custom header lines (e.g. TIN, tagline) — one printed line each, using
@@ -72,7 +72,7 @@ class ReceiptBuilder {
     final header = tenant.receiptHeader?.trim() ?? '';
     if (header.isNotEmpty) {
       for (final line in header.split('\n')) {
-        bytes.addAll(g.text(line, styles: PosStyles(align: headerAlign)));
+        bytes.addAll(g.text(_san(line), styles: PosStyles(align: headerAlign)));
       }
     }
     bytes.addAll(g.feed(1));
@@ -91,11 +91,11 @@ class ReceiptBuilder {
           styles: const PosStyles(align: PosAlign.right)),
     ]));
     if ((order.cashierName ?? '').trim().isNotEmpty) {
-      bytes.addAll(g.text('Cashier: ${order.cashierName}',
+      bytes.addAll(g.text(_san('Cashier: ${order.cashierName}'),
           styles: const PosStyles(align: PosAlign.left)));
     }
     if ((order.customerName ?? '').trim().isNotEmpty) {
-      bytes.addAll(g.text('Customer: ${order.customerName}',
+      bytes.addAll(g.text(_san('Customer: ${order.customerName}'),
           styles: const PosStyles(align: PosAlign.left)));
     }
     bytes.addAll(g.hr());
@@ -105,7 +105,7 @@ class ReceiptBuilder {
       // Name + qty x unit  ────────  line total
       bytes.addAll(g.row([
         PosColumn(
-          text: '${line.quantity}× ${line.name}',
+          text: _san('${line.quantity}× ${line.name}'),
           width: 8,
           styles: const PosStyles(bold: true),
         ),
@@ -126,7 +126,7 @@ class ReceiptBuilder {
         final opts = mods['options'];
         if (opts is Map) {
           for (final entry in opts.entries) {
-            bytes.addAll(g.text('  · ${entry.key}: ${entry.value}'));
+            bytes.addAll(g.text(_san('  · ${entry.key}: ${entry.value}')));
           }
         }
         final addOns = mods['add_ons'];
@@ -135,7 +135,7 @@ class ReceiptBuilder {
             if (a is Map) {
               final name = a['name'];
               final qty = a['quantity'];
-              bytes.addAll(g.text('  + $qty× $name'));
+              bytes.addAll(g.text(_san('  + $qty× $name')));
             }
           }
         }
@@ -177,7 +177,7 @@ class ReceiptBuilder {
         }
       }
       if ((p.reference ?? '').isNotEmpty) {
-        bytes.addAll(g.text('  Ref: ${p.reference}'));
+        bytes.addAll(g.text(_san('  Ref: ${p.reference}')));
       }
     }
     bytes.addAll(g.feed(1));
@@ -189,10 +189,10 @@ class ReceiptBuilder {
     if (footer != null && footer.isNotEmpty) {
       for (final line in footer.split('\n')) {
         bytes.addAll(
-            g.text(line, styles: PosStyles(align: headerAlign, bold: true)));
+            g.text(_san(line), styles: PosStyles(align: headerAlign, bold: true)));
       }
     } else {
-      bytes.addAll(g.text('Thank you — please come again!',
+      bytes.addAll(g.text('Thank you - please come again!',
           styles: const PosStyles(align: PosAlign.center, bold: true)));
     }
     bytes.addAll(g.feed(2));
@@ -231,7 +231,7 @@ class ReceiptBuilder {
     bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
         styles: const PosStyles(align: PosAlign.center)));
     if ((order.customerName ?? '').trim().isNotEmpty) {
-      bytes.addAll(g.text('For: ${order.customerName}',
+      bytes.addAll(g.text(_san('For: ${order.customerName}'),
           styles: const PosStyles(
             align: PosAlign.center,
             bold: true,
@@ -253,7 +253,7 @@ class ReceiptBuilder {
         final opts = mods['options'];
         if (opts is Map) {
           for (final entry in opts.entries) {
-            bytes.addAll(g.text('  · ${entry.key}: ${entry.value}',
+            bytes.addAll(g.text(_san('  · ${entry.key}: ${entry.value}'),
                 styles: const PosStyles(bold: true)));
           }
         }
@@ -261,7 +261,7 @@ class ReceiptBuilder {
         if (addOns is List) {
           for (final a in addOns) {
             if (a is Map) {
-              bytes.addAll(g.text('  + ${a['quantity']}× ${a['name']}',
+              bytes.addAll(g.text(_san('  + ${a['quantity']}× ${a['name']}'),
                   styles: const PosStyles(bold: true)));
             }
           }
@@ -274,7 +274,7 @@ class ReceiptBuilder {
       bytes.addAll(g.hr());
       bytes.addAll(g.text('Notes:',
           styles: const PosStyles(bold: true)));
-      bytes.addAll(g.text(order.notes!.trim()));
+      bytes.addAll(g.text(_san(order.notes!.trim())));
     }
 
     bytes.addAll(g.feed(2));
@@ -293,7 +293,7 @@ class ReceiptBuilder {
     final g = Generator(size, profile);
     final bytes = <int>[];
     bytes.addAll(g.reset());
-    bytes.addAll(g.text(tenant.businessName,
+    bytes.addAll(g.text(_san(tenant.businessName),
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
@@ -311,7 +311,7 @@ class ReceiptBuilder {
     bytes.addAll(g.hr());
     bytes.addAll(g.text('ABCDEFGHIJKLMNOPQRSTUVWXYZ',
         styles: const PosStyles(align: PosAlign.center)));
-    bytes.addAll(g.text('0123456789  \$ ₱ % &',
+    bytes.addAll(g.text('0123456789  P \$ % &',
         styles: const PosStyles(align: PosAlign.center)));
     bytes.addAll(g.feed(3));
     bytes.addAll(g.cut());
@@ -379,13 +379,13 @@ class ReceiptBuilder {
     bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
         styles: const PosStyles(align: PosAlign.center)));
     if ((order.customerName ?? '').trim().isNotEmpty) {
-      bytes.addAll(g.text('For: ${order.customerName}',
+      bytes.addAll(g.text(_san('For: ${order.customerName}'),
           styles: const PosStyles(align: PosAlign.center, bold: true)));
     }
     bytes.addAll(g.hr(ch: '='));
 
     for (final line in lines) {
-      bytes.addAll(g.text('${line.quantity}× ${line.name}',
+      bytes.addAll(g.text(_san('${line.quantity}× ${line.name}'),
           styles: const PosStyles(
             bold: true,
             height: PosTextSize.size2,
@@ -396,7 +396,7 @@ class ReceiptBuilder {
         final opts = mods['options'];
         if (opts is Map) {
           for (final entry in opts.entries) {
-            bytes.addAll(g.text('  · ${entry.key}: ${entry.value}',
+            bytes.addAll(g.text(_san('  · ${entry.key}: ${entry.value}'),
                 styles: const PosStyles(bold: true)));
           }
         }
@@ -404,7 +404,7 @@ class ReceiptBuilder {
         if (addOns is List) {
           for (final a in addOns) {
             if (a is Map) {
-              bytes.addAll(g.text('  + ${a['quantity']}× ${a['name']}',
+              bytes.addAll(g.text(_san('  + ${a['quantity']}× ${a['name']}'),
                   styles: const PosStyles(bold: true)));
             }
           }
@@ -416,7 +416,7 @@ class ReceiptBuilder {
     if ((order.notes ?? '').trim().isNotEmpty) {
       bytes.addAll(g.hr());
       bytes.addAll(g.text('Notes:', styles: const PosStyles(bold: true)));
-      bytes.addAll(g.text(order.notes!.trim()));
+      bytes.addAll(g.text(_san(order.notes!.trim())));
     }
 
     bytes.addAll(g.feed(2));
@@ -467,7 +467,29 @@ class ReceiptBuilder {
 
   static String _peso(int cents) {
     final pesos = cents / 100;
-    return '₱${pesos.toStringAsFixed(2)}';
+    // Thermal printers encode Latin-1 and can't render the ₱ glyph, so we
+    // print "P" for pesos on receipts.
+    return 'P${pesos.toStringAsFixed(2)}';
+  }
+
+  /// Makes text safe for the printer's Latin-1 encoder. Maps the few common
+  /// non-Latin-1 glyphs the POS produces to ASCII, and replaces anything else
+  /// outside Latin-1 with '?' so building a ticket never throws.
+  static String _san(String s) {
+    final mapped = s
+        .replaceAll('₱', 'P')
+        .replaceAll('—', '-')
+        .replaceAll('–', '-')
+        .replaceAll('‘', "'")
+        .replaceAll('’', "'")
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('…', '...');
+    final buf = StringBuffer();
+    for (final r in mapped.runes) {
+      buf.writeCharCode(r <= 0xFF ? r : 0x3F); // '?'
+    }
+    return buf.toString();
   }
 
   static String _fmtDateTime(DateTime dt) {
