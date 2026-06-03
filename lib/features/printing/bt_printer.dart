@@ -82,10 +82,13 @@ class BtPrinter {
 
   static Future<bool> _write(String address, List<int> bytes) async {
     if (!await PrintBluetoothThermal.connectionStatus) {
-      var ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
-      if (!ok) {
-        // First connect after launch can miss — wait briefly and retry once.
-        await Future.delayed(const Duration(milliseconds: 500));
+      // The first connection after launch / payment is often cold — retry a
+      // few times with a growing delay so the auto-receipt doesn't miss.
+      var ok = false;
+      for (var attempt = 0; attempt < 4 && !ok; attempt++) {
+        if (attempt > 0) {
+          await Future.delayed(Duration(milliseconds: 400 + attempt * 300));
+        }
         ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
       }
       if (!ok) return false;

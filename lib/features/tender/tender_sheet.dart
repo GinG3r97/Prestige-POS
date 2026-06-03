@@ -759,7 +759,11 @@ class _TenderSheetState extends State<TenderSheet> {
     final lines = cart.lines.map((line) {
       String? categoryName;
       if (line.kind case CartLineCafe(:final item)) {
-        categoryName = item.category.title;
+        // Real DB category (Coffee / Books / Food …) so barista/kitchen
+        // routing works. Falls back to the legacy enum for in-memory items.
+        categoryName = item.categoryName.isNotEmpty
+            ? item.categoryName
+            : item.category.title;
       }
       return (
         sellableId: null as String?,

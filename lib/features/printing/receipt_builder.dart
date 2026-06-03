@@ -401,8 +401,8 @@ class ReceiptBuilder {
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size3,
-          width: PosTextSize.size3,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
         )));
     if (!minimal) {
       bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
@@ -416,12 +416,9 @@ class ReceiptBuilder {
 
     for (final line in lines) {
       final prefix = detailed ? '[ ] ' : '';
+      // Normal receipt-size text (was double-height — too big / wasteful).
       bytes.addAll(g.text(_san('$prefix${line.quantity}x ${line.name}'),
-          styles: const PosStyles(
-            bold: true,
-            height: PosTextSize.size2,
-            width: PosTextSize.size2,
-          )));
+          styles: const PosStyles(bold: true)));
       final mods = line.modifiers;
       if (mods != null) {
         final opts = mods['options'];
@@ -441,8 +438,9 @@ class ReceiptBuilder {
           }
         }
       }
-      // Minimal packs items tight; Standard/Detailed add a separating line.
-      if (!minimal) bytes.addAll(g.feed(1));
+      // Only Detailed adds a separating line between items; Standard/Minimal
+      // pack tight to save paper.
+      if (detailed) bytes.addAll(g.feed(1));
     }
 
     if (!minimal && (order.notes ?? '').trim().isNotEmpty) {
