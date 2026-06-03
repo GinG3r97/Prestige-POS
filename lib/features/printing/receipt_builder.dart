@@ -195,39 +195,79 @@ class ReceiptBuilder {
     bytes.addAll(g.hr());
 
     // ─── Totals ───
-    bytes.addAll(_kv(g, 'Subtotal', _peso(order.subtotalCents), font: font));
-    if (order.discountCents > 0) {
-      bytes.addAll(_kv(g, 'Discount', '-${_peso(order.discountCents)}', font: font));
-    }
-    if (birReady && tenant.vatRegistered) {
-      // Sales are VAT-inclusive; back out the 12% for the BIR breakdown.
-      // Phase 1 treats all items as VATable (exempt/zero-rated = 0).
-      final net = (order.totalCents / 1.12).round();
-      final vat = order.totalCents - net;
-      bytes.addAll(_kv(g, 'VATable Sales', _peso(net), font: font));
-      bytes.addAll(_kv(g, 'VAT-Exempt Sales', _peso(0), font: font));
-      bytes.addAll(_kv(g, 'Zero-Rated Sales', _peso(0), font: font));
-      bytes.addAll(_kv(g, 'VAT (12%)', _peso(vat), font: font));
-    } else if (!birReady) {
-      bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
-          fadedFirstCol: true, font: font));
+    if (order.isScPwd) {
+      // Senior / PWD: strip VAT (if VAT-registered) then 20% off the net.
+      final sub = order.subtotalCents;
+      final net = tenant.vatRegistered ? (sub / 1.12).round() : sub;
+      final vat = sub - net;
+      final scDisc = net - order.totalCents; // the 20% portion
+      bytes.addAll(_kv(g, 'Total Sales', _peso(sub), font: font));
+      if (tenant.vatRegistered) {
+        bytes.addAll(_kv(g, 'Less: VAT', '-${_peso(vat)}', font: font));
+        bytes.addAll(_kv(g, 'Net of VAT', _peso(net), font: font));
+      }
+      bytes.addAll(_kv(
+          g,
+          order.scPwdType == 'senior'
+              ? 'Less: 20% SC Disc'
+              : 'Less: 20% PWD Disc',
+          '-${_peso(scDisc)}',
+          font: font));
+    } else {
+      bytes.addAll(_kv(g, 'Subtotal', _peso(order.subtotalCents), font: font));
+      if (order.discountCents > 0) {
+        bytes.addAll(
+            _kv(g, 'Discount', '-${_peso(order.discountCents)}', font: font));
+      }
+      if (birReady && tenant.vatRegistered) {
+        // Sales are VAT-inclusive; back out the 12% for the BIR breakdown.
+        // Phase 1 treats all items as VATable (exempt/zero-rated = 0).
+        final net = (order.totalCents / 1.12).round();
+        final vat = order.totalCents - net;
+        bytes.addAll(_kv(g, 'VATable Sales', _peso(net), font: font));
+        bytes.addAll(_kv(g, 'VAT-Exempt Sales', _peso(0), font: font));
+        bytes.addAll(_kv(g, 'Zero-Rated Sales', _peso(0), font: font));
+        bytes.addAll(_kv(g, 'VAT (12%)', _peso(vat), font: font));
+      } else if (!birReady) {
+        bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
+            fadedFirstCol: true, font: font));
+      }
     }
     bytes.addAll(g.hr(ch: '='));
     bytes.addAll(g.row([
       PosColumn(
-          text: 'TOTAL',
+          text: (birReady || order.isScPwd) ? 'AMOUNT DUE' : 'TOTAL',
           width: 6,
           styles: PosStyles(fontType: font, bold: true, height: PosTextSize.size2)),
       PosColumn(
           text: _peso(order.totalCents),
           width: 6,
-          styles: PosStyles(fontType: font, 
+          styles: PosStyles(fontType: font,
             align: PosAlign.right,
             bold: true,
             height: PosTextSize.size2,
           )),
     ]));
     bytes.addAll(g.hr());
+
+    // ─── VAT-exempt disclosure (Senior / PWD) ───
+    if (order.isScPwd) {
+      final sub = order.subtotalCents;
+      final net = tenant.vatRegistered ? (sub / 1.12).round() : sub;
+      bytes.addAll(_kv(g, 'VAT-Exempt Sales', _peso(net), font: font));
+      bytes.addAll(_kv(g, 'VAT Amount', _peso(0), font: font));
+      bytes.addAll(g.text('*** VAT EXEMPT SALE ***',
+          styles:
+              PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+      final who = order.scPwdType == 'senior' ? 'SC' : 'PWD';
+      bytes.addAll(g.text(_san('$who Name: ${order.scPwdName ?? ''}'),
+          styles: PosStyles(fontType: font)));
+      bytes.addAll(g.text(_san('$who ID No: ${order.scPwdId ?? ''}'),
+          styles: PosStyles(fontType: font)));
+      bytes.addAll(g.text('Signature: _____________________',
+          styles: PosStyles(fontType: font)));
+      bytes.addAll(g.hr());
+    }
 
     // ─── Payment(s) ───
     for (final p in order.payments) {

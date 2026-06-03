@@ -174,9 +174,15 @@ class Order {
   final String? customerPhone;
   final String? notes;
   final String? voidReason;
+  /// Senior Citizen / PWD discount disclosure. type is 'senior' | 'pwd' | null.
+  final String? scPwdType;
+  final String? scPwdName;
+  final String? scPwdId;
   final DateTime createdAt;
   final DateTime? paidAt;
   final DateTime? voidedAt;
+
+  bool get isScPwd => (scPwdType ?? '').isNotEmpty;
 
   /// Populated by the fetch-with-relations query. Empty list when the
   /// order is fetched without joining lines/payments.
@@ -201,6 +207,9 @@ class Order {
     this.customerPhone,
     this.notes,
     this.voidReason,
+    this.scPwdType,
+    this.scPwdName,
+    this.scPwdId,
     required this.createdAt,
     this.paidAt,
     this.voidedAt,
@@ -230,6 +239,9 @@ class Order {
         customerPhone: row['customer_phone'] as String?,
         notes: row['notes'] as String?,
         voidReason: row['void_reason'] as String?,
+        scPwdType: row['sc_pwd_type'] as String?,
+        scPwdName: row['sc_pwd_name'] as String?,
+        scPwdId: row['sc_pwd_id'] as String?,
         createdAt: DateTime.parse(row['created_at'] as String),
         paidAt: row['paid_at'] == null
             ? null

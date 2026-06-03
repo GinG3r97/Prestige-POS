@@ -4368,6 +4368,9 @@ class AppState extends ChangeNotifier {
     String? customerPhone,
     String? notes,
     int discountCents = 0,
+    String? scPwdType,
+    String? scPwdName,
+    String? scPwdId,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return (id: null, error: 'No store selected.');
@@ -4443,6 +4446,9 @@ class AppState extends ChangeNotifier {
         'p_employee_id': isOwnerSession ? null : currentStaff?.id,
         'p_employee_name': currentStaff?.name,
         'p_recipe_deductions': recipeDeductionsPayload,
+        'p_sc_pwd_type': scPwdType,
+        'p_sc_pwd_name': scPwdName,
+        'p_sc_pwd_id': scPwdId,
       });
       return (id: id as String?, error: null);
     } on sb.PostgrestException catch (e) {
@@ -4615,6 +4621,7 @@ class AppState extends ChangeNotifier {
               'order_number, status, '
               'subtotal_cents, discount_cents, vat_cents, total_cents, '
               'customer_name, customer_phone, notes, void_reason, '
+              'sc_pwd_type, sc_pwd_name, sc_pwd_id, '
               'created_at, paid_at, voided_at, '
               'order_lines(id, sellable_id, sellable_name, category_name, '
               'emoji, unit_price_cents, quantity, line_total_cents, '

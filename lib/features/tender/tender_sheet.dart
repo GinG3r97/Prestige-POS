@@ -53,10 +53,99 @@ class _TenderSheetState extends State<TenderSheet> {
   String _reference = '';
   final TextEditingController _refController = TextEditingController();
 
+  // Senior Citizen / PWD discount (whole-order). type: 'senior' | 'pwd'.
+  String? _scType;
+  String _scName = '';
+  String _scId = '';
+
   @override
   void dispose() {
     _refController.dispose();
     super.dispose();
+  }
+
+  /// Total discount for an SC/PWD sale vs the VAT-inclusive sticker price:
+  /// strip the 12% VAT (VAT-registered only), then take 20% off the net.
+  int _scDiscountCents(AppState state) {
+    if (_scType == null) return 0;
+    final s = state.cart.total.centavos;
+    final vatReg = state.tenant?.vatRegistered ?? false;
+    final net = vatReg ? (s / 1.12).round() : s;
+    final disc = (net * 0.20).round();
+    return s - (net - disc);
+  }
+
+  /// What the customer actually pays after any SC/PWD discount.
+  Money _amountDue(AppState state) =>
+      Money(state.cart.total.centavos - _scDiscountCents(state));
+
+  Future<void> _applyScPwd(AppState state) async {
+    final result = await showDialog<({String type, String name, String id})>(
+      context: context,
+      builder: (_) => const _ScPwdDialog(),
+    );
+    if (result != null) {
+      setState(() {
+        _scType = result.type;
+        _scName = result.name;
+        _scId = result.id;
+      });
+    }
+  }
+
+  Widget _scPwdControl(AppState state) {
+    if (_scType != null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: YColor.brandTint.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(YRadius.md),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Row(children: [
+          Icon(_scType == 'senior' ? Icons.elderly : Icons.accessible,
+              size: 18, color: YColor.brandDeep),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_scType == 'senior' ? 'Senior Citizen' : 'PWD',
+                    style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                Text('$_scName · ID $_scId',
+                    style: YFont.caption(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() {
+              _scType = null;
+              _scName = '';
+              _scId = '';
+            }),
+            child: const Text('Remove',
+                style: TextStyle(color: YColor.danger)),
+          ),
+        ]),
+      );
+    }
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _applyScPwd(state),
+        icon: const Icon(Icons.badge_outlined, size: 18),
+        label: const Text('Senior / PWD discount'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: YColor.brandDeep,
+          side: const BorderSide(color: YColor.hairline),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(YRadius.md)),
+        ),
+      ),
+    );
   }
   bool completed = false;
   bool _busy = false;
@@ -179,15 +268,25 @@ class _TenderSheetState extends State<TenderSheet> {
                 ),
                 const Divider(),
                 _totalRow('Subtotal', cart.subtotal.formatted),
-                _totalRow('VAT (incl.)', cart.vat.formatted, faded: true),
+                if (_scType == null)
+                  _totalRow('VAT (incl.)', cart.vat.formatted, faded: true)
+                else
+                  _totalRow(
+                      _scType == 'senior'
+                          ? 'Senior disc (20% + VAT-exempt)'
+                          : 'PWD disc (20% + VAT-exempt)',
+                      '-${Money(_scDiscountCents(state)).formatted}'),
                 const SizedBox(height: 6),
                 Row(children: [
-                  Text('Total to pay', style: YFont.titleMD()),
+                  Text(_scType == null ? 'Total to pay' : 'Amount due',
+                      style: YFont.titleMD()),
                   const Spacer(),
-                  Text(cart.total.formatted,
+                  Text(_amountDue(state).formatted,
                       style: YFont.titleMD()
                           .copyWith(color: YColor.brand, fontSize: 22)),
                 ]),
+                const SizedBox(height: 12),
+                _scPwdControl(state),
               ],
             ),
           ),
@@ -338,7 +437,7 @@ class _TenderSheetState extends State<TenderSheet> {
 
   // ── Step 1a: cash amount entry with on-screen numpad ──
   Widget _cashEntry(AppState state, {Key? key}) {
-    final total = state.cart.total;
+    final total = _amountDue(state);
     final entered = double.tryParse(cashReceived) ?? 0;
     final receivedMoney = Money.pesos(entered);
     final isEnough = receivedMoney.centavos >= total.centavos;
@@ -516,7 +615,7 @@ class _TenderSheetState extends State<TenderSheet> {
           const SizedBox(height: 6),
           Center(
             child: Text(
-              state.cart.total.formatted,
+              _amountDue(state).formatted,
               style: YFont.titleLG()
                   .copyWith(fontSize: 36, color: YColor.brand),
             ),
@@ -591,7 +690,7 @@ class _TenderSheetState extends State<TenderSheet> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : Text('Charge ${state.cart.total.formatted}',
+                  : Text('Charge ${_amountDue(state).formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white)),
             ),
@@ -756,7 +855,8 @@ class _TenderSheetState extends State<TenderSheet> {
 
     final cart = state.cart;
     final m = method ?? TenderMethod.cash;
-    final totalCents = cart.total.centavos;
+    final scDiscountCents = _scDiscountCents(state);
+    final totalCents = cart.total.centavos - scDiscountCents; // amount due
 
     // Map the chosen tender into the DB-compatible enum.
     final dbMethod = switch (m) {
@@ -816,6 +916,10 @@ class _TenderSheetState extends State<TenderSheet> {
       lines: lines,
       payments: payments,
       customerName: cart.customer?.name,
+      discountCents: scDiscountCents,
+      scPwdType: _scType,
+      scPwdName: _scType == null ? null : _scName,
+      scPwdId: _scType == null ? null : _scId,
     );
 
     if (!mounted) return;
@@ -942,7 +1046,7 @@ class _TenderSheetState extends State<TenderSheet> {
                 )),
           ],
           const SizedBox(height: 8),
-          Text(state.cart.total.formatted,
+          Text(_amountDue(state).formatted,
               style: YFont.titleLG().copyWith(color: YColor.brand)),
           const SizedBox(height: 24),
           _printActions(state),
@@ -1151,6 +1255,146 @@ class _ErrorBanner extends StatelessWidget {
                 style: YFont.caption().copyWith(color: YColor.danger)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Captures the Senior Citizen / PWD type + name + ID for a discounted sale.
+/// Returns ({type, name, id}) or null if cancelled.
+class _ScPwdDialog extends StatefulWidget {
+  const _ScPwdDialog();
+  @override
+  State<_ScPwdDialog> createState() => _ScPwdDialogState();
+}
+
+class _ScPwdDialogState extends State<_ScPwdDialog> {
+  String _type = 'senior';
+  final _name = TextEditingController();
+  final _id = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _id.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _name.text.trim().isNotEmpty && _id.text.trim().isNotEmpty;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Senior / PWD discount', style: YFont.titleMD()),
+            const SizedBox(height: 4),
+            Text('20% off + VAT exemption. Verify and record the ID.',
+                style: YFont.caption().copyWith(color: YColor.inkMuted)),
+            const SizedBox(height: 16),
+            Row(children: [
+              _typeChip('senior', 'Senior Citizen', Icons.elderly),
+              const SizedBox(width: 10),
+              _typeChip('pwd', 'PWD', Icons.accessible),
+            ]),
+            const SizedBox(height: 16),
+            _field(_name, 'Full name', TextCapitalization.words),
+            const SizedBox(height: 12),
+            _field(_id, 'OSCA / PWD ID number', TextCapitalization.characters),
+            const SizedBox(height: 20),
+            Row(children: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(foregroundColor: YColor.inkMuted),
+                child: const Text('Cancel'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: ready
+                    ? () => Navigator.of(context).pop((
+                          type: _type,
+                          name: _name.text.trim(),
+                          id: _id.text.trim(),
+                        ))
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: YColor.surface3,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+                child: const Text('Apply discount'),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeChip(String value, String label, IconData icon) {
+    final on = _type == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _type = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: on ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: on ? YColor.brand : YColor.hairline),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 18, color: on ? Colors.white : YColor.brandDeep),
+            const SizedBox(width: 8),
+            Text(label,
+                style: YFont.bodyStrong()
+                    .copyWith(color: on ? Colors.white : YColor.ink)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _field(
+      TextEditingController c, String label, TextCapitalization caps) {
+    return TextField(
+      controller: c,
+      textCapitalization: caps,
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: YColor.surface2,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.hairline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.hairline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.brand, width: 1.5),
+        ),
       ),
     );
   }
