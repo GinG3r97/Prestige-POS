@@ -7,6 +7,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/image_util.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import '../printing/printer_setup_sheet.dart';
 import '../shell/nav_controller.dart';
@@ -649,7 +650,12 @@ class _TextFieldDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    return Dialog(
+    // Strip the keyboard inset so the dialog stays full-size when the keyboard
+    // opens — the KeyboardAccessoryField floats the value above the keyboard.
+    return MediaQuery.removeViewInsets(
+      context: context,
+      removeBottom: true,
+      child: Dialog(
       insetPadding:
           const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
       backgroundColor: YColor.surface1,
@@ -680,34 +686,14 @@ class _TextFieldDialog extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextField(
+                    // Floats a blurred preview card above the keyboard (so the
+                    // value stays visible) and the dialog doesn't collapse.
+                    KeyboardAccessoryField(
                       controller: controller,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: hint,
-                        filled: true,
-                        fillColor: YColor.surface2,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 14),
-                        border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md),
-                          borderSide:
-                              const BorderSide(color: YColor.hairline),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md),
-                          borderSide:
-                              const BorderSide(color: YColor.hairline),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md),
-                          borderSide:
-                              const BorderSide(color: YColor.brand),
-                        ),
-                      ),
+                      accessoryLabel: title,
+                      hint: hint,
+                      fillColor: YColor.surface2,
+                      borderColor: YColor.hairline,
                     ),
                   ],
                 ),
@@ -742,6 +728,7 @@ class _TextFieldDialog extends StatelessWidget {
           ),
         ]),
       ),
+    ),
     );
   }
 }
