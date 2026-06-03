@@ -2,6 +2,7 @@ import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
 import '../../models/order.dart' as o;
 import '../../models/printer_config.dart';
+import '../../models/shift.dart';
 import '../../models/tenant.dart';
 import 'bt_printer.dart';
 import 'printer_service.dart';
@@ -48,6 +49,17 @@ class PrintJobs {
       tailLines: tenant.printTailLines,
       font: tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA,
     );
+    return _send(config, bytes);
+  }
+
+  /// Z-Reading end-of-shift report.
+  static Future<bool> zReading({
+    required CashierShift shift,
+    required Tenant tenant,
+    required PrinterConfig config,
+  }) async {
+    final bytes = await ReceiptBuilder.zReading(
+        shift: shift, tenant: tenant, printer: config);
     return _send(config, bytes);
   }
 

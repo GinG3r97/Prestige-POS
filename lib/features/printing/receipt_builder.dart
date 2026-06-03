@@ -5,6 +5,7 @@ import 'package:image/image.dart' as img;
 
 import '../../models/order.dart' as o;
 import '../../models/printer_config.dart';
+import '../../models/shift.dart';
 import '../../models/tenant.dart';
 
 /// Generates ESC/POS byte streams for receipts + kitchen slips.
@@ -330,6 +331,73 @@ class ReceiptBuilder {
         styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.feed(3));
     bytes.addAll(g.cut());
+    return bytes;
+  }
+
+  /// Z-Reading — the end-of-shift cash-up report.
+  static Future<List<int>> zReading({
+    required CashierShift shift,
+    required Tenant tenant,
+    required PrinterConfig printer,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final g = Generator(size, profile);
+    final bytes = <int>[];
+    final font =
+        tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA;
+
+    bytes.addAll(g.reset());
+    bytes.addAll(g.text(_san(tenant.businessName),
+        styles: PosStyles(
+            fontType: font,
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2)));
+    bytes.addAll(g.text('Z-READING',
+        styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+    bytes.addAll(g.hr());
+    bytes.addAll(
+        g.text('Opened:  ${_fmtDateTime(shift.openedAt)}', styles: PosStyles(fontType: font)));
+    if (shift.closedAt != null) {
+      bytes.addAll(g.text('Closed:  ${_fmtDateTime(shift.closedAt!)}',
+          styles: PosStyles(fontType: font)));
+    }
+    if ((shift.openedByName ?? '').isNotEmpty) {
+      bytes.addAll(g.text(_san('Cashier: ${shift.openedByName}'),
+          styles: PosStyles(fontType: font)));
+    }
+    bytes.addAll(g.hr());
+    bytes.addAll(_kv(g, 'Beginning money', _peso(shift.openingFloatCents),
+        font: font));
+    bytes.addAll(
+        _kv(g, 'Cash sales', _peso(shift.cashSalesCents ?? 0), font: font));
+    bytes.addAll(_kv(g, 'Expected cash', _peso(shift.expectedCashCents ?? 0),
+        font: font));
+    bytes.addAll(_kv(g, 'Counted cash', _peso(shift.countedCashCents ?? 0),
+        font: font));
+    final over = shift.overShortCents ?? 0;
+    bytes.addAll(_kv(
+        g,
+        over == 0 ? 'Balanced' : (over > 0 ? 'OVER' : 'SHORT'),
+        _peso(over.abs()),
+        font: font));
+    bytes.addAll(g.hr(ch: '='));
+    bytes.addAll(g.row([
+      PosColumn(
+          text: 'TOTAL SALES',
+          width: 7,
+          styles: PosStyles(fontType: font, bold: true)),
+      PosColumn(
+          text: _peso(shift.totalSalesCents ?? 0),
+          width: 5,
+          styles: PosStyles(
+              fontType: font, align: PosAlign.right, bold: true)),
+    ]));
+    bytes.addAll(_kv(g, 'Orders', '${shift.orderCount ?? 0}', font: font));
+    bytes.addAll(g.hr());
+    bytes.addAll(_endFeed(g, tenant.printTailLines));
     return bytes;
   }
 

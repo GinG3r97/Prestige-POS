@@ -11,6 +11,7 @@ import '../../models/catalog.dart';
 import '../../models/category.dart' as cat;
 import '../cafe/product_detail_sheet.dart';
 import '../widgets/push_toast.dart';
+import 'shift_bar.dart';
 
 /// Unified storefront for the coffee shop. Search + category chips on top,
 /// product grid below. Tapping a drink opens the modifier sheet, tapping a
@@ -70,12 +71,14 @@ class _SellViewState extends State<SellView> {
       color: YColor.surface2,
       child: Column(
         children: [
+          const ShiftBar(),
+          Container(height: 0.5, color: YColor.hairline),
           _header(usedCategories: usedCategories),
           Expanded(
             child: filtered.isEmpty
                 ? _empty()
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 140),
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 140),
                     child: _grid(filtered, state),
                   ),
           ),
@@ -103,7 +106,7 @@ class _SellViewState extends State<SellView> {
   Widget _header({required List<cat.Category> usedCategories}) {
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 14),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,8 +167,8 @@ class _SellViewState extends State<SellView> {
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon,
-                size: 13, color: selected ? Colors.white : YColor.ink),
-            const SizedBox(width: 6),
+                size: 16, color: selected ? Colors.white : YColor.brandDeep),
+            const SizedBox(width: 7),
             Text(label,
                 style: YFont.bodyStrong().copyWith(
                   color: selected ? Colors.white : YColor.ink,

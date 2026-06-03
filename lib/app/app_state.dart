@@ -19,6 +19,7 @@ import '../models/mock_data.dart';
 import '../features/printing/bt_printer.dart';
 import '../models/order.dart' as o;
 import '../models/printer_config.dart';
+import '../models/shift.dart';
 import '../models/payroll.dart';
 import '../models/payroll_rules.dart';
 import '../models/tenant.dart';
@@ -390,6 +391,8 @@ class AppState extends ChangeNotifier {
 
       // Configured receipt printer (single default).
       await _loadPrinter();
+      // Open cashier shift (Z-reading), if any.
+      await _loadShift();
 
       // Bookable resources (rooms, hot desks, event spaces). The actual
       // [Booking] rows are loaded per-day on demand from BookingsView.
@@ -1865,6 +1868,143 @@ class AppState extends ChangeNotifier {
       return null;
     } catch (_) {
       return 'Could not save the printer. Please try again.';
+    }
+  }
+
+  // ───── Cashier shift / Z-reading ──────────────────────────────────────
+  CashierShift? _shift;
+  CashierShift? get currentShift => _shift;
+  bool get hasOpenShift => _shift != null && _shift!.isOpen;
+
+  Future<void> _loadShift() async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return;
+    try {
+      final rows = await supabase
+          .from('cashier_shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'open')
+          .order('opened_at', ascending: false)
+          .limit(1);
+      _shift = (rows as List).isNotEmpty
+          ? CashierShift.fromRow(rows.first as Map<String, dynamic>)
+          : null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Load shift failed: $e');
+    }
+  }
+
+  /// Live sales totals since the current shift opened (by payment method).
+  Future<ShiftTotals> shiftTotals() async {
+    final shift = _shift;
+    final tenantId = _currentTenantDbId;
+    if (shift == null || tenantId == null) return const ShiftTotals();
+    try {
+      final rows = await supabase
+          .from('orders')
+          .select('total_cents, status, '
+              'payments(method, amount_cents, refunded)')
+          .eq('tenant_id', tenantId)
+          .gte('created_at', shift.openedAt.toUtc().toIso8601String());
+      var cash = 0, card = 0, other = 0, total = 0, count = 0;
+      for (final r in rows as List) {
+        final m = r as Map<String, dynamic>;
+        if (m['status'] != 'paid') continue;
+        total += (m['total_cents'] as int?) ?? 0;
+        count++;
+        for (final p in (m['payments'] as List? ?? const [])) {
+          final pm = p as Map<String, dynamic>;
+          if (pm['refunded'] == true) continue;
+          final amt = (pm['amount_cents'] as int?) ?? 0;
+          switch (pm['method']) {
+            case 'cash':
+              cash += amt;
+              break;
+            case 'card':
+              card += amt;
+              break;
+            default:
+              other += amt;
+          }
+        }
+      }
+      return ShiftTotals(
+        cashSalesCents: cash,
+        cardSalesCents: card,
+        otherSalesCents: other,
+        totalSalesCents: total,
+        orderCount: count,
+      );
+    } catch (_) {
+      return const ShiftTotals();
+    }
+  }
+
+  /// Opens a cashier shift with a starting cash float. Returns null on success.
+  Future<String?> openShift(int openingFloatCents) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return 'No store selected.';
+    if (_shift != null) return 'A shift is already open.';
+    try {
+      final inserted = await supabase
+          .from('cashier_shifts')
+          .insert({
+            'tenant_id': tenantId,
+            'status': 'open',
+            'opened_by': supabase.auth.currentUser?.id,
+            'opened_by_name': currentStaff?.name ??
+                currentOwner?.displayName ??
+                'Cashier',
+            'opening_float_cents': openingFloatCents,
+          })
+          .select()
+          .single();
+      _shift = CashierShift.fromRow(inserted);
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      if (e.code == '23505') return 'A shift is already open.';
+      return 'Could not open the shift. Please try again.';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  /// Closes the current shift, reconciling counted cash against expected.
+  /// Returns the closed shift (with the Z-reading numbers) or null on failure.
+  Future<CashierShift?> closeShift(int countedCashCents) async {
+    final shift = _shift;
+    if (shift == null) return null;
+    final totals = await shiftTotals();
+    final expected = shift.openingFloatCents + totals.cashSalesCents;
+    final overShort = countedCashCents - expected;
+    try {
+      final updated = await supabase
+          .from('cashier_shifts')
+          .update({
+            'status': 'closed',
+            'closed_by': supabase.auth.currentUser?.id,
+            'closed_by_name': currentStaff?.name ??
+                currentOwner?.displayName ??
+                'Cashier',
+            'closed_at': DateTime.now().toUtc().toIso8601String(),
+            'counted_cash_cents': countedCashCents,
+            'expected_cash_cents': expected,
+            'over_short_cents': overShort,
+            'cash_sales_cents': totals.cashSalesCents,
+            'total_sales_cents': totals.totalSalesCents,
+            'order_count': totals.orderCount,
+          })
+          .eq('id', shift.id)
+          .select()
+          .single();
+      final closed = CashierShift.fromRow(updated);
+      _shift = null;
+      notifyListeners();
+      return closed;
+    } catch (_) {
+      return null;
     }
   }
 
