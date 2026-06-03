@@ -73,12 +73,13 @@ class ReceiptBuilder {
       bytes.addAll(g.text(_san(tenant.address.trim()),
           styles: PosStyles(fontType: font, align: PosAlign.center)));
     }
-    // Custom header lines (e.g. TIN, tagline) — one printed line each, using
-    // the owner's chosen alignment. Hidden on Compact.
+    // Custom header lines (e.g. TIN, tagline) — always printed (it's managed
+    // separately in Settings → Receipt header & footer); templates only
+    // control the built-in logo/address/layout, not your custom text.
     final headerAlign =
         tenant.receiptAlign == 'left' ? PosAlign.left : PosAlign.center;
     final header = tenant.receiptHeader?.trim() ?? '';
-    if (header.isNotEmpty && !compact) {
+    if (header.isNotEmpty) {
       for (final line in header.split('\n')) {
         bytes.addAll(g.text(_san(line), styles: PosStyles(fontType: font, align: headerAlign)));
       }

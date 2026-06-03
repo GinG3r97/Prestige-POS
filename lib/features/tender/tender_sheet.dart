@@ -53,6 +53,12 @@ class _TenderSheetState extends State<TenderSheet> {
   o.Order? _completedOrder;
   bool _printBusy = false;
   String? _printStatus;
+  // What's been printed for this order — gates "New Order" so nothing is
+  // missed. _skipPrinting is the escape hatch when the printer is down.
+  bool _receiptPrinted = false;
+  bool _baristaPrinted = false;
+  bool _kitchenPrinted = false;
+  bool _skipPrinting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -925,21 +931,39 @@ class _TenderSheetState extends State<TenderSheet> {
               style: YFont.titleLG().copyWith(color: YColor.brand)),
           const SizedBox(height: 24),
           _printActions(state),
-          ElevatedButton(
-            onPressed: () {
-              state.cart.clear();
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: YColor.brand,
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
-            child: const Text('New Order'),
-          ),
+          Builder(builder: (_) {
+            final pending = _printsPending(state);
+            return Column(children: [
+              ElevatedButton(
+                onPressed: pending
+                    ? null
+                    : () {
+                        state.cart.clear();
+                        Navigator.of(context).pop();
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: YColor.surface3,
+                  disabledForegroundColor: YColor.inkMuted,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+                child: Text(pending ? 'Print to continue' : 'New Order'),
+              ),
+              if (pending) ...[
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => setState(() => _skipPrinting = true),
+                  child: Text('Printer down? Finish without printing',
+                      style: YFont.caption()
+                          .copyWith(color: YColor.inkMuted)),
+                ),
+              ],
+            ]);
+          }),
         ],
       ),
     );
@@ -979,30 +1003,52 @@ class _TenderSheetState extends State<TenderSheet> {
         alignment: WrapAlignment.center,
         children: [
           if (tenant != null)
-            _prepBtn('Reprint receipt', Icons.receipt_long_outlined,
+            _prepBtn(
+                _receiptPrinted ? 'Receipt printed' : 'Print receipt',
+                Icons.receipt_long_outlined,
                 () => _doPrint(
                       () => PrintJobs.receipt(
                           order: order, tenant: tenant, config: printer),
                       what: 'Receipt',
-                    )),
+                    ),
+                done: _receiptPrinted),
           if (drinks && tenant != null)
-            _prepBtn('Barista ticket', Icons.local_cafe_outlined,
+            _prepBtn(
+                _baristaPrinted ? 'Barista printed' : 'Print barista',
+                Icons.local_cafe_outlined,
                 () => _doPrint(
                       () => PrintJobs.barista(
                           order: order, tenant: tenant, config: printer),
                       what: 'Barista ticket',
-                    )),
+                    ),
+                done: _baristaPrinted),
           if (food && tenant != null)
-            _prepBtn('Kitchen ticket', Icons.restaurant_outlined,
+            _prepBtn(
+                _kitchenPrinted ? 'Kitchen printed' : 'Print kitchen',
+                Icons.restaurant_outlined,
                 () => _doPrint(
                       () => PrintJobs.kitchen(
                           order: order, tenant: tenant, config: printer),
                       what: 'Kitchen ticket',
-                    )),
+                    ),
+                done: _kitchenPrinted),
         ],
       ),
       const SizedBox(height: 16),
     ]);
+  }
+
+  /// True when a printer is set and something still needs printing (and the
+  /// cashier hasn't chosen to skip). Drives the "New Order" gate.
+  bool _printsPending(AppState state) {
+    final order = _completedOrder;
+    final printer = state.printerConfig;
+    if (order == null || printer == null || _skipPrinting) return false;
+    final needBarista = ReceiptBuilder.hasDrinks(order);
+    final needKitchen = ReceiptBuilder.hasFood(order);
+    return !_receiptPrinted ||
+        (needBarista && !_baristaPrinted) ||
+        (needKitchen && !_kitchenPrinted);
   }
 
   /// Runs a print job with a UI lock — ignores taps while one is in flight
@@ -1020,6 +1066,11 @@ class _TenderSheetState extends State<TenderSheet> {
     setState(() {
       _printBusy = false;
       _printStatus = null;
+      if (ok) {
+        if (what == 'Receipt') _receiptPrinted = true;
+        if (what == 'Barista ticket') _baristaPrinted = true;
+        if (what == 'Kitchen ticket') _kitchenPrinted = true;
+      }
     });
     PushToast.show(context,
         title: ok ? '$what printed' : '$what didn\'t print',
@@ -1028,14 +1079,17 @@ class _TenderSheetState extends State<TenderSheet> {
             ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
   }
 
-  Widget _prepBtn(String label, IconData icon, VoidCallback onTap) {
+  Widget _prepBtn(String label, IconData icon, VoidCallback onTap,
+      {bool done = false}) {
+    final tone = done ? YColor.success : YColor.brandDeep;
     return OutlinedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
+      icon: Icon(done ? Icons.check_circle : icon, size: 16, color: tone),
+      label: Text(label, style: TextStyle(color: tone)),
       style: OutlinedButton.styleFrom(
-        foregroundColor: YColor.brandDeep,
-        side: const BorderSide(color: YColor.hairline),
+        foregroundColor: tone,
+        backgroundColor: done ? YColor.successSoft : null,
+        side: BorderSide(color: done ? YColor.success : YColor.hairline),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
