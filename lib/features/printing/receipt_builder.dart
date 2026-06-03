@@ -546,9 +546,16 @@ class ReceiptBuilder {
   }
 
   static String _fmtDateTime(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
+    final d = dt.toLocal(); // DB times are UTC — show in the store's timezone
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final ampm = d.hour >= 12 ? 'PM' : 'AM';
+    final mm = d.minute.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '${months[d.month - 1]} $dd, ${d.year}  $h12:$mm $ampm';
   }
 
   static String _paymentLabel(o.OrderPaymentMethod m) => switch (m) {

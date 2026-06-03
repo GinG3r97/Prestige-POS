@@ -29,6 +29,7 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
   bool _btOn = true;
   bool _scanning = false;
   bool _working = false;
+  bool _connected = false;
   List<BtDevice> _devices = const [];
   String? _selectedAddress;
   String _selectedName = '';
@@ -59,14 +60,30 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       await Future.delayed(const Duration(milliseconds: 500));
       on = await BtPrinter.isEnabled();
     }
+    final connected = await BtPrinter.isConnected;
     // Scan regardless — if we find devices, Bluetooth is clearly on.
     final devices = await BtPrinter.scan();
     if (!mounted) return;
     setState(() {
-      _btOn = on || devices.isNotEmpty;
+      _connected = connected;
+      _btOn = on || devices.isNotEmpty || connected;
       _devices = devices;
       _scanning = false;
     });
+  }
+
+  /// Scanned devices, with the saved printer always included at the top — BLE
+  /// hides already-connected devices from new scans, so without this your
+  /// working printer would vanish from the list.
+  List<BtDevice> _displayDevices() {
+    final saved = context.read<AppState>().printerConfig;
+    final list = <BtDevice>[];
+    final savedAddr = saved?.bluetoothId ?? '';
+    if (savedAddr.isNotEmpty && !_devices.any((d) => d.address == savedAddr)) {
+      list.add(BtDevice(saved!.name, savedAddr));
+    }
+    list.addAll(_devices);
+    return list;
   }
 
   Future<void> _testPrint() async {
@@ -186,19 +203,23 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!_btOn)
+            if (_connected && _selectedAddress != null)
+              _banner(
+                  'Connected to ${_selectedName.isEmpty ? 'your printer' : _selectedName} ✓',
+                  YColor.success)
+            else if (!_btOn)
               _banner('Bluetooth is off — turn it on, then tap rescan.',
                   YColor.danger),
-            Text('NEARBY PRINTERS', style: YFont.caption()),
+            Text('PRINTERS', style: YFont.caption()),
             const SizedBox(height: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 220),
-              child: _devices.isEmpty
+              child: _displayDevices().isEmpty
                   ? _empty()
                   : SingleChildScrollView(
                       child: Column(
                         children: [
-                          for (final d in _devices) _deviceTile(d),
+                          for (final d in _displayDevices()) _deviceTile(d),
                         ],
                       ),
                     ),

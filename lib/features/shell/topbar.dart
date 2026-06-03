@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
+import '../printing/bt_printer.dart';
+import '../printing/printer_setup_sheet.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
@@ -82,6 +86,8 @@ class TopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: YSpacing.sm),
+          const _PrinterStatusChip(),
+          const SizedBox(width: YSpacing.sm),
           // Lock button — tapping signs the current staff out so the next
           // user has to re-enter their PIN. Replaces the old "Online"
           // status pill (which was a passive indicator with no action).
@@ -135,6 +141,84 @@ class TopBar extends StatelessWidget {
       AppRoute.settings,
     };
     return inMore.contains(r);
+  }
+}
+
+/// Top-bar chip showing the receipt printer status — green when connected,
+/// amber when a printer is saved but disconnected, grey when none. Tapping it
+/// opens the same printer setup as Settings → Receipt printer.
+class _PrinterStatusChip extends StatefulWidget {
+  const _PrinterStatusChip();
+
+  @override
+  State<_PrinterStatusChip> createState() => _PrinterStatusChipState();
+}
+
+class _PrinterStatusChipState extends State<_PrinterStatusChip> {
+  Timer? _timer;
+  bool _connected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _check());
+  }
+
+  Future<void> _check() async {
+    final c = await BtPrinter.isConnected;
+    if (mounted && c != _connected) setState(() => _connected = c);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final printer = state.printerConfig;
+    final Color dot;
+    final String label;
+    if (printer == null) {
+      dot = YColor.inkMuted;
+      label = 'No printer';
+    } else if (_connected) {
+      dot = YColor.success;
+      label = printer.name;
+    } else {
+      dot = Colors.orange;
+      label = 'Reconnect';
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => showPrinterSetup(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: YColor.surface3,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.print_outlined, size: 14, color: YColor.brandDeep),
+          const SizedBox(width: 6),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(label,
+              style: YFont.bodyStrong().copyWith(
+                  fontSize: 12, color: YColor.ink),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    );
   }
 }
 
