@@ -156,7 +156,8 @@ class AppState extends ChangeNotifier {
           .from('tenants')
           .select('id, business_name, address, currency, timezone, logo_url, '
               'receipt_header, receipt_footer, receipt_align, '
-              'receipt_template, ticket_template, print_tail_lines, print_font')
+              'receipt_template, ticket_template, print_tail_lines, print_font, '
+              'inventory_tracking_enabled')
           .eq('owner_id', user.id)
           .order('created_at', ascending: true);
 
@@ -190,6 +191,8 @@ class AppState extends ChangeNotifier {
           ticketTemplate: (t['ticket_template'] as int?) ?? 1,
           printTailLines: (t['print_tail_lines'] as int?) ?? 2,
           printFont: (t['print_font'] as String?) ?? 'a',
+          inventoryTrackingEnabled:
+              (t['inventory_tracking_enabled'] as bool?) ?? true,
           branches: branchRows
               .map((b) => Branch(
                     id: b['id'] as String,
@@ -1207,6 +1210,63 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       if (kDebugMode) debugPrint('updateStoreInfo failed: $e');
       return 'Could not save. Please try again.';
+    }
+  }
+
+  /// Flips the store-wide inventory tracking master switch. When off, no
+  /// product deducts stock or is blocked by it. Optimistic with rollback.
+  Future<String?> setInventoryTrackingEnabled(bool value) async {
+    final tenantId = _currentTenantDbId;
+    final t = tenant;
+    if (t == null || tenantId == null) return 'No store selected.';
+    final prev = t.inventoryTrackingEnabled;
+    t.inventoryTrackingEnabled = value;
+    notifyListeners();
+    try {
+      final res = await supabase
+          .from('tenants')
+          .update({'inventory_tracking_enabled': value})
+          .eq('id', tenantId)
+          .select('id');
+      if ((res as List).isEmpty) {
+        t.inventoryTrackingEnabled = prev;
+        notifyListeners();
+        return 'Could not save — please sign out and back in, then retry.';
+      }
+      return null;
+    } catch (_) {
+      t.inventoryTrackingEnabled = prev;
+      notifyListeners();
+      return 'Could not save. Please try again.';
+    }
+  }
+
+  /// Toggles inventory tracking for a single product. Optimistic with
+  /// rollback so the switch feels instant.
+  Future<String?> setProductTrackInventory(
+      CafeItem product, bool value) async {
+    final prev = product.trackInventory;
+    product.trackInventory = value;
+    notifyListeners();
+    try {
+      final res = await supabase
+          .from('products')
+          .update({
+            'track_inventory': value,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', product.id)
+          .select('id');
+      if ((res as List).isEmpty) {
+        product.trackInventory = prev;
+        notifyListeners();
+        return 'Could not save. Please try again.';
+      }
+      return null;
+    } catch (_) {
+      product.trackInventory = prev;
+      notifyListeners();
+      return 'Could not reach the server. Please try again.';
     }
   }
 
@@ -2358,9 +2418,25 @@ class AppState extends ChangeNotifier {
   /// full cart aggregation. Products with no recipe (Services) always
   /// return true; products whose type is flagged `deducts_stock = false`
   /// also bypass.
-  bool canFulfillOne(CafeItem product) {
+  /// Store-wide master switch (mirrors the tenant flag). When false, NO
+  /// product deducts stock or is blocked by it — the store sells freely.
+  bool get inventoryTrackingEnabled =>
+      tenant?.inventoryTrackingEnabled ?? true;
+
+  /// Whether [product] should draw down / be limited by inventory. True only
+  /// when the store master switch is on, the product's own toggle is on, and
+  /// its type is stock-bearing (Service opts out). This single gate replaces
+  /// the scattered `type.deductsStock` checks.
+  bool tracksStock(CafeItem product) {
+    if (!inventoryTrackingEnabled) return false;
+    if (!product.trackInventory) return false;
     final type = productTypeById(product.typeId);
-    if (type != null && !type.deductsStock) return true;
+    if (type != null && !type.deductsStock) return false;
+    return true;
+  }
+
+  bool canFulfillOne(CafeItem product) {
+    if (!tracksStock(product)) return true;
     if (product.recipe.isEmpty) return true;
     for (final line in product.recipe) {
       final inv = _inventory
@@ -2384,8 +2460,7 @@ class AppState extends ChangeNotifier {
   /// has no recipe. An ingredient that's been deleted (orphan ref) caps the
   /// count at 0 — the dish can't be assembled from a missing ingredient.
   int buildableCount(CafeItem product) {
-    final type = productTypeById(product.typeId);
-    if (type != null && !type.deductsStock) return kUnlimitedBuild;
+    if (!tracksStock(product)) return kUnlimitedBuild;
     if (product.recipe.isEmpty) return kUnlimitedBuild;
     var maxBuild = kUnlimitedBuild;
     for (final line in product.recipe) {
@@ -2415,8 +2490,7 @@ class AppState extends ChangeNotifier {
       if (kind is! CartLineCafe) continue;
       final product = productById(kind.item.id);
       if (product == null) continue;
-      final type = productTypeById(product.typeId);
-      if (type != null && !type.deductsStock) continue;
+      if (!tracksStock(product)) continue;
       final expanded = expandRecipe(
         product,
         kind.selections,
@@ -2463,9 +2537,9 @@ class AppState extends ChangeNotifier {
       if (kind is! CartLineCafe) continue;
       final product = productById(kind.item.id);
       if (product == null) continue;
-      final type = productTypeById(product.typeId);
-      // Skip stock deduction for types flagged as non-stock (e.g. Service).
-      if (type != null && !type.deductsStock) continue;
+      // Skip stock deduction when this product isn't tracked (master switch
+      // off, per-product toggle off, or a non-stock type like Service).
+      if (!tracksStock(product)) continue;
       final expanded = expandRecipe(
         product,
         kind.selections,
@@ -4239,9 +4313,9 @@ class AppState extends ChangeNotifier {
         if (kind is! CartLineCafe) continue;
         final product = productById(kind.item.id);
         if (product == null) continue;
-        final type = productTypeById(product.typeId);
-        // Skip types flagged as non-stock (e.g. Service).
-        if (type != null && !type.deductsStock) continue;
+        // Skip untracked products (master switch off, per-product toggle off,
+        // or a non-stock type) so the server RPC isn't told to deduct them.
+        if (!tracksStock(product)) continue;
         final expanded = expandRecipe(
           product,
           kind.selections,
@@ -4370,8 +4444,7 @@ class AppState extends ChangeNotifier {
     if (kind is! CartLineCafe) return const [];
     final product = productById(kind.item.id);
     if (product == null) return const [];
-    final type = productTypeById(product.typeId);
-    if (type != null && !type.deductsStock) return const [];
+    if (!tracksStock(product)) return const [];
     final expanded = expandRecipe(
       product,
       kind.selections,

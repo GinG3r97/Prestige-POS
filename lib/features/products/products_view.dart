@@ -45,8 +45,13 @@ class _ProductsViewState extends State<ProductsView> {
 
     return Container(
       color: YColor.surface2,
-      child: Row(
+      child: Column(
         children: [
+          _globalTrackingBanner(context, state),
+          Container(height: 0.5, color: YColor.hairline),
+          Expanded(
+            child: Row(
+              children: [
           // List pane
           SizedBox(
             width: panelWidth(context, fraction: 0.30, min: 300, max: 360),
@@ -255,12 +260,70 @@ class _ProductsViewState extends State<ProductsView> {
                             leadingIcon: Icons.error_outline);
                       }
                     },
+                    onToggleTracking: () async {
+                      final err = await state.setProductTrackInventory(
+                          selected, !selected.trackInventory);
+                      if (!mounted) return;
+                      if (err != null) {
+                        PushToast.show(context,
+                            title: 'Could not update',
+                            subtitle: err,
+                            leadingIcon: Icons.error_outline);
+                      }
+                    },
                     onRemove: () =>
                         _confirmRemove(context, state, selected),
                   ),
           ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _globalTrackingBanner(BuildContext context, AppState state) {
+    final on = state.inventoryTrackingEnabled;
+    return Container(
+      color: YColor.surface1,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Row(children: [
+        Icon(on ? Icons.inventory_2 : Icons.inventory_2_outlined,
+            size: 18, color: YColor.brandDeep),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Track inventory for this store',
+                  style: YFont.bodyStrong()),
+              const SizedBox(height: 2),
+              Text(
+                on
+                    ? 'On — tracked products deduct ingredients and stop selling when out of stock.'
+                    : 'Off — every product sells freely; ingredients are not deducted.',
+                style: YFont.caption(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Switch(
+          value: on,
+          onChanged: (v) async {
+            final err = await state.setInventoryTrackingEnabled(v);
+            if (!context.mounted) return;
+            if (err != null) {
+              PushToast.show(context,
+                  title: 'Could not update',
+                  subtitle: err,
+                  leadingIcon: Icons.error_outline);
+            }
+          },
+          activeThumbColor: YColor.brand,
+        ),
+      ]),
     );
   }
 
@@ -425,6 +488,7 @@ class _ProductDetailPane extends StatelessWidget {
     required this.inventory,
     required this.onEdit,
     required this.onToggleAvailability,
+    required this.onToggleTracking,
     required this.onRemove,
   });
 
@@ -432,6 +496,7 @@ class _ProductDetailPane extends StatelessWidget {
   final List<InventoryItem> inventory;
   final VoidCallback onEdit;
   final VoidCallback onToggleAvailability;
+  final VoidCallback onToggleTracking;
   final VoidCallback onRemove;
 
   InventoryItem? _findItem(String id) =>
@@ -533,6 +598,56 @@ class _ProductDetailPane extends StatelessWidget {
                   ),
                 ]),
               ),
+
+              const SizedBox(height: 18),
+
+              // Inventory tracking
+              Builder(builder: (context) {
+                final globalOn =
+                    context.watch<AppState>().inventoryTrackingEnabled;
+                final on = product.trackInventory;
+                return _Card(
+                  title: 'INVENTORY',
+                  icon: Icons.inventory_2_outlined,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Track ingredients',
+                                  style: YFont.bodyStrong()),
+                              const SizedBox(height: 2),
+                              Text(
+                                on
+                                    ? 'Deducts the recipe from stock and stops the sale when an ingredient runs out.'
+                                    : 'Sells freely — the recipe is not deducted from stock.',
+                                style: YFont.caption(),
+                              ),
+                              if (on && !globalOn) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Store inventory tracking is OFF, so nothing is deducted right now.',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.brandDeep),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Switch(
+                          value: on,
+                          onChanged: (_) => onToggleTracking(),
+                          activeThumbColor: YColor.brand,
+                        ),
+                      ]),
+                    ),
+                  ],
+                );
+              }),
 
               const SizedBox(height: 18),
 

@@ -31,6 +31,10 @@ class Tenant {
   int printTailLines;
   /// Built-in printer font: 'a' = normal, 'b' = small/condensed.
   String printFont;
+  /// Store-wide master switch for inventory tracking. When false, NO product
+  /// deducts stock or blocks selling (per-product [CafeItem.trackInventory] is
+  /// ignored). Lets a store sell freely until they're ready to use inventory.
+  bool inventoryTrackingEnabled;
   List<Branch> branches;
 
   List<CustomCategory> customCategories;
@@ -49,6 +53,7 @@ class Tenant {
     this.ticketTemplate = 1,
     this.printTailLines = 2,
     this.printFont = 'a',
+    this.inventoryTrackingEnabled = true,
     List<Branch>? branches,
     List<CustomCategory>? customCategories,
   })  : id = id ?? _uuid.v4(),

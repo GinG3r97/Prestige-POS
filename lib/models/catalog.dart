@@ -116,6 +116,11 @@ class CafeItem {
   bool available;
   int sortOrder;
 
+  /// When false, this product sells freely — its recipe is NOT deducted from
+  /// inventory and it never shows "out of stock". Gated further by the
+  /// store-wide [AppState.inventoryTrackingEnabled] master switch.
+  bool trackInventory;
+
   CafeItem({
     String? id,
     required this.name,
@@ -137,6 +142,7 @@ class CafeItem {
     List<ModifierAdjustment>? modifierAdjustments,
     this.available = true,
     this.sortOrder = 0,
+    this.trackInventory = true,
   })  : id = id ?? _uuid.v4(),
         modifierGroupIds = modifierGroupIds ?? <String>[],
         recipe = recipe ?? <RecipeLine>[],
@@ -230,6 +236,7 @@ class CafeItem {
       modifierAdjustments: adjustments,
       available: (row['available'] as bool?) ?? true,
       sortOrder: (row['sort_order'] as int?) ?? 0,
+      trackInventory: (row['track_inventory'] as bool?) ?? true,
     );
   }
 }
@@ -308,6 +315,7 @@ Map<String, dynamic> productRowPayload(CafeItem p, String tenantId) => {
       'tag': _tagToDb(p.tag),
       'available': p.available,
       'sort_order': p.sortOrder,
+      'track_inventory': p.trackInventory,
       'modifier_group_ids': p.modifierGroupIds,
       'recipe': [
         for (final l in p.recipe)
