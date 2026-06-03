@@ -1,3 +1,5 @@
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+
 import '../../models/order.dart' as o;
 import '../../models/printer_config.dart';
 import '../../models/tenant.dart';
@@ -44,6 +46,7 @@ class PrintJobs {
       printer: config,
       template: tenant.ticketTemplate,
       tailLines: tenant.printTailLines,
+      font: tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA,
     );
     return _send(config, bytes);
   }
@@ -59,6 +62,7 @@ class PrintJobs {
       printer: config,
       template: tenant.ticketTemplate,
       tailLines: tenant.printTailLines,
+      font: tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA,
     );
     return _send(config, bytes);
   }

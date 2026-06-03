@@ -41,6 +41,8 @@ class ReceiptBuilder {
     final tmpl = tenant.receiptTemplate;
     final compact = tmpl == 2;
     final official = tmpl == 3;
+    final font =
+        tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA;
 
     // ─── Logo (optional, hidden on Compact) ───
     if (logoBytes != null && !compact) {
@@ -61,7 +63,7 @@ class ReceiptBuilder {
 
     // ─── Header ───
     bytes.addAll(g.text(_san(tenant.businessName),
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size2,
@@ -69,7 +71,7 @@ class ReceiptBuilder {
         )));
     if (tenant.address.trim().isNotEmpty && !compact) {
       bytes.addAll(g.text(_san(tenant.address.trim()),
-          styles: const PosStyles(align: PosAlign.center)));
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
     }
     // Custom header lines (e.g. TIN, tagline) — one printed line each, using
     // the owner's chosen alignment. Hidden on Compact.
@@ -78,12 +80,12 @@ class ReceiptBuilder {
     final header = tenant.receiptHeader?.trim() ?? '';
     if (header.isNotEmpty && !compact) {
       for (final line in header.split('\n')) {
-        bytes.addAll(g.text(_san(line), styles: PosStyles(align: headerAlign)));
+        bytes.addAll(g.text(_san(line), styles: PosStyles(fontType: font, align: headerAlign)));
       }
     }
     if (official) {
       bytes.addAll(g.text('OFFICIAL RECEIPT',
-          styles: const PosStyles(align: PosAlign.center, bold: true)));
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     }
     if (!compact) bytes.addAll(g.feed(1));
     bytes.addAll(g.hr());
@@ -94,19 +96,19 @@ class ReceiptBuilder {
       PosColumn(
           text: 'Order #${order.orderNumber.toString().padLeft(4, '0')}',
           width: 6,
-          styles: const PosStyles(bold: true)),
+          styles: PosStyles(fontType: font, bold: true)),
       PosColumn(
           text: ts,
           width: 6,
-          styles: const PosStyles(align: PosAlign.right)),
+          styles: PosStyles(fontType: font, align: PosAlign.right)),
     ]));
     if ((order.cashierName ?? '').trim().isNotEmpty) {
       bytes.addAll(g.text(_san('Cashier: ${order.cashierName}'),
-          styles: const PosStyles(align: PosAlign.left)));
+          styles: PosStyles(fontType: font, align: PosAlign.left)));
     }
     if ((order.customerName ?? '').trim().isNotEmpty) {
       bytes.addAll(g.text(_san('Customer: ${order.customerName}'),
-          styles: const PosStyles(align: PosAlign.left)));
+          styles: PosStyles(fontType: font, align: PosAlign.left)));
     }
     bytes.addAll(g.hr());
 
@@ -117,18 +119,18 @@ class ReceiptBuilder {
         PosColumn(
           text: _san('${line.quantity}× ${line.name}'),
           width: 8,
-          styles: const PosStyles(bold: true),
+          styles: PosStyles(fontType: font, bold: true),
         ),
         PosColumn(
           text: _peso(line.lineTotalCents),
           width: 4,
-          styles: const PosStyles(align: PosAlign.right, bold: true),
+          styles: PosStyles(fontType: font, align: PosAlign.right, bold: true),
         ),
       ]));
       // Unit price subline (only when qty > 1; skipped on Compact).
       if (line.quantity > 1 && !compact) {
         bytes.addAll(g.text('  @ ${_peso(line.unitPriceCents)}',
-            styles: const PosStyles(align: PosAlign.left)));
+            styles: PosStyles(fontType: font, align: PosAlign.left)));
       }
       // Modifier / add-on details from the snapshot jsonb.
       final mods = line.modifiers;
@@ -154,22 +156,22 @@ class ReceiptBuilder {
     bytes.addAll(g.hr());
 
     // ─── Totals ───
-    bytes.addAll(_kv(g, 'Subtotal', _peso(order.subtotalCents)));
+    bytes.addAll(_kv(g, 'Subtotal', _peso(order.subtotalCents), font: font));
     if (order.discountCents > 0) {
-      bytes.addAll(_kv(g, 'Discount', '-${_peso(order.discountCents)}'));
+      bytes.addAll(_kv(g, 'Discount', '-${_peso(order.discountCents)}', font: font));
     }
     bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
-        fadedFirstCol: true));
+        fadedFirstCol: true, font: font));
     bytes.addAll(g.hr(ch: '='));
     bytes.addAll(g.row([
       PosColumn(
           text: 'TOTAL',
           width: 6,
-          styles: const PosStyles(bold: true, height: PosTextSize.size2)),
+          styles: PosStyles(fontType: font, bold: true, height: PosTextSize.size2)),
       PosColumn(
           text: _peso(order.totalCents),
           width: 6,
-          styles: const PosStyles(
+          styles: PosStyles(fontType: font, 
             align: PosAlign.right,
             bold: true,
             height: PosTextSize.size2,
@@ -179,11 +181,11 @@ class ReceiptBuilder {
 
     // ─── Payment(s) ───
     for (final p in order.payments) {
-      bytes.addAll(_kv(g, _paymentLabel(p.method), _peso(p.amountCents)));
+      bytes.addAll(_kv(g, _paymentLabel(p.method), _peso(p.amountCents), font: font));
       if (p.tenderedCents != null && p.method == o.OrderPaymentMethod.cash) {
-        bytes.addAll(_kv(g, '  Tendered', _peso(p.tenderedCents!)));
+        bytes.addAll(_kv(g, '  Tendered', _peso(p.tenderedCents!), font: font));
         if (p.changeCents != null) {
-          bytes.addAll(_kv(g, '  Change', _peso(p.changeCents!)));
+          bytes.addAll(_kv(g, '  Change', _peso(p.changeCents!), font: font));
         }
       }
       if ((p.reference ?? '').isNotEmpty) {
@@ -199,15 +201,15 @@ class ReceiptBuilder {
     if (footer != null && footer.isNotEmpty) {
       for (final line in footer.split('\n')) {
         bytes.addAll(
-            g.text(_san(line), styles: PosStyles(align: headerAlign, bold: true)));
+            g.text(_san(line), styles: PosStyles(fontType: font, align: headerAlign, bold: true)));
       }
     } else {
       bytes.addAll(g.text('Thank you - please come again!',
-          styles: const PosStyles(align: PosAlign.center, bold: true)));
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     }
     if (official) {
       bytes.addAll(g.text('This serves as your Official Receipt.',
-          styles: const PosStyles(align: PosAlign.center)));
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
     }
     bytes.addAll(_endFeed(g, tenant.printTailLines));
     return bytes;
@@ -226,26 +228,27 @@ class ReceiptBuilder {
         : PaperSize.mm58;
     final g = Generator(size, profile);
     final bytes = <int>[];
+    const font = PosFontType.fontA;
 
     bytes.addAll(g.reset());
 
     bytes.addAll(g.text('ORDER',
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           align: PosAlign.center,
           bold: true,
         )));
     bytes.addAll(g.text('#${order.orderNumber.toString().padLeft(4, '0')}',
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size3,
           width: PosTextSize.size3,
         )));
     bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
-        styles: const PosStyles(align: PosAlign.center)));
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
     if ((order.customerName ?? '').trim().isNotEmpty) {
       bytes.addAll(g.text(_san('For: ${order.customerName}'),
-          styles: const PosStyles(
+          styles: PosStyles(fontType: font, 
             align: PosAlign.center,
             bold: true,
           )));
@@ -255,7 +258,7 @@ class ReceiptBuilder {
     for (final line in order.lines) {
       bytes.addAll(g.text(
         '${line.quantity}× ${line.name}',
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           bold: true,
           height: PosTextSize.size2,
           width: PosTextSize.size2,
@@ -267,7 +270,7 @@ class ReceiptBuilder {
         if (opts is Map) {
           for (final entry in opts.entries) {
             bytes.addAll(g.text(_san('  · ${entry.key}: ${entry.value}'),
-                styles: const PosStyles(bold: true)));
+                styles: PosStyles(fontType: font, bold: true)));
           }
         }
         final addOns = mods['add_ons'];
@@ -275,7 +278,7 @@ class ReceiptBuilder {
           for (final a in addOns) {
             if (a is Map) {
               bytes.addAll(g.text(_san('  + ${a['quantity']}× ${a['name']}'),
-                  styles: const PosStyles(bold: true)));
+                  styles: PosStyles(fontType: font, bold: true)));
             }
           }
         }
@@ -286,7 +289,7 @@ class ReceiptBuilder {
     if ((order.notes ?? '').trim().isNotEmpty) {
       bytes.addAll(g.hr());
       bytes.addAll(g.text('Notes:',
-          styles: const PosStyles(bold: true)));
+          styles: PosStyles(fontType: font, bold: true)));
       bytes.addAll(g.text(_san(order.notes!.trim())));
     }
 
@@ -305,9 +308,11 @@ class ReceiptBuilder {
     final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final g = Generator(size, profile);
     final bytes = <int>[];
+    final font =
+        tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA;
     bytes.addAll(g.reset());
     bytes.addAll(g.text(_san(tenant.businessName),
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size2,
@@ -315,17 +320,17 @@ class ReceiptBuilder {
         )));
     bytes.addAll(g.feed(1));
     bytes.addAll(g.text('Printer connected!',
-        styles: const PosStyles(align: PosAlign.center, bold: true)));
+        styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     bytes.addAll(g.text('Prestige POS test print',
-        styles: const PosStyles(align: PosAlign.center)));
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.text('${printer.paperWidth}mm paper',
-        styles: const PosStyles(align: PosAlign.center)));
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.feed(1));
     bytes.addAll(g.hr());
     bytes.addAll(g.text('ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-        styles: const PosStyles(align: PosAlign.center)));
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.text('0123456789  P \$ % &',
-        styles: const PosStyles(align: PosAlign.center)));
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.feed(3));
     bytes.addAll(g.cut());
     return bytes;
@@ -337,6 +342,7 @@ class ReceiptBuilder {
     required PrinterConfig printer,
     int template = 1,
     int tailLines = 2,
+    PosFontType font = PosFontType.fontA,
   }) =>
       _prepTicket(
         order: order,
@@ -345,6 +351,7 @@ class ReceiptBuilder {
         lines: order.lines.where((l) => _isDrink(l.categoryName)).toList(),
         template: template,
         tailLines: tailLines,
+        font: font,
       );
 
   /// Kitchen ticket — food only (excludes drinks + retail/service), no prices.
@@ -353,6 +360,7 @@ class ReceiptBuilder {
     required PrinterConfig printer,
     int template = 1,
     int tailLines = 2,
+    PosFontType font = PosFontType.fontA,
   }) =>
       _prepTicket(
         order: order,
@@ -364,6 +372,7 @@ class ReceiptBuilder {
             .toList(),
         template: template,
         tailLines: tailLines,
+        font: font,
       );
 
   /// True if [order] has any drink line (so a Barista ticket is worth offering).
@@ -383,6 +392,7 @@ class ReceiptBuilder {
     required List<o.OrderLine> lines,
     int template = 1,
     int tailLines = 2,
+    PosFontType font = PosFontType.fontA,
   }) async {
     final profile = await CapabilityProfile.load();
     final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
@@ -396,9 +406,9 @@ class ReceiptBuilder {
 
     bytes.addAll(g.reset());
     bytes.addAll(g.text(title,
-        styles: const PosStyles(align: PosAlign.center, bold: true)));
+        styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     bytes.addAll(g.text('#${order.orderNumber.toString().padLeft(4, '0')}',
-        styles: const PosStyles(
+        styles: PosStyles(fontType: font, 
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size2,
@@ -406,10 +416,10 @@ class ReceiptBuilder {
         )));
     if (!minimal) {
       bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
-          styles: const PosStyles(align: PosAlign.center)));
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
       if ((order.customerName ?? '').trim().isNotEmpty) {
         bytes.addAll(g.text(_san('For: ${order.customerName}'),
-            styles: const PosStyles(align: PosAlign.center, bold: true)));
+            styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
       }
     }
     bytes.addAll(g.hr(ch: '='));
@@ -418,14 +428,14 @@ class ReceiptBuilder {
       final prefix = detailed ? '[ ] ' : '';
       // Normal receipt-size text (was double-height — too big / wasteful).
       bytes.addAll(g.text(_san('$prefix${line.quantity}x ${line.name}'),
-          styles: const PosStyles(bold: true)));
+          styles: PosStyles(fontType: font, bold: true)));
       final mods = line.modifiers;
       if (mods != null) {
         final opts = mods['options'];
         if (opts is Map) {
           for (final entry in opts.entries) {
             bytes.addAll(g.text(_san('  - ${entry.key}: ${entry.value}'),
-                styles: const PosStyles(bold: true)));
+                styles: PosStyles(fontType: font, bold: true)));
           }
         }
         final addOns = mods['add_ons'];
@@ -433,7 +443,7 @@ class ReceiptBuilder {
           for (final a in addOns) {
             if (a is Map) {
               bytes.addAll(g.text(_san('  + ${a['quantity']}x ${a['name']}'),
-                  styles: const PosStyles(bold: true)));
+                  styles: PosStyles(fontType: font, bold: true)));
             }
           }
         }
@@ -445,7 +455,7 @@ class ReceiptBuilder {
 
     if (!minimal && (order.notes ?? '').trim().isNotEmpty) {
       bytes.addAll(g.hr());
-      bytes.addAll(g.text('Notes:', styles: const PosStyles(bold: true)));
+      bytes.addAll(g.text('Notes:', styles: PosStyles(fontType: font, bold: true)));
       bytes.addAll(g.text(_san(order.notes!.trim())));
     }
 
@@ -479,17 +489,17 @@ class ReceiptBuilder {
   // ─── helpers ──────────────────────────────────────────────────────
 
   static List<int> _kv(Generator g, String k, String v,
-      {bool fadedFirstCol = false}) {
+      {bool fadedFirstCol = false, PosFontType font = PosFontType.fontA}) {
     return g.row([
       PosColumn(
         text: k,
         width: 8,
-        styles: PosStyles(bold: !fadedFirstCol),
+        styles: PosStyles(fontType: font, bold: !fadedFirstCol),
       ),
       PosColumn(
         text: v,
         width: 4,
-        styles: const PosStyles(align: PosAlign.right),
+        styles: PosStyles(fontType: font, align: PosAlign.right),
       ),
     ]);
   }

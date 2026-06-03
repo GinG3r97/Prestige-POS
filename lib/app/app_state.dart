@@ -154,7 +154,7 @@ class AppState extends ChangeNotifier {
           .from('tenants')
           .select('id, business_name, address, currency, timezone, logo_url, '
               'receipt_header, receipt_footer, receipt_align, '
-              'receipt_template, ticket_template, print_tail_lines')
+              'receipt_template, ticket_template, print_tail_lines, print_font')
           .eq('owner_id', user.id)
           .order('created_at', ascending: true);
 
@@ -187,6 +187,7 @@ class AppState extends ChangeNotifier {
           receiptTemplate: (t['receipt_template'] as int?) ?? 1,
           ticketTemplate: (t['ticket_template'] as int?) ?? 1,
           printTailLines: (t['print_tail_lines'] as int?) ?? 2,
+          printFont: (t['print_font'] as String?) ?? 'a',
           branches: branchRows
               .map((b) => Branch(
                     id: b['id'] as String,
@@ -1859,21 +1860,25 @@ class AppState extends ChangeNotifier {
     int? receiptTemplate,
     int? ticketTemplate,
     int? tailLines,
+    String? font,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenant == null || tenantId == null) return 'No store selected.';
     final r = (receiptTemplate ?? tenant!.receiptTemplate).clamp(1, 3);
     final k = (ticketTemplate ?? tenant!.ticketTemplate).clamp(1, 3);
     final tail = (tailLines ?? tenant!.printTailLines).clamp(0, 8);
+    final f = (font ?? tenant!.printFont) == 'b' ? 'b' : 'a';
     try {
       await supabase.from('tenants').update({
         'receipt_template': r,
         'ticket_template': k,
         'print_tail_lines': tail,
+        'print_font': f,
       }).eq('id', tenantId);
       tenant!.receiptTemplate = r;
       tenant!.ticketTemplate = k;
       tenant!.printTailLines = tail;
+      tenant!.printFont = f;
       notifyListeners();
       return null;
     } catch (_) {

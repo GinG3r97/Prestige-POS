@@ -1126,6 +1126,7 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
   late int _receipt;
   late int _ticket;
   late int _tail;
+  late String _font;
   bool _busy = false;
 
   static const _receiptNames = {
@@ -1146,12 +1147,16 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
     _receipt = t?.receiptTemplate ?? 1;
     _ticket = t?.ticketTemplate ?? 1;
     _tail = t?.printTailLines ?? 2;
+    _font = t?.printFont ?? 'a';
   }
 
   Future<void> _save() async {
     setState(() => _busy = true);
     final err = await context.read<AppState>().updatePrintTemplates(
-        receiptTemplate: _receipt, ticketTemplate: _ticket, tailLines: _tail);
+        receiptTemplate: _receipt,
+        ticketTemplate: _ticket,
+        tailLines: _tail,
+        font: _font);
     if (!mounted) return;
     Navigator.of(context).pop();
     PushToast.show(context,
@@ -1185,6 +1190,22 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
               for (final e in _ticketNames.entries)
                 _choice(e.key, e.value, _ticket,
                     (v) => setState(() => _ticket = v)),
+              const SizedBox(height: 16),
+              Text('FONT SIZE', style: YFont.caption()),
+              const SizedBox(height: 2),
+              Text('The typeface is fixed by the printer; this picks its '
+                  'built-in Normal or Small size. Small fits more per line.',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: _fontChip('Normal', 'a', Icons.text_fields),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _fontChip('Small (condensed)', 'b', Icons.short_text),
+                ),
+              ]),
               const SizedBox(height: 16),
               Text('PAPER GAP AFTER EACH PRINT', style: YFont.caption()),
               const SizedBox(height: 2),
@@ -1275,6 +1296,36 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
                     color: on ? YColor.brandDeep : YColor.ink)),
           ),
           if (on) const Icon(Icons.check_circle, size: 18, color: YColor.brand),
+        ]),
+      ),
+    );
+  }
+
+  Widget _fontChip(String label, String value, IconData icon) {
+    final on = _font == value;
+    return GestureDetector(
+      onTap: () => setState(() => _font = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: on ? YColor.brandTint : YColor.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: on ? YColor.brand : YColor.hairline,
+              width: on ? 1.4 : 1),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon,
+              size: 16, color: on ? YColor.brandDeep : YColor.inkMuted),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.bodyStrong().copyWith(
+                    fontSize: 13,
+                    color: on ? YColor.brandDeep : YColor.ink)),
+          ),
         ]),
       ),
     );

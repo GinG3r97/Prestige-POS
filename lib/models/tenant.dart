@@ -29,6 +29,8 @@ class Tenant {
   int ticketTemplate;
   /// Blank lines fed after each printed ticket (paper-save / tear-off gap).
   int printTailLines;
+  /// Built-in printer font: 'a' = normal, 'b' = small/condensed.
+  String printFont;
   List<Branch> branches;
 
   List<CustomCategory> customCategories;
@@ -46,6 +48,7 @@ class Tenant {
     this.receiptTemplate = 1,
     this.ticketTemplate = 1,
     this.printTailLines = 2,
+    this.printFont = 'a',
     List<Branch>? branches,
     List<CustomCategory>? customCategories,
   })  : id = id ?? _uuid.v4(),
