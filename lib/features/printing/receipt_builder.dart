@@ -36,8 +36,14 @@ class ReceiptBuilder {
 
     bytes.addAll(g.reset());
 
-    // ─── Logo (optional) ───
-    if (logoBytes != null) {
+    // Layout template: 1 = Standard, 2 = Compact (no logo/address/header,
+    // tighter), 3 = Official (adds an OFFICIAL RECEIPT label + closing line).
+    final tmpl = tenant.receiptTemplate;
+    final compact = tmpl == 2;
+    final official = tmpl == 3;
+
+    // ─── Logo (optional, hidden on Compact) ───
+    if (logoBytes != null && !compact) {
       final decoded = img.decodeImage(logoBytes);
       if (decoded != null) {
         // Printable dot width: 80mm heads are 576 dots, 58mm are 384. Keep
@@ -61,21 +67,25 @@ class ReceiptBuilder {
           height: PosTextSize.size2,
           width: PosTextSize.size2,
         )));
-    if (tenant.address.trim().isNotEmpty) {
+    if (tenant.address.trim().isNotEmpty && !compact) {
       bytes.addAll(g.text(_san(tenant.address.trim()),
           styles: const PosStyles(align: PosAlign.center)));
     }
     // Custom header lines (e.g. TIN, tagline) — one printed line each, using
-    // the owner's chosen alignment.
+    // the owner's chosen alignment. Hidden on Compact.
     final headerAlign =
         tenant.receiptAlign == 'left' ? PosAlign.left : PosAlign.center;
     final header = tenant.receiptHeader?.trim() ?? '';
-    if (header.isNotEmpty) {
+    if (header.isNotEmpty && !compact) {
       for (final line in header.split('\n')) {
         bytes.addAll(g.text(_san(line), styles: PosStyles(align: headerAlign)));
       }
     }
-    bytes.addAll(g.feed(1));
+    if (official) {
+      bytes.addAll(g.text('OFFICIAL RECEIPT',
+          styles: const PosStyles(align: PosAlign.center, bold: true)));
+    }
+    if (!compact) bytes.addAll(g.feed(1));
     bytes.addAll(g.hr());
 
     // ─── Order meta ───
@@ -115,8 +125,8 @@ class ReceiptBuilder {
           styles: const PosStyles(align: PosAlign.right, bold: true),
         ),
       ]));
-      // Unit price subline (only when qty > 1, otherwise redundant).
-      if (line.quantity > 1) {
+      // Unit price subline (only when qty > 1; skipped on Compact).
+      if (line.quantity > 1 && !compact) {
         bytes.addAll(g.text('  @ ${_peso(line.unitPriceCents)}',
             styles: const PosStyles(align: PosAlign.left)));
       }
@@ -195,8 +205,11 @@ class ReceiptBuilder {
       bytes.addAll(g.text('Thank you - please come again!',
           styles: const PosStyles(align: PosAlign.center, bold: true)));
     }
-    bytes.addAll(g.feed(2));
-    bytes.addAll(g.cut());
+    if (official) {
+      bytes.addAll(g.text('This serves as your Official Receipt.',
+          styles: const PosStyles(align: PosAlign.center)));
+    }
+    bytes.addAll(_endFeed(g, tenant.printTailLines));
     return bytes;
   }
 
@@ -322,18 +335,24 @@ class ReceiptBuilder {
   static Future<List<int>> barista({
     required o.Order order,
     required PrinterConfig printer,
+    int template = 1,
+    int tailLines = 2,
   }) =>
       _prepTicket(
         order: order,
         printer: printer,
         title: 'BARISTA',
         lines: order.lines.where((l) => _isDrink(l.categoryName)).toList(),
+        template: template,
+        tailLines: tailLines,
       );
 
   /// Kitchen ticket — food only (excludes drinks + retail/service), no prices.
   static Future<List<int>> kitchenFood({
     required o.Order order,
     required PrinterConfig printer,
+    int template = 1,
+    int tailLines = 2,
   }) =>
       _prepTicket(
         order: order,
@@ -343,6 +362,8 @@ class ReceiptBuilder {
             .where((l) =>
                 !_isDrink(l.categoryName) && !_isRetailOrService(l.categoryName))
             .toList(),
+        template: template,
+        tailLines: tailLines,
       );
 
   /// True if [order] has any drink line (so a Barista ticket is worth offering).
@@ -360,11 +381,18 @@ class ReceiptBuilder {
     required PrinterConfig printer,
     required String title,
     required List<o.OrderLine> lines,
+    int template = 1,
+    int tailLines = 2,
   }) async {
     final profile = await CapabilityProfile.load();
     final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
     final g = Generator(size, profile);
     final bytes = <int>[];
+
+    // 1 = Standard, 2 = Minimal (# + items only, tight), 3 = Detailed (adds a
+    // [ ] checkbox per item the cook can tick off).
+    final minimal = template == 2;
+    final detailed = template == 3;
 
     bytes.addAll(g.reset());
     bytes.addAll(g.text(title,
@@ -376,16 +404,19 @@ class ReceiptBuilder {
           height: PosTextSize.size3,
           width: PosTextSize.size3,
         )));
-    bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
-        styles: const PosStyles(align: PosAlign.center)));
-    if ((order.customerName ?? '').trim().isNotEmpty) {
-      bytes.addAll(g.text(_san('For: ${order.customerName}'),
-          styles: const PosStyles(align: PosAlign.center, bold: true)));
+    if (!minimal) {
+      bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
+          styles: const PosStyles(align: PosAlign.center)));
+      if ((order.customerName ?? '').trim().isNotEmpty) {
+        bytes.addAll(g.text(_san('For: ${order.customerName}'),
+            styles: const PosStyles(align: PosAlign.center, bold: true)));
+      }
     }
     bytes.addAll(g.hr(ch: '='));
 
     for (final line in lines) {
-      bytes.addAll(g.text(_san('${line.quantity}× ${line.name}'),
+      final prefix = detailed ? '[ ] ' : '';
+      bytes.addAll(g.text(_san('$prefix${line.quantity}x ${line.name}'),
           styles: const PosStyles(
             bold: true,
             height: PosTextSize.size2,
@@ -396,7 +427,7 @@ class ReceiptBuilder {
         final opts = mods['options'];
         if (opts is Map) {
           for (final entry in opts.entries) {
-            bytes.addAll(g.text(_san('  · ${entry.key}: ${entry.value}'),
+            bytes.addAll(g.text(_san('  - ${entry.key}: ${entry.value}'),
                 styles: const PosStyles(bold: true)));
           }
         }
@@ -404,23 +435,23 @@ class ReceiptBuilder {
         if (addOns is List) {
           for (final a in addOns) {
             if (a is Map) {
-              bytes.addAll(g.text(_san('  + ${a['quantity']}× ${a['name']}'),
+              bytes.addAll(g.text(_san('  + ${a['quantity']}x ${a['name']}'),
                   styles: const PosStyles(bold: true)));
             }
           }
         }
       }
-      bytes.addAll(g.feed(1));
+      // Minimal packs items tight; Standard/Detailed add a separating line.
+      if (!minimal) bytes.addAll(g.feed(1));
     }
 
-    if ((order.notes ?? '').trim().isNotEmpty) {
+    if (!minimal && (order.notes ?? '').trim().isNotEmpty) {
       bytes.addAll(g.hr());
       bytes.addAll(g.text('Notes:', styles: const PosStyles(bold: true)));
       bytes.addAll(g.text(_san(order.notes!.trim())));
     }
 
-    bytes.addAll(g.feed(2));
-    bytes.addAll(g.cut());
+    bytes.addAll(_endFeed(g, tailLines));
     return bytes;
   }
 
@@ -465,6 +496,17 @@ class ReceiptBuilder {
     ]);
   }
 
+  /// Final paper advance + cut. [lines] is the owner's tail-spacing setting
+  /// (0 = none) — keeps portable printers without an auto-cutter from wasting
+  /// paper between tickets.
+  static List<int> _endFeed(Generator g, int lines) {
+    final out = <int>[];
+    final n = lines.clamp(0, 8);
+    if (n > 0) out.addAll(g.feed(n));
+    out.addAll(g.cut());
+    return out;
+  }
+
   static String _peso(int cents) {
     final pesos = cents / 100;
     // Thermal printers encode Latin-1 and can't render the ₱ glyph, so we
@@ -478,6 +520,8 @@ class ReceiptBuilder {
   static String _san(String s) {
     final mapped = s
         .replaceAll('₱', 'P')
+        .replaceAll('×', 'x') // printer renders × as '#'
+        .replaceAll('·', '-') // printer renders · as 'ⁿ'
         .replaceAll('—', '-')
         .replaceAll('–', '-')
         .replaceAll('‘', "'")

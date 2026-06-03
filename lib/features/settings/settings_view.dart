@@ -221,6 +221,21 @@ class SettingsView extends StatelessWidget {
                     ),
                     const _Divider(),
                     _Row(
+                      leading: const Icon(Icons.dashboard_customize_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Print templates & spacing',
+                      subtitle: tenant != null
+                          ? 'Receipt #${tenant.receiptTemplate} · '
+                              'Ticket #${tenant.ticketTemplate} · '
+                              '${tenant.printTailLines}-line gap'
+                          : 'Choose receipt & ticket layouts, paper spacing',
+                      onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => const _PrintTemplateDialog(),
+                      ),
+                    ),
+                    const _Divider(),
+                    _Row(
                       leading: _logoLeading(tenant?.logoUrl),
                       title: 'Logo',
                       subtitle: (tenant?.logoUrl?.isNotEmpty ?? false)
@@ -1094,6 +1109,192 @@ class _ReceiptTextDialogState extends State<_ReceiptTextDialog> {
               : const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+/// Picks the receipt + ticket layout templates and the paper tail-spacing
+/// (blank lines fed after each print). Saved as small ints on the tenant.
+class _PrintTemplateDialog extends StatefulWidget {
+  const _PrintTemplateDialog();
+
+  @override
+  State<_PrintTemplateDialog> createState() => _PrintTemplateDialogState();
+}
+
+class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
+  late int _receipt;
+  late int _ticket;
+  late int _tail;
+  bool _busy = false;
+
+  static const _receiptNames = {
+    1: 'Standard — logo, address, full totals',
+    2: 'Compact — name + items + total (saves paper)',
+    3: 'Official — adds "Official Receipt" + closing line',
+  };
+  static const _ticketNames = {
+    1: 'Standard — order #, time, items + mods',
+    2: 'Minimal — order # + items only (tight)',
+    3: 'Detailed — adds [ ] checkboxes + notes',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final t = context.read<AppState>().tenant;
+    _receipt = t?.receiptTemplate ?? 1;
+    _ticket = t?.ticketTemplate ?? 1;
+    _tail = t?.printTailLines ?? 2;
+  }
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    final err = await context.read<AppState>().updatePrintTemplates(
+        receiptTemplate: _receipt, ticketTemplate: _ticket, tailLines: _tail);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    PushToast.show(context,
+        title: err == null ? 'Print settings saved' : 'Could not save',
+        subtitle: err,
+        leadingIcon:
+            err == null ? Icons.check_circle_outline : Icons.error_outline);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: YColor.surface1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Print templates & spacing', style: YFont.titleMD()),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('RECEIPT LAYOUT', style: YFont.caption()),
+              const SizedBox(height: 6),
+              for (final e in _receiptNames.entries)
+                _choice(e.key, e.value, _receipt,
+                    (v) => setState(() => _receipt = v)),
+              const SizedBox(height: 16),
+              Text('TICKET LAYOUT (barista / kitchen)', style: YFont.caption()),
+              const SizedBox(height: 6),
+              for (final e in _ticketNames.entries)
+                _choice(e.key, e.value, _ticket,
+                    (v) => setState(() => _ticket = v)),
+              const SizedBox(height: 16),
+              Text('PAPER GAP AFTER EACH PRINT', style: YFont.caption()),
+              const SizedBox(height: 2),
+              Text('Blank lines fed after a ticket so you can tear it off. '
+                  'Lower = less wasted paper.',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              const SizedBox(height: 8),
+              Row(children: [
+                _stepBtn(Icons.remove, () {
+                  if (_tail > 0) setState(() => _tail--);
+                }),
+                Container(
+                  width: 56,
+                  alignment: Alignment.center,
+                  child: Text('$_tail',
+                      style: YFont.titleMD().copyWith(color: YColor.brand)),
+                ),
+                _stepBtn(Icons.add, () {
+                  if (_tail < 8) setState(() => _tail++);
+                }),
+                const SizedBox(width: 10),
+                Text('lines', style: YFont.caption()),
+              ]),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text('Cancel',
+              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+        ),
+        ElevatedButton(
+          onPressed: _busy ? null : _save,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: YColor.brand,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  Widget _choice(int value, String label, int selected, ValueChanged<int> onTap) {
+    final on = selected == value;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: on ? YColor.brandTint : YColor.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: on ? YColor.brand : YColor.hairline,
+              width: on ? 1.4 : 1),
+        ),
+        child: Row(children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? YColor.brand : YColor.surface1,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text('$value',
+                style: YFont.bodyStrong().copyWith(
+                    fontSize: 13,
+                    color: on ? Colors.white : YColor.inkMuted)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: YFont.body().copyWith(
+                    color: on ? YColor.brandDeep : YColor.ink)),
+          ),
+          if (on) const Icon(Icons.check_circle, size: 18, color: YColor.brand),
+        ]),
+      ),
+    );
+  }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: YColor.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Icon(icon, size: 18, color: YColor.brandDeep),
+      ),
     );
   }
 }

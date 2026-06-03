@@ -36,18 +36,30 @@ class PrintJobs {
   /// Barista prep ticket (drinks only, no prices).
   static Future<bool> barista({
     required o.Order order,
+    required Tenant tenant,
     required PrinterConfig config,
   }) async {
-    final bytes = await ReceiptBuilder.barista(order: order, printer: config);
+    final bytes = await ReceiptBuilder.barista(
+      order: order,
+      printer: config,
+      template: tenant.ticketTemplate,
+      tailLines: tenant.printTailLines,
+    );
     return _send(config, bytes);
   }
 
   /// Kitchen prep ticket (food only, no prices).
   static Future<bool> kitchen({
     required o.Order order,
+    required Tenant tenant,
     required PrinterConfig config,
   }) async {
-    final bytes = await ReceiptBuilder.kitchenFood(order: order, printer: config);
+    final bytes = await ReceiptBuilder.kitchenFood(
+      order: order,
+      printer: config,
+      template: tenant.ticketTemplate,
+      tailLines: tenant.printTailLines,
+    );
     return _send(config, bytes);
   }
 }

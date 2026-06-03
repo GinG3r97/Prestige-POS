@@ -153,7 +153,8 @@ class AppState extends ChangeNotifier {
       final tenantRows = await supabase
           .from('tenants')
           .select('id, business_name, address, currency, timezone, logo_url, '
-              'receipt_header, receipt_footer, receipt_align')
+              'receipt_header, receipt_footer, receipt_align, '
+              'receipt_template, ticket_template, print_tail_lines')
           .eq('owner_id', user.id)
           .order('created_at', ascending: true);
 
@@ -183,6 +184,9 @@ class AppState extends ChangeNotifier {
           receiptHeader: t['receipt_header'] as String?,
           receiptFooter: t['receipt_footer'] as String?,
           receiptAlign: (t['receipt_align'] as String?) ?? 'center',
+          receiptTemplate: (t['receipt_template'] as int?) ?? 1,
+          ticketTemplate: (t['ticket_template'] as int?) ?? 1,
+          printTailLines: (t['print_tail_lines'] as int?) ?? 2,
           branches: branchRows
               .map((b) => Branch(
                     id: b['id'] as String,
@@ -1848,6 +1852,33 @@ class AppState extends ChangeNotifier {
     } catch (_) {/* best effort */}
     _printer = null;
     notifyListeners();
+  }
+
+  /// Saves the receipt/ticket layout templates + paper tail spacing.
+  Future<String?> updatePrintTemplates({
+    int? receiptTemplate,
+    int? ticketTemplate,
+    int? tailLines,
+  }) async {
+    final tenantId = _currentTenantDbId;
+    if (tenant == null || tenantId == null) return 'No store selected.';
+    final r = (receiptTemplate ?? tenant!.receiptTemplate).clamp(1, 3);
+    final k = (ticketTemplate ?? tenant!.ticketTemplate).clamp(1, 3);
+    final tail = (tailLines ?? tenant!.printTailLines).clamp(0, 8);
+    try {
+      await supabase.from('tenants').update({
+        'receipt_template': r,
+        'ticket_template': k,
+        'print_tail_lines': tail,
+      }).eq('id', tenantId);
+      tenant!.receiptTemplate = r;
+      tenant!.ticketTemplate = k;
+      tenant!.printTailLines = tail;
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not save. Please try again.';
+    }
   }
 
   /// Saves the custom receipt header / footer text + alignment on the tenant.

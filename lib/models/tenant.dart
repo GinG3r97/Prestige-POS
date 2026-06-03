@@ -23,6 +23,12 @@ class Tenant {
   String? receiptFooter;
   /// Alignment for the custom header/footer text — 'center' or 'left'.
   String receiptAlign;
+  /// Receipt layout template (1 Standard, 2 Compact, 3 Official).
+  int receiptTemplate;
+  /// Prep-ticket layout template (1 Standard, 2 Minimal, 3 Detailed).
+  int ticketTemplate;
+  /// Blank lines fed after each printed ticket (paper-save / tear-off gap).
+  int printTailLines;
   List<Branch> branches;
 
   List<CustomCategory> customCategories;
@@ -37,6 +43,9 @@ class Tenant {
     this.receiptHeader,
     this.receiptFooter,
     this.receiptAlign = 'center',
+    this.receiptTemplate = 1,
+    this.ticketTemplate = 1,
+    this.printTailLines = 2,
     List<Branch>? branches,
     List<CustomCategory>? customCategories,
   })  : id = id ?? _uuid.v4(),

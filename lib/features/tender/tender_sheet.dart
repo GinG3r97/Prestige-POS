@@ -981,16 +981,18 @@ class _TenderSheetState extends State<TenderSheet> {
                           order: order, tenant: tenant, config: printer),
                       what: 'Receipt',
                     )),
-          if (drinks)
+          if (drinks && tenant != null)
             _prepBtn('Barista ticket', Icons.local_cafe_outlined,
                 () => _doPrint(
-                      () => PrintJobs.barista(order: order, config: printer),
+                      () => PrintJobs.barista(
+                          order: order, tenant: tenant, config: printer),
                       what: 'Barista ticket',
                     )),
-          if (food)
+          if (food && tenant != null)
             _prepBtn('Kitchen ticket', Icons.restaurant_outlined,
                 () => _doPrint(
-                      () => PrintJobs.kitchen(order: order, config: printer),
+                      () => PrintJobs.kitchen(
+                          order: order, tenant: tenant, config: printer),
                       what: 'Kitchen ticket',
                     )),
         ],
