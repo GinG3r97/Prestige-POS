@@ -1185,7 +1185,20 @@ class AppState extends ChangeNotifier {
       if (businessName != null) payload['business_name'] = businessName;
       if (address != null) payload['address'] = address;
       if (payload.isNotEmpty) {
-        await supabase.from('tenants').update(payload).eq('id', tenantId);
+        // .select() so a row that DIDN'T update (RLS mismatch / wrong id)
+        // comes back empty instead of silently "succeeding" — otherwise the
+        // change sticks in the UI but never reaches the DB.
+        final res = await supabase
+            .from('tenants')
+            .update(payload)
+            .eq('id', tenantId)
+            .select('id');
+        if ((res as List).isEmpty) {
+          tenant!.businessName = prevName;
+          tenant!.address = prevAddr;
+          notifyListeners();
+          return 'Could not save — please sign out and back in, then retry.';
+        }
       }
       return null;
     } catch (e) {
@@ -1207,6 +1220,45 @@ class AppState extends ChangeNotifier {
     }
     try {
       await supabase.auth.updateUser(sb.UserAttributes(email: e));
+      return null;
+    } on sb.AuthException catch (ex) {
+      return ex.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  /// Renames the owner. Persists to the Supabase auth user metadata
+  /// (`display_name`) — the same field receipts/orders read for the owner —
+  /// and updates local state so the UI reflects it immediately. Returns null
+  /// on success or a user-safe error message.
+  Future<String?> updateOwnerName(String newName) async {
+    final n = newName.trim();
+    if (n.isEmpty) return 'Enter a name.';
+    try {
+      await supabase.auth.updateUser(
+          sb.UserAttributes(data: {'display_name': n}));
+      final o = currentOwner;
+      if (o != null) {
+        currentOwner = OwnerAccount(
+          id: o.id,
+          email: o.email,
+          password: o.password,
+          displayName: n,
+          tenantId: o.tenantId,
+        );
+      }
+      // Keep the synthesized owner-staff name in sync so orders/receipts
+      // rung in this owner session stamp the new name.
+      if (isOwnerSession && currentStaff != null) {
+        currentStaff = Employee(
+          id: currentStaff!.id,
+          name: n,
+          roleId: currentStaff!.roleId,
+          role: currentStaff!.role,
+        );
+      }
+      notifyListeners();
       return null;
     } on sb.AuthException catch (ex) {
       return ex.message;

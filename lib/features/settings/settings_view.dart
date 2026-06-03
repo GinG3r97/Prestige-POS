@@ -77,9 +77,12 @@ class SettingsView extends StatelessWidget {
                 _Card(children: [
                   _Row(
                     leading: const Icon(Icons.person_outline, color: YColor.brandDeep),
-                    title: state.currentOwner?.displayName ?? '',
-                    subtitle: state.currentOwner?.email ?? '',
+                    title: 'Owner name',
+                    subtitle: state.currentOwner?.displayName.isNotEmpty == true
+                        ? state.currentOwner!.displayName
+                        : 'Tap to set your name',
                     trailing: const _Badge(text: 'OWNER'),
+                    onTap: () => _editOwnerName(context, state),
                   ),
                   const _Divider(),
                   _Row(
@@ -412,6 +415,24 @@ class SettingsView extends StatelessWidget {
       final err = await state.updateStoreInfo(address: result.trim());
       if (!context.mounted) return;
       _saveToast(context, err, 'Address updated');
+    }
+  }
+
+  Future<void> _editOwnerName(BuildContext context, AppState state) async {
+    final controller =
+        TextEditingController(text: state.currentOwner?.displayName ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextFieldDialog(
+        title: 'Owner name',
+        controller: controller,
+        hint: 'Your full name',
+      ),
+    );
+    if (result != null && result.trim().isNotEmpty) {
+      final err = await state.updateOwnerName(result.trim());
+      if (!context.mounted) return;
+      _saveToast(context, err, 'Owner name updated');
     }
   }
 
