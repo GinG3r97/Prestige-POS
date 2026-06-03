@@ -952,19 +952,11 @@ String _shortOrderId(String fullId) {
 }
 
 String _fmtDateTime(DateTime d) {
-  final now = DateTime.now();
-  final isToday =
-      d.year == now.year && d.month == now.month && d.day == now.day;
-  final isYesterday = d.year == now.year &&
-      d.month == now.month &&
-      d.day == now.day - 1;
-  final h = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
   final period = d.hour >= 12 ? 'PM' : 'AM';
   final time = '$h:${d.minute.toString().padLeft(2, '0')} $period';
-  if (isToday) return 'Today $time';
-  if (isYesterday) return 'Yesterday $time';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return '${months[d.month - 1]} ${d.day} $time';
+  return '${months[d.month - 1]} ${d.day.toString().padLeft(2, '0')}, ${d.year} · $time';
 }
 
 /// Bridge between Supabase-backed [db.Order] and the existing [MockOrder]
@@ -973,7 +965,9 @@ String _fmtDateTime(DateTime d) {
 MockOrder _adaptToMock(db.Order o) {
   return MockOrder(
     id: o.id,
-    placedAt: o.createdAt,
+    // DB times are UTC — convert to the store's local timezone so "today"
+    // filtering + display don't roll an early-morning order back to yesterday.
+    placedAt: o.createdAt.toLocal(),
     lines: o.lines
         .map((l) => MockOrderLine(
               name: l.name,

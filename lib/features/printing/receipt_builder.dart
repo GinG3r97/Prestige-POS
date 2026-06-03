@@ -92,17 +92,13 @@ class ReceiptBuilder {
     bytes.addAll(g.hr());
 
     // ─── Order meta ───
+    // Order # and date on their own full-width lines — the long date would
+    // wrap (and drop the "M" of AM/PM) if squeezed into a half-width column.
     final ts = _fmtDateTime(order.paidAt ?? order.createdAt);
-    bytes.addAll(g.row([
-      PosColumn(
-          text: 'Order #${order.orderNumber.toString().padLeft(4, '0')}',
-          width: 6,
-          styles: PosStyles(fontType: font, bold: true)),
-      PosColumn(
-          text: ts,
-          width: 6,
-          styles: PosStyles(fontType: font, align: PosAlign.right)),
-    ]));
+    bytes.addAll(g.text(
+        'Order #${order.orderNumber.toString().padLeft(4, '0')}',
+        styles: PosStyles(fontType: font, bold: true)));
+    bytes.addAll(g.text(ts, styles: PosStyles(fontType: font)));
     if ((order.cashierName ?? '').trim().isNotEmpty) {
       bytes.addAll(g.text(_san('Cashier: ${order.cashierName}'),
           styles: PosStyles(fontType: font, align: PosAlign.left)));
