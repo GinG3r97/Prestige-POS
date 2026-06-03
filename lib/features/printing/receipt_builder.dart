@@ -27,6 +27,7 @@ class ReceiptBuilder {
     required PrinterConfig printer,
     String? footerMessage,
     Uint8List? logoBytes,
+    bool reprint = false,
   }) async {
     final profile = await CapabilityProfile.load();
     final size = printer.paperWidth == 80
@@ -44,6 +45,11 @@ class ReceiptBuilder {
     final official = tmpl == 3;
     final font =
         tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA;
+
+    // A store counts as "BIR-configured" once it has entered a TIN. Then we
+    // print the compliant Sales Invoice format (registration header, VAT
+    // breakdown, BIR footer) instead of the plain receipt.
+    final birReady = (tenant.tin ?? '').trim().isNotEmpty;
 
     // ─── Logo (optional, hidden on Compact) ───
     if (logoBytes != null && !compact) {
@@ -74,6 +80,25 @@ class ReceiptBuilder {
       bytes.addAll(g.text(_san(tenant.address.trim()),
           styles: PosStyles(fontType: font, align: PosAlign.center)));
     }
+    // ─── BIR registration header ───
+    if (birReady) {
+      final vatLabel = tenant.vatRegistered ? 'VAT REG TIN' : 'NON-VAT TIN';
+      bytes.addAll(g.text(_san('$vatLabel: ${tenant.tin}'),
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+      final idBits = <String>[];
+      if ((tenant.birMin ?? '').trim().isNotEmpty) {
+        idBits.add('MIN ${tenant.birMin}');
+      }
+      if ((tenant.birSerial ?? '').trim().isNotEmpty) {
+        idBits.add('SN ${tenant.birSerial}');
+      }
+      if (idBits.isNotEmpty) {
+        bytes.addAll(g.text(_san(idBits.join('  ')),
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+      bytes.addAll(g.text(_san('Branch: ${tenant.branchCode}'),
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+    }
     // Custom header lines (e.g. TIN, tagline) — always printed (it's managed
     // separately in Settings → Receipt header & footer); templates only
     // control the built-in logo/address/layout, not your custom text.
@@ -85,8 +110,22 @@ class ReceiptBuilder {
         bytes.addAll(g.text(_san(line), styles: PosStyles(fontType: font, align: headerAlign)));
       }
     }
-    if (official) {
-      bytes.addAll(g.text('OFFICIAL RECEIPT',
+    // Document title — "Sales Invoice" per the EOPT Act (Official Receipt was
+    // renamed to Invoice). Printed when BIR-configured or on the Official tmpl.
+    if (birReady || official) {
+      bytes.addAll(g.text('SALES INVOICE',
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+    }
+    // Status / reprint banners.
+    if (order.status == o.OrderStatus.voided) {
+      bytes.addAll(g.text('*** VOID ***',
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+    } else if (order.status == o.OrderStatus.refunded) {
+      bytes.addAll(g.text('*** REFUNDED ***',
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+    }
+    if (reprint) {
+      bytes.addAll(g.text('*** REPRINT ***',
           styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     }
     if (!compact) bytes.addAll(g.feed(1));
@@ -96,8 +135,10 @@ class ReceiptBuilder {
     // Order # and date on their own full-width lines — the long date would
     // wrap (and drop the "M" of AM/PM) if squeezed into a half-width column.
     final ts = _fmtDateTime(order.paidAt ?? order.createdAt);
-    bytes.addAll(g.text(
-        'Order #${order.orderNumber.toString().padLeft(4, '0')}',
+    final invoiceLine = birReady
+        ? 'Invoice No: ${order.orderNumber.toString().padLeft(7, '0')}'
+        : 'Order #${order.orderNumber.toString().padLeft(4, '0')}';
+    bytes.addAll(g.text(invoiceLine,
         styles: PosStyles(fontType: font, bold: true)));
     bytes.addAll(g.text(ts, styles: PosStyles(fontType: font)));
     if ((order.cashierName ?? '').trim().isNotEmpty) {
@@ -158,8 +199,19 @@ class ReceiptBuilder {
     if (order.discountCents > 0) {
       bytes.addAll(_kv(g, 'Discount', '-${_peso(order.discountCents)}', font: font));
     }
-    bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
-        fadedFirstCol: true, font: font));
+    if (birReady && tenant.vatRegistered) {
+      // Sales are VAT-inclusive; back out the 12% for the BIR breakdown.
+      // Phase 1 treats all items as VATable (exempt/zero-rated = 0).
+      final net = (order.totalCents / 1.12).round();
+      final vat = order.totalCents - net;
+      bytes.addAll(_kv(g, 'VATable Sales', _peso(net), font: font));
+      bytes.addAll(_kv(g, 'VAT-Exempt Sales', _peso(0), font: font));
+      bytes.addAll(_kv(g, 'Zero-Rated Sales', _peso(0), font: font));
+      bytes.addAll(_kv(g, 'VAT (12%)', _peso(vat), font: font));
+    } else if (!birReady) {
+      bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
+          fadedFirstCol: true, font: font));
+    }
     bytes.addAll(g.hr(ch: '='));
     bytes.addAll(g.row([
       PosColumn(
@@ -205,8 +257,39 @@ class ReceiptBuilder {
       bytes.addAll(g.text('Thank you - please come again!',
           styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     }
-    if (official) {
-      bytes.addAll(g.text('This serves as your Official Receipt.',
+    // ─── BIR footer ───
+    if (birReady) {
+      bytes.addAll(g.feed(1));
+      bytes.addAll(g.text('This serves as your Sales Invoice',
+          styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+      if (!tenant.vatRegistered) {
+        bytes.addAll(g.text('THIS DOCUMENT IS NOT VALID',
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+        bytes.addAll(g.text('FOR CLAIM OF INPUT TAX',
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+      bytes.addAll(g.feed(1));
+      bytes.addAll(g.text('Acquired from: Prestige POS',
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+      if ((tenant.birAccreditationNo ?? '').trim().isNotEmpty) {
+        bytes.addAll(g.text(_san('Accred No: ${tenant.birAccreditationNo}'),
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+      if ((tenant.ptuNumber ?? '').trim().isNotEmpty) {
+        bytes.addAll(g.text(_san('PTU No: ${tenant.ptuNumber}'),
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+      if ((tenant.ptuValidUntil ?? '').trim().isNotEmpty) {
+        bytes.addAll(g.text(_san('Valid until: ${tenant.ptuValidUntil}'),
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+      bytes.addAll(g.feed(1));
+      bytes.addAll(g.text('THIS INVOICE SHALL BE VALID FOR',
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+      bytes.addAll(g.text('FIVE (5) YEARS FROM PTU DATE.',
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+    } else if (official) {
+      bytes.addAll(g.text('This serves as your Sales Invoice.',
           styles: PosStyles(fontType: font, align: PosAlign.center)));
     }
     bytes.addAll(_endFeed(g, tenant.printTailLines));

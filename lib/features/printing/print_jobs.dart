@@ -30,9 +30,14 @@ class PrintJobs {
     required Tenant tenant,
     required PrinterConfig config,
     String? footerMessage,
+    bool reprint = false,
   }) async {
     final bytes = await ReceiptBuilder.bir(
-        order: order, tenant: tenant, printer: config, footerMessage: footerMessage);
+        order: order,
+        tenant: tenant,
+        printer: config,
+        footerMessage: footerMessage,
+        reprint: reprint);
     return _send(config, bytes);
   }
 

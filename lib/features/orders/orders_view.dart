@@ -999,7 +999,8 @@ Future<void> _reprintReceipt(BuildContext context, String orderId) async {
   if (tenant == null) return;
   PushToast.show(context,
       title: 'Printing receipt…', leadingIcon: Icons.print_outlined);
-  final ok = await PrintJobs.receipt(order: order, tenant: tenant, config: printer);
+  final ok = await PrintJobs.receipt(
+      order: order, tenant: tenant, config: printer, reprint: true);
   if (!context.mounted) return;
   PushToast.show(context,
       title: ok ? 'Receipt printed' : 'Receipt didn\'t print',

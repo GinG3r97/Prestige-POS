@@ -157,7 +157,9 @@ class AppState extends ChangeNotifier {
           .select('id, business_name, address, currency, timezone, logo_url, '
               'receipt_header, receipt_footer, receipt_align, '
               'receipt_template, ticket_template, print_tail_lines, print_font, '
-              'inventory_tracking_enabled')
+              'inventory_tracking_enabled, '
+              'vat_registered, tin, branch_code, bir_min, bir_serial, '
+              'ptu_number, ptu_valid_until, bir_accreditation_no')
           .eq('owner_id', user.id)
           .order('created_at', ascending: true);
 
@@ -193,6 +195,14 @@ class AppState extends ChangeNotifier {
           printFont: (t['print_font'] as String?) ?? 'a',
           inventoryTrackingEnabled:
               (t['inventory_tracking_enabled'] as bool?) ?? true,
+          vatRegistered: (t['vat_registered'] as bool?) ?? false,
+          tin: t['tin'] as String?,
+          branchCode: (t['branch_code'] as String?) ?? '000',
+          birMin: t['bir_min'] as String?,
+          birSerial: t['bir_serial'] as String?,
+          ptuNumber: t['ptu_number'] as String?,
+          ptuValidUntil: t['ptu_valid_until'] as String?,
+          birAccreditationNo: t['bir_accreditation_no'] as String?,
           branches: branchRows
               .map((b) => Branch(
                     id: b['id'] as String,
@@ -1237,6 +1247,91 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       t.inventoryTrackingEnabled = prev;
       notifyListeners();
+      return 'Could not save. Please try again.';
+    }
+  }
+
+  /// Updates the store's BIR registration details (printed on Sales
+  /// Invoices). Only the passed fields change. Optimistic with rollback.
+  Future<String?> updateBirInfo({
+    bool? vatRegistered,
+    String? tin,
+    String? branchCode,
+    String? birMin,
+    String? birSerial,
+    String? ptuNumber,
+    String? ptuValidUntil,
+    String? birAccreditationNo,
+  }) async {
+    final tenantId = _currentTenantDbId;
+    final t = tenant;
+    if (t == null || tenantId == null) return 'No store selected.';
+    // Snapshot for rollback.
+    final pVat = t.vatRegistered, pTin = t.tin, pBranch = t.branchCode;
+    final pMin = t.birMin, pSn = t.birSerial, pPtu = t.ptuNumber;
+    final pValid = t.ptuValidUntil, pAccr = t.birAccreditationNo;
+
+    final payload = <String, dynamic>{};
+    if (vatRegistered != null) {
+      t.vatRegistered = vatRegistered;
+      payload['vat_registered'] = vatRegistered;
+    }
+    if (tin != null) {
+      t.tin = tin;
+      payload['tin'] = tin;
+    }
+    if (branchCode != null) {
+      t.branchCode = branchCode;
+      payload['branch_code'] = branchCode;
+    }
+    if (birMin != null) {
+      t.birMin = birMin;
+      payload['bir_min'] = birMin;
+    }
+    if (birSerial != null) {
+      t.birSerial = birSerial;
+      payload['bir_serial'] = birSerial;
+    }
+    if (ptuNumber != null) {
+      t.ptuNumber = ptuNumber;
+      payload['ptu_number'] = ptuNumber;
+    }
+    if (ptuValidUntil != null) {
+      t.ptuValidUntil = ptuValidUntil;
+      payload['ptu_valid_until'] = ptuValidUntil;
+    }
+    if (birAccreditationNo != null) {
+      t.birAccreditationNo = birAccreditationNo;
+      payload['bir_accreditation_no'] = birAccreditationNo;
+    }
+    if (payload.isEmpty) return null;
+    notifyListeners();
+
+    void rollback() {
+      t.vatRegistered = pVat;
+      t.tin = pTin;
+      t.branchCode = pBranch;
+      t.birMin = pMin;
+      t.birSerial = pSn;
+      t.ptuNumber = pPtu;
+      t.ptuValidUntil = pValid;
+      t.birAccreditationNo = pAccr;
+      notifyListeners();
+    }
+
+    try {
+      final res = await supabase
+          .from('tenants')
+          .update(payload)
+          .eq('id', tenantId)
+          .select('id');
+      if ((res as List).isEmpty) {
+        rollback();
+        return 'Could not save — please sign out and back in, then retry.';
+      }
+      return null;
+    } catch (_) {
+      rollback();
       return 'Could not save. Please try again.';
     }
   }

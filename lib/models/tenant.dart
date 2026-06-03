@@ -35,6 +35,23 @@ class Tenant {
   /// deducts stock or blocks selling (per-product [CafeItem.trackInventory] is
   /// ignored). Lets a store sell freely until they're ready to use inventory.
   bool inventoryTrackingEnabled;
+
+  // ── BIR (Bureau of Internal Revenue) registration — printed on invoices ──
+  /// When true the invoice shows the 12% VAT breakdown; when false it prints
+  /// the Non-VAT note ("NOT VALID FOR CLAIM OF INPUT TAX").
+  bool vatRegistered;
+  String? tin;
+  String branchCode;
+  /// Machine Identification Number.
+  String? birMin;
+  /// Unit serial number.
+  String? birSerial;
+  /// Permit To Use number + its validity (free-text date).
+  String? ptuNumber;
+  String? ptuValidUntil;
+  /// Accredited supplier (software) accreditation number.
+  String? birAccreditationNo;
+
   List<Branch> branches;
 
   List<CustomCategory> customCategories;
@@ -54,6 +71,14 @@ class Tenant {
     this.printTailLines = 2,
     this.printFont = 'a',
     this.inventoryTrackingEnabled = true,
+    this.vatRegistered = false,
+    this.tin,
+    this.branchCode = '000',
+    this.birMin,
+    this.birSerial,
+    this.ptuNumber,
+    this.ptuValidUntil,
+    this.birAccreditationNo,
     List<Branch>? branches,
     List<CustomCategory>? customCategories,
   })  : id = id ?? _uuid.v4(),

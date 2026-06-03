@@ -147,6 +147,132 @@ class SettingsView extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
+                  // ── Tax / BIR registration
+                  _SectionHeader(
+                    title: 'Tax / BIR registration',
+                    subtitle: (tenant.tin ?? '').trim().isEmpty
+                        ? 'Add your TIN to print a BIR Sales Invoice'
+                        : 'Printed on every Sales Invoice',
+                  ),
+                  _Card(children: [
+                    _Row(
+                      leading: const Icon(Icons.receipt_long_outlined,
+                          color: YColor.brandDeep),
+                      title: 'VAT-registered',
+                      subtitle: tenant.vatRegistered
+                          ? 'Invoice shows the 12% VAT breakdown'
+                          : 'Non-VAT — prints "not valid for input tax"',
+                      trailing: Switch(
+                        value: tenant.vatRegistered,
+                        activeThumbColor: YColor.brand,
+                        onChanged: (v) async {
+                          final err =
+                              await state.updateBirInfo(vatRegistered: v);
+                          if (!context.mounted) return;
+                          if (err != null) {
+                            _saveToast(context, err, '');
+                          }
+                        },
+                      ),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.badge_outlined,
+                          color: YColor.brandDeep),
+                      title: 'TIN',
+                      subtitle: (tenant.tin ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.tin!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'TIN',
+                          hint: '123-456-789-00000',
+                          current: tenant.tin,
+                          save: (v) => state.updateBirInfo(tin: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.account_tree_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Branch code',
+                      subtitle: tenant.branchCode,
+                      onTap: () => _editBirField(context, state,
+                          title: 'Branch code',
+                          hint: '000',
+                          current: tenant.branchCode,
+                          save: (v) => state.updateBirInfo(branchCode: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.memory_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Machine ID (MIN)',
+                      subtitle: (tenant.birMin ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.birMin!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'Machine ID (MIN)',
+                          current: tenant.birMin,
+                          save: (v) => state.updateBirInfo(birMin: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.tag_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Serial number',
+                      subtitle: (tenant.birSerial ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.birSerial!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'Serial number',
+                          current: tenant.birSerial,
+                          save: (v) => state.updateBirInfo(birSerial: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.verified_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Permit To Use (PTU) no.',
+                      subtitle: (tenant.ptuNumber ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.ptuNumber!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'PTU number',
+                          current: tenant.ptuNumber,
+                          save: (v) => state.updateBirInfo(ptuNumber: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.event_available_outlined,
+                          color: YColor.brandDeep),
+                      title: 'PTU valid until',
+                      subtitle: (tenant.ptuValidUntil ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.ptuValidUntil!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'PTU valid until',
+                          hint: 'e.g. Jun 30, 2030',
+                          current: tenant.ptuValidUntil,
+                          save: (v) =>
+                              state.updateBirInfo(ptuValidUntil: v)),
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.workspace_premium_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Accreditation no.',
+                      subtitle: (tenant.birAccreditationNo ?? '').isEmpty
+                          ? 'Not set'
+                          : tenant.birAccreditationNo!,
+                      onTap: () => _editBirField(context, state,
+                          title: 'Accreditation no.',
+                          current: tenant.birAccreditationNo,
+                          save: (v) =>
+                              state.updateBirInfo(birAccreditationNo: v)),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
                   // ── Branches
                   _SectionHeader(
                     title: 'Branches',
@@ -415,6 +541,30 @@ class SettingsView extends StatelessWidget {
       final err = await state.updateStoreInfo(address: result.trim());
       if (!context.mounted) return;
       _saveToast(context, err, 'Address updated');
+    }
+  }
+
+  Future<void> _editBirField(
+    BuildContext context,
+    AppState state, {
+    required String title,
+    required String? current,
+    required Future<String?> Function(String) save,
+    String? hint,
+  }) async {
+    final controller = TextEditingController(text: current ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _TextFieldDialog(
+        title: title,
+        controller: controller,
+        hint: hint,
+      ),
+    );
+    if (result != null) {
+      final err = await save(result.trim());
+      if (!context.mounted) return;
+      _saveToast(context, err, '$title updated');
     }
   }
 
