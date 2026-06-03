@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
+import '../printing/print_jobs.dart';
+import '../widgets/push_toast.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -533,7 +535,7 @@ class _OrderDetail extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _actionButton(
-                      onPressed: () {},
+                      onPressed: () => _reprintReceipt(context, order.id),
                       icon: Icons.print_outlined,
                       label: 'Reprint receipt',
                       foreground: YColor.ink,
@@ -838,6 +840,34 @@ Widget _actionButton({
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
     ),
   );
+}
+
+/// Reprints the receipt for [orderId] on the configured printer. Looks the
+/// full order up from the cached list (it's always one that's displayed).
+Future<void> _reprintReceipt(BuildContext context, String orderId) async {
+  final state = context.read<AppState>();
+  final order =
+      state.recentOrders.where((o) => o.id == orderId).firstOrNull;
+  final tenant = state.tenant;
+  final printer = state.printerConfig;
+  if (order == null) return;
+  if (printer == null) {
+    PushToast.show(context,
+        title: 'No printer connected',
+        subtitle: 'Connect one in Settings → Hardware → Receipt printer.',
+        leadingIcon: Icons.print_disabled_outlined);
+    return;
+  }
+  if (tenant == null) return;
+  PushToast.show(context,
+      title: 'Printing receipt…', leadingIcon: Icons.print_outlined);
+  final ok = await PrintJobs.receipt(order: order, tenant: tenant, config: printer);
+  if (!context.mounted) return;
+  PushToast.show(context,
+      title: ok ? 'Receipt printed' : 'Receipt didn\'t print',
+      subtitle: ok ? null : 'Check the printer is on and nearby.',
+      leadingIcon:
+          ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
 }
 
 /// On-theme outlined icon for an order line, sourced from its category's
