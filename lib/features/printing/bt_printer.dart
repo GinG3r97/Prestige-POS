@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 /// A discovered Bluetooth printer (name + address). On Android the address is
@@ -55,18 +57,40 @@ class BtPrinter {
     }
   }
 
-  /// Ensures a connection to [address], then writes [bytes]. Returns true on
-  /// success.
-  static Future<bool> printBytes(String address, List<int> bytes) async {
-    try {
-      if (!await PrintBluetoothThermal.connectionStatus) {
-        final ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
-        if (!ok) return false;
+  // Serializes print jobs — a thermal printer can only handle one at a time,
+  // so concurrent writes (or a spammed button) corrupt output. Each call waits
+  // for the previous to finish.
+  static Future<bool> _chain = Future.value(true);
+
+  /// Ensures a connection to [address], then writes [bytes]. Jobs run strictly
+  /// one after another. Returns true on success.
+  static Future<bool> printBytes(String address, List<int> bytes) {
+    final prev = _chain;
+    final completer = Completer<bool>();
+    _chain = completer.future;
+    prev.whenComplete(() async {
+      bool result;
+      try {
+        result = await _write(address, bytes);
+      } catch (_) {
+        result = false;
       }
-      return await PrintBluetoothThermal.writeBytes(bytes);
-    } catch (_) {
-      return false;
+      completer.complete(result);
+    });
+    return completer.future;
+  }
+
+  static Future<bool> _write(String address, List<int> bytes) async {
+    if (!await PrintBluetoothThermal.connectionStatus) {
+      var ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
+      if (!ok) {
+        // First connect after launch can miss — wait briefly and retry once.
+        await Future.delayed(const Duration(milliseconds: 500));
+        ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
+      }
+      if (!ok) return false;
     }
+    return await PrintBluetoothThermal.writeBytes(bytes);
   }
 
   static Future<void> disconnect() async {

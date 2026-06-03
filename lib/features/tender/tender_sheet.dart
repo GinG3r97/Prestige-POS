@@ -51,6 +51,8 @@ class _TenderSheetState extends State<TenderSheet> {
   String? _error;
   int? _orderNumber;
   o.Order? _completedOrder;
+  bool _printBusy = false;
+  String? _printStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -824,19 +826,16 @@ class _TenderSheetState extends State<TenderSheet> {
       completed = true;
     });
 
-    // Auto-print the customer receipt to the configured printer (best-effort).
+    // Auto-print the customer receipt to the configured printer (best-effort,
+    // serialized so it can't collide with a tapped prep ticket).
     final order = _completedOrder;
     final printer = state.printerConfig;
     final tenant = state.tenant;
     if (order != null && printer != null && tenant != null) {
-      final ok = await PrintJobs.receipt(
-          order: order, tenant: tenant, config: printer);
-      if (mounted && !ok) {
-        PushToast.show(context,
-            title: 'Receipt didn\'t print',
-            subtitle: 'Check the printer connection in Settings.',
-            leadingIcon: Icons.print_disabled_outlined);
-      }
+      await _doPrint(
+        () => PrintJobs.receipt(order: order, tenant: tenant, config: printer),
+        what: 'Receipt',
+      );
     }
 
     if (summary.isEmpty) return;
@@ -952,6 +951,23 @@ class _TenderSheetState extends State<TenderSheet> {
     if (order == null || printer == null) return const SizedBox.shrink();
     final drinks = ReceiptBuilder.hasDrinks(order);
     final food = ReceiptBuilder.hasFood(order);
+
+    // While a job is in flight, show a lock so the printer can't be spammed.
+    if (_printBusy) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Text(_printStatus ?? 'Printing…',
+              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+        ]),
+      );
+    }
+
     return Column(children: [
       Wrap(
         spacing: 10,
@@ -960,27 +976,48 @@ class _TenderSheetState extends State<TenderSheet> {
         children: [
           if (tenant != null)
             _prepBtn('Reprint receipt', Icons.receipt_long_outlined,
-                () => _doPrint(() => PrintJobs.receipt(
-                    order: order, tenant: tenant, config: printer))),
+                () => _doPrint(
+                      () => PrintJobs.receipt(
+                          order: order, tenant: tenant, config: printer),
+                      what: 'Receipt',
+                    )),
           if (drinks)
             _prepBtn('Barista ticket', Icons.local_cafe_outlined,
                 () => _doPrint(
-                    () => PrintJobs.barista(order: order, config: printer))),
+                      () => PrintJobs.barista(order: order, config: printer),
+                      what: 'Barista ticket',
+                    )),
           if (food)
             _prepBtn('Kitchen ticket', Icons.restaurant_outlined,
                 () => _doPrint(
-                    () => PrintJobs.kitchen(order: order, config: printer))),
+                      () => PrintJobs.kitchen(order: order, config: printer),
+                      what: 'Kitchen ticket',
+                    )),
         ],
       ),
       const SizedBox(height: 16),
     ]);
   }
 
-  Future<void> _doPrint(Future<bool> Function() job) async {
+  /// Runs a print job with a UI lock — ignores taps while one is in flight
+  /// (anti-spam) and shows a "Printing…" status. Jobs are also serialized at
+  /// the Bluetooth layer, so nothing collides.
+  Future<void> _doPrint(Future<bool> Function() job,
+      {String what = 'Document'}) async {
+    if (_printBusy) return;
+    setState(() {
+      _printBusy = true;
+      _printStatus = 'Printing $what…';
+    });
     final ok = await job();
     if (!mounted) return;
+    setState(() {
+      _printBusy = false;
+      _printStatus = null;
+    });
     PushToast.show(context,
-        title: ok ? 'Sent to printer' : 'Print failed',
+        title: ok ? '$what printed' : '$what didn\'t print',
+        subtitle: ok ? null : 'Check the printer is on and nearby.',
         leadingIcon:
             ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
   }
