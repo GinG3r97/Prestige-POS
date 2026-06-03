@@ -14,16 +14,15 @@ extension OrderStatusX on OrderStatus {
       };
 }
 
-enum PaymentMethod { cash, card, gcash, paymaya, points, account }
+enum PaymentMethod { cash, gcash, bank, qrph, other }
 
 extension PaymentMethodX on PaymentMethod {
   String get label => switch (this) {
         PaymentMethod.cash => 'Cash',
-        PaymentMethod.card => 'Card',
         PaymentMethod.gcash => 'GCash',
-        PaymentMethod.paymaya => 'PayMaya',
-        PaymentMethod.points => 'Points',
-        PaymentMethod.account => 'On Account',
+        PaymentMethod.bank => 'Bank',
+        PaymentMethod.qrph => 'QR Ph',
+        PaymentMethod.other => 'Other',
       };
 }
 
@@ -167,13 +166,11 @@ class MockHistory {
         final methodIdx = rng.nextInt(100);
         final method = methodIdx < 55
             ? PaymentMethod.cash
-            : methodIdx < 80
-                ? PaymentMethod.card
-                : methodIdx < 92
-                    ? PaymentMethod.gcash
-                    : methodIdx < 97
-                        ? PaymentMethod.paymaya
-                        : PaymentMethod.points;
+            : methodIdx < 78
+                ? PaymentMethod.gcash
+                : methodIdx < 90
+                    ? PaymentMethod.qrph
+                    : PaymentMethod.bank;
         final status = rng.nextInt(100) < 3
             ? OrderStatus.refunded
             : OrderStatus.completed;

@@ -1062,12 +1062,18 @@ class AppState extends ChangeNotifier {
       return 'Enter a 4–8 digit PIN.';
     }
 
-    // 1) Owner PIN — only valid lengths get through.
+    // 1) Owner PIN — PROBE without counting a failure. The unified login
+    //    tries the owner PIN first for every 4-digit code, so a cashier
+    //    signing in with their own (non-owner) PIN must NOT bump the owner's
+    //    brute-force counter — that bug locked owners who never mistyped.
+    //    A genuine failed login charges one attempt at the very end instead.
+    bool ownerLocked = false;
     if (p.length == 4) {
       try {
         final ok = await supabase.rpc('verify_owner_pin', params: {
           'p_tenant_id': tenantId,
           'p_pin': p,
+          'p_count_failure': false,
         });
         if (ok == true) {
           final ownerRole = _employeeRoles
@@ -1083,13 +1089,13 @@ class AppState extends ChangeNotifier {
           return null;
         }
       } on sb.PostgrestException catch (e) {
-        final msg = e.message.toLowerCase();
-        if (msg.contains('locked')) {
-          return 'Owner PIN locked. Please wait a few minutes.';
+        // Owner PIN is in its lockout window. Don't block cashiers — they
+        // have their own per-employee throttle — so remember it and fall
+        // through to cashier matching; only report it if nothing matches.
+        if (e.message.toLowerCase().contains('lock')) {
+          ownerLocked = true;
         }
-        // Owner verify failed for non-lockout reasons — fall through to
-        // cashier-PIN matching so a typo with the owner check doesn't
-        // block staff from signing in.
+        // Other errors: fall through to cashier-PIN matching.
       } catch (_) {
         return 'Could not reach the server. Please try again.';
       }
@@ -1121,6 +1127,24 @@ class AppState extends ChangeNotifier {
       }
     }
 
+    // 3) Nothing matched. Charge ONE failed attempt against the owner
+    //    throttle so the login screen still resists brute force — but only
+    //    on a truly failed login, never on a successful cashier sign-in.
+    if (p.length == 4 && !ownerLocked) {
+      try {
+        await supabase.rpc('verify_owner_pin', params: {
+          'p_tenant_id': tenantId,
+          'p_pin': p,
+          'p_count_failure': true,
+        });
+      } catch (_) {
+        // Best-effort throttle bump; ignore failures here.
+      }
+    }
+
+    if (ownerLocked) {
+      return 'Owner PIN locked. Please wait a few minutes.';
+    }
     return 'No PIN matched. Try again.';
   }
 
@@ -4191,11 +4215,11 @@ class AppState extends ChangeNotifier {
         'p_customer_phone': customerPhone,
         'p_notes': notes,
         'p_discount_cents': discountCents,
-        // Don't pass the synthesized owner-staff id (it isn't an
-        // employees row); only real employees get stamped.
-        'p_employee_id': currentStaff != null && currentOwner == null
-            ? currentStaff!.id
-            : null,
+        // Stamp the real cashier's employee id. In an OWNER session the
+        // synthesized owner-staff id isn't an employees row (the RPC would
+        // reject it), so pass null there — employee_name still records who
+        // operated the till.
+        'p_employee_id': isOwnerSession ? null : currentStaff?.id,
         'p_employee_name': currentStaff?.name,
         'p_recipe_deductions': recipeDeductionsPayload,
       });
@@ -4367,6 +4391,7 @@ class AppState extends ChangeNotifier {
           .from('orders')
           .select(
               'id, tenant_id, branch_id, cashier_id, cashier_name, '
+              'employee_id, employee_name, '
               'order_number, status, '
               'subtotal_cents, discount_cents, vat_cents, total_cents, '
               'customer_name, customer_phone, notes, void_reason, '

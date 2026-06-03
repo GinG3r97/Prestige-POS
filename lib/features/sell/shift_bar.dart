@@ -9,6 +9,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/money.dart';
 import '../../models/shift.dart';
+import '../orders/date_range_sheet.dart';
 import '../printing/print_jobs.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
@@ -24,6 +25,36 @@ Future<void> showCloseCashier(BuildContext context) =>
 /// Shows a (read-only) Z-reading summary for a past/closed shift.
 void showZReadingFor(BuildContext context, CashierShift shift) =>
     showDialog(context: context, builder: (_) => _ZReadingDialog(shift: shift));
+
+/// Plain peso input — the number keypad is enough, no floating accessory.
+Widget _moneyField(TextEditingController c,
+    {bool autofocus = false, VoidCallback? onChanged}) {
+  return TextField(
+    controller: c,
+    autofocus: autofocus,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: moneyInputFormatters,
+    style: YFont.titleMD().copyWith(color: YColor.brand),
+    onChanged: onChanged == null ? null : (_) => onChanged(),
+    decoration: InputDecoration(
+      prefixText: '₱ ',
+      prefixStyle: YFont.titleMD().copyWith(color: YColor.inkMuted),
+      hintText: '0.00',
+      filled: true,
+      fillColor: YColor.surface2,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(YRadius.md),
+        borderSide: const BorderSide(color: YColor.hairline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(YRadius.md),
+        borderSide: const BorderSide(color: YColor.brand, width: 1.4),
+      ),
+    ),
+  );
+}
 
 /// The cashier-shift bar shown at the top of the Sell page. Open Cashier (with
 /// a starting float) when closed; live sales + Close Cashier (Z-reading) when
@@ -201,20 +232,10 @@ class _OpenShiftDialogState extends State<_OpenShiftDialog> {
             Text('Count the cash in the drawer now and enter it as your '
                 'starting amount (beginning money).',
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
-            const SizedBox(height: 12),
-            KeyboardAccessoryField(
-              controller: _float,
-              accessoryLabel: 'Beginning money (₱)',
-              label: 'Beginning money (₱)',
-              hint: '0.00',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: moneyInputFormatters,
-              formatPreview: (raw) {
-                final n = double.tryParse(raw) ?? 0;
-                return Money.pesos(n).formatted;
-              },
-            ),
+            const SizedBox(height: 10),
+            Text('BEGINNING MONEY', style: YFont.caption()),
+            const SizedBox(height: 6),
+            _moneyField(_float, autofocus: true),
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(_error!,
@@ -331,18 +352,10 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
                   _row('Expected cash in drawer', Money(expected).formatted,
                       bold: true),
                   const SizedBox(height: 12),
-                  KeyboardAccessoryField(
-                    controller: _counted,
-                    accessoryLabel: 'Counted cash (₱)',
-                    label: 'Count the drawer now (₱)',
-                    hint: '0.00',
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: moneyInputFormatters,
-                    onChanged: (_) => setState(() {}),
-                    formatPreview: (raw) =>
-                        Money.pesos(double.tryParse(raw) ?? 0).formatted,
-                  ),
+                  Text('COUNT THE DRAWER NOW', style: YFont.caption()),
+                  const SizedBox(height: 6),
+                  _moneyField(_counted,
+                      autofocus: true, onChanged: () => setState(() {})),
                   if (_counted.text.trim().isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _row(
@@ -505,11 +518,13 @@ class _ZReadingDialog extends StatelessWidget {
 /// Opens the Shifts history (Z-readings) — reprint any past Z-reading and
 /// print a today's-sales report.
 void showShiftsSheet(BuildContext context) {
-  showModalBottomSheet(
+  showDialog(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => const _ShiftsSheet(),
+    builder: (_) => const Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.all(24),
+      child: _ShiftsSheet(),
+    ),
   );
 }
 
@@ -522,6 +537,7 @@ class _ShiftsSheet extends StatefulWidget {
 class _ShiftsSheetState extends State<_ShiftsSheet> {
   List<CashierShift>? _shifts;
   bool _printingToday = false;
+  DateTimeRange? _range;
 
   @override
   void initState() {
@@ -562,12 +578,52 @@ class _ShiftsSheetState extends State<_ShiftsSheet> {
             ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
   }
 
+  Future<void> _pickRange() async {
+    final picked = await showDateRangeSheet(context, initial: _range);
+    if (picked != null) setState(() => _range = picked);
+  }
+
+  bool _inRange(DateTime d, DateTimeRange r) {
+    final start = DateTime(r.start.year, r.start.month, r.start.day);
+    final end = DateTime(r.end.year, r.end.month, r.end.day)
+        .add(const Duration(days: 1));
+    return !d.isBefore(start) && d.isBefore(end);
+  }
+
+  String _fmtRange(DateTimeRange r) {
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final s = r.start, e = r.end;
+    final sameDay = s.year == e.year && s.month == e.month && s.day == e.day;
+    if (sameDay) return '${m[s.month - 1]} ${s.day}, ${s.year}';
+    final sameYear = s.year == e.year;
+    final left = '${m[s.month - 1]} ${s.day}${sameYear ? '' : ', ${s.year}'}';
+    return '$left – ${m[e.month - 1]} ${e.day}, ${e.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final shifts = _shifts;
+    final state = context.read<AppState>();
+    final isOwner = state.isOwnerSession;
+    final myName = state.currentStaff?.name;
+    var shifts = _shifts;
+    // Cashier scoping: a non-owner sees only their OWN shifts.
+    if (shifts != null && !isOwner) {
+      shifts = shifts.where((s) => s.openedByName == myName).toList();
+    }
+    // Date filter (range).
+    if (shifts != null && _range != null) {
+      shifts = shifts
+          .where((s) => _inRange(s.openedAt.toLocal(), _range!))
+          .toList();
+    }
+    // Fixed height keeps the dialog from re-laying-out (and "blinking") when
+    // the async shift list loads in.
+    final screenH = MediaQuery.of(context).size.height;
+    final dialogH = screenH < 720 ? screenH - 96 : 600.0;
     return Container(
-      margin: const EdgeInsets.all(16),
-      constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
+      width: 520,
+      height: dialogH,
+      constraints: const BoxConstraints(maxWidth: 520),
       decoration: BoxDecoration(
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(20),
@@ -582,46 +638,95 @@ class _ShiftsSheetState extends State<_ShiftsSheet> {
               const Icon(Icons.summarize_outlined, color: YColor.brandDeep),
               const SizedBox(width: 10),
               Expanded(child: Text('Shifts & Z-readings', style: YFont.titleMD())),
-              OutlinedButton.icon(
-                onPressed: _printingToday ? null : _printToday,
-                icon: _printingToday
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.print_outlined, size: 16),
-                label: const Text("Print today's sales"),
-                style: OutlinedButton.styleFrom(
-                    foregroundColor: YColor.brand,
-                    side: const BorderSide(color: YColor.hairline)),
-              ),
+              // Store-wide total — owner only. Cashiers see just their own
+              // shifts and can reprint their own Z-readings by tapping a row.
+              if (isOwner)
+                OutlinedButton.icon(
+                  onPressed: _printingToday ? null : _printToday,
+                  icon: _printingToday
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.print_outlined, size: 16),
+                  label: const Text("Print today's sales"),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: YColor.brand,
+                      side: const BorderSide(color: YColor.hairline)),
+                ),
               IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close)),
             ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
-          Flexible(
-            child: shifts == null
-                ? const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator()))
-                : shifts.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Center(
-                          child: Text('No shifts yet.',
-                              style: YFont.caption()
-                                  .copyWith(color: YColor.inkMuted)),
-                        ),
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: shifts.length,
-                        separatorBuilder: (_, __) =>
-                            Container(height: 0.5, color: YColor.hairline),
-                        itemBuilder: (_, i) => _shiftRow(shifts[i]),
-                      ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            child: Row(children: [
+              GestureDetector(
+                onTap: () => setState(() => _range = null),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _range == null ? YColor.brand : YColor.surface2,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('All',
+                      style: YFont.bodyStrong().copyWith(
+                          fontSize: 12,
+                          color: _range == null ? Colors.white : YColor.ink)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _pickRange,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _range != null ? YColor.brand : YColor.surface2,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.calendar_today_outlined,
+                        size: 13,
+                        color:
+                            _range != null ? Colors.white : YColor.brandDeep),
+                    const SizedBox(width: 6),
+                    Text(_range != null ? _fmtRange(_range!) : 'Pick a date',
+                        style: YFont.bodyStrong().copyWith(
+                            fontSize: 12,
+                            color:
+                                _range != null ? Colors.white : YColor.ink)),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: Builder(builder: (_) {
+              final list = shifts;
+              if (list == null) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (list.isEmpty) {
+                return Center(
+                  child: Text(
+                      _range != null
+                          ? 'No shifts in this range.'
+                          : 'No shifts yet.',
+                      style:
+                          YFont.caption().copyWith(color: YColor.inkMuted)),
+                );
+              }
+              return ListView.separated(
+                itemCount: list.length,
+                separatorBuilder: (_, __) =>
+                    Container(height: 0.5, color: YColor.hairline),
+                itemBuilder: (_, i) => _shiftRow(list[i]),
+              );
+            }),
           ),
         ],
       ),

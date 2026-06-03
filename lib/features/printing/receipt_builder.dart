@@ -681,6 +681,8 @@ class ReceiptBuilder {
         o.OrderPaymentMethod.gcash => 'GCash',
         o.OrderPaymentMethod.paymaya => 'Maya',
         o.OrderPaymentMethod.card => 'Card',
+        o.OrderPaymentMethod.bankTransfer => 'Bank',
+        o.OrderPaymentMethod.qrPh => 'QR Ph',
         _ => 'Other',
       };
 }

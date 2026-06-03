@@ -81,7 +81,7 @@ class _SellViewState extends State<SellView> {
               child: filtered.isEmpty
                   ? _empty()
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 140),
+                      padding: const EdgeInsets.fromLTRB(24, 2, 24, 140),
                       child: _grid(filtered, state),
                     ),
             ),
@@ -110,7 +110,7 @@ class _SellViewState extends State<SellView> {
   Widget _header({required List<cat.Category> usedCategories}) {
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 6),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -131,7 +131,7 @@ class _SellViewState extends State<SellView> {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             // No "All" chip — cashiers always land on a real category
@@ -186,7 +186,8 @@ class _SellViewState extends State<SellView> {
   /// Shown instead of the catalog when no cashier shift is open — selling is
   /// blocked until the drawer is opened with a starting float.
   Widget _cashierClosed(BuildContext context) {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.35),
       child: Padding(
         padding: const EdgeInsets.all(36),
         child: Column(
@@ -206,24 +207,10 @@ class _SellViewState extends State<SellView> {
             const SizedBox(height: 16),
             Text('Cashier is closed', style: YFont.titleMD()),
             const SizedBox(height: 4),
-            Text('Open the cashier with your starting cash to begin selling.',
+            Text('Tap "Open Cashier" at the top to enter your starting cash '
+                'and begin selling.',
                 textAlign: TextAlign.center,
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
-            const SizedBox(height: 18),
-            ElevatedButton.icon(
-              onPressed: () => showOpenCashier(context),
-              icon: const Icon(Icons.lock_open_outlined, size: 18),
-              label: const Text('Open Cashier'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md)),
-              ),
-            ),
           ],
         ),
       ),

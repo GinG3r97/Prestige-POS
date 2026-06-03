@@ -13,9 +13,10 @@ import '../../design_system/typography.dart';
 import '../../models/mock_history.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as db;
+import 'date_range_sheet.dart';
 import 'void_refund_dialog.dart';
 
-enum _DateFilter { today, week, all }
+enum _DateFilter { today, week, all, day }
 
 class OrdersView extends StatefulWidget {
   const OrdersView({super.key});
@@ -27,6 +28,7 @@ class OrdersView extends StatefulWidget {
 class _OrdersViewState extends State<OrdersView> {
   String _query = '';
   _DateFilter _date = _DateFilter.today;
+  DateTimeRange? _pickedRange;
   String? _selectedId;
   PaymentMethod? _method;
 
@@ -46,7 +48,13 @@ class _OrdersViewState extends State<OrdersView> {
     final state = context.watch<AppState>();
     // Real DB-backed orders, adapted to the UI's existing MockOrder shape so
     // the 700-line layout doesn't need to be rewritten this turn.
-    final all = state.recentOrders.map(_adaptToMock).toList();
+    final allOrders = state.recentOrders.map(_adaptToMock).toList();
+    // Cashier scoping: a non-owner sees ONLY the orders they rang up. The
+    // owner (or any owner-session) sees everything.
+    final myName = state.currentStaff?.name;
+    final all = state.isOwnerSession
+        ? allOrders
+        : allOrders.where((o) => o.employeeName == myName).toList();
 
     final filtered = _filter(all);
     final selected = _selectedId == null
@@ -66,8 +74,7 @@ class _OrdersViewState extends State<OrdersView> {
                 children: [
                   _header(filtered, all),
                   _filterRow(),
-                  Container(
-                      height: 0.5, color: YColor.hairline),
+                  _summaryBar(filtered),
                   Expanded(
                     child: filtered.isEmpty
                         ? Center(
@@ -130,6 +137,19 @@ class _OrdersViewState extends State<OrdersView> {
         break;
       case _DateFilter.all:
         break;
+      case _DateFilter.day:
+        final r = _pickedRange;
+        if (r != null) {
+          final start = DateTime(r.start.year, r.start.month, r.start.day);
+          // End is inclusive — extend to the end of that day.
+          final end = DateTime(r.end.year, r.end.month, r.end.day)
+              .add(const Duration(days: 1));
+          list = list
+              .where((o) =>
+                  !o.placedAt.isBefore(start) && o.placedAt.isBefore(end))
+              .toList();
+        }
+        break;
     }
     if (_method != null) {
       list = list.where((o) => o.method == _method).toList();
@@ -147,10 +167,8 @@ class _OrdersViewState extends State<OrdersView> {
   }
 
   Widget _header(List<MockOrder> filtered, List<MockOrder> all) {
-    final total =
-        filtered.fold(Money.zero, (acc, o) => acc + o.total);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -171,27 +189,8 @@ class _OrdersViewState extends State<OrdersView> {
                     borderRadius: BorderRadius.circular(YRadius.md)),
               ),
             ),
-            const SizedBox(width: 10),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: YColor.brandTint,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '${filtered.length} · ${total.formatted}',
-                style: YFont.bodyStrong()
-                    .copyWith(fontSize: 12, color: YColor.brandDeep),
-              ),
-            ),
           ]),
-          const SizedBox(height: 4),
-          Text(
-            '${all.length} total orders this week',
-            style: YFont.caption(),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           TextField(
             onChanged: (v) => setState(() => _query = v),
             decoration: InputDecoration(
@@ -214,27 +213,178 @@ class _OrdersViewState extends State<OrdersView> {
     );
   }
 
+  Widget _summaryBar(List<MockOrder> filtered) {
+    final total =
+        filtered.fold(Money.zero, (acc, o) => acc + o.total);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: YColor.brandTint.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(color: YColor.hairline),
+      ),
+      child: Row(
+        children: [
+          // Left — order count
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: 'Orders: ',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              TextSpan(
+                  text: '${filtered.length}',
+                  style: YFont.bodyStrong().copyWith(fontSize: 14)),
+            ]),
+          ),
+          const Spacer(),
+          // Right — total sales
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: 'Total Sales: ',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              TextSpan(
+                  text: total.formatted,
+                  style: YFont.bodyStrong()
+                      .copyWith(fontSize: 14, color: YColor.brandDeep)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _filterRow() {
     return SizedBox(
-      height: 44,
+      height: 38,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         children: [
           _dateChip('Today', _DateFilter.today),
-          _dateChip('This week', _DateFilter.week),
-          _dateChip('All', _DateFilter.all),
+          _pickDateChip(),
           Container(
             width: 1,
             height: 22,
             color: YColor.hairline,
             margin: const EdgeInsets.symmetric(horizontal: 8),
           ),
-          _methodChip(null, 'Any method'),
-          for (final m in PaymentMethod.values) _methodChip(m, m.label),
+          _methodDropdown(),
         ],
       ),
     );
+  }
+
+  Widget _pickDateChip() {
+    final selected = _date == _DateFilter.day && _pickedRange != null;
+    final label = selected
+        ? _fmtRangeLabel(_pickedRange!)
+        : 'Pick a date';
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: _pickDate,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.calendar_today_outlined,
+                size: 13, color: selected ? Colors.white : YColor.brandDeep),
+            const SizedBox(width: 6),
+            Text(label,
+                style: YFont.bodyStrong().copyWith(
+                    fontSize: 12,
+                    color: selected ? Colors.white : YColor.ink)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDateRangeSheet(context, initial: _pickedRange);
+    if (picked != null) {
+      setState(() {
+        _pickedRange = picked;
+        _date = _DateFilter.day;
+      });
+    }
+  }
+
+  Widget _methodDropdown() {
+    final label = _method?.label ?? 'Any method';
+    return PopupMenuButton<PaymentMethod?>(
+      position: PopupMenuPosition.under,
+      color: YColor.surface1,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: YColor.hairline),
+      ),
+      onSelected: (m) => setState(() => _method = m),
+      itemBuilder: (_) => [
+        _methodItem(null, 'Any method'),
+        for (final m in PaymentMethod.values) _methodItem(m, m.label),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: _method != null ? YColor.brandDeep : YColor.surface2,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.payments_outlined,
+              size: 13,
+              color: _method != null ? Colors.white : YColor.brandDeep),
+          const SizedBox(width: 6),
+          Text(label,
+              style: YFont.bodyStrong().copyWith(
+                  fontSize: 12,
+                  color: _method != null ? Colors.white : YColor.ink)),
+          const SizedBox(width: 4),
+          Icon(Icons.expand_more,
+              size: 14,
+              color: _method != null ? Colors.white : YColor.inkMuted),
+        ]),
+      ),
+    );
+  }
+
+  PopupMenuItem<PaymentMethod?> _methodItem(PaymentMethod? m, String label) {
+    final selected = _method == m;
+    return PopupMenuItem<PaymentMethod?>(
+      value: m,
+      height: 42,
+      child: Row(children: [
+        Text(label,
+            style: YFont.bodyStrong().copyWith(
+                color: selected ? YColor.brandDeep : YColor.ink)),
+        const Spacer(),
+        if (selected)
+          const Icon(Icons.check, size: 16, color: YColor.brand),
+      ]),
+    );
+  }
+
+  String _fmtDayLabel(DateTime d) {
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${m[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  String _fmtRangeLabel(DateTimeRange r) {
+    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final s = r.start, e = r.end;
+    final sameDay = s.year == e.year && s.month == e.month && s.day == e.day;
+    if (sameDay) return _fmtDayLabel(s);
+    // "Jun 1 – Jun 7" (drop the year unless the span crosses years).
+    final sameYear = s.year == e.year;
+    final left = '${m[s.month - 1]} ${s.day}${sameYear ? '' : ', ${s.year}'}';
+    final right = '${m[e.month - 1]} ${e.day}, ${e.year}';
+    return '$left – $right';
   }
 
   Widget _dateChip(String label, _DateFilter value) {
@@ -249,33 +399,6 @@ class _OrdersViewState extends State<OrdersView> {
               horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: selected ? YColor.brand : YColor.surface2,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: YFont.bodyStrong().copyWith(
-              fontSize: 12,
-              color: selected ? Colors.white : YColor.ink,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _methodChip(PaymentMethod? m, String label) {
-    final selected = _method == m;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: () => setState(() => _method = m),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? YColor.brandDeep : YColor.surface2,
             borderRadius: BorderRadius.circular(999),
           ),
           alignment: Alignment.center,
@@ -1002,7 +1125,9 @@ MockOrder _adaptToMock(db.Order o) {
     total: Money(o.totalCents),
     method: _adaptMethod(o.payments),
     status: _adaptStatus(o.status),
-    employeeName: o.cashierName ?? 'Cashier',
+    // Show the real operator who rang it up (employee_name), not the shared
+    // account holder (cashier_name, always the owner).
+    employeeName: o.employeeName ?? o.cashierName ?? 'Cashier',
     employeeEmoji: '👤',
     branchName: 'Main Branch', // TODO: lookup once branches caching exists
   );
@@ -1038,11 +1163,12 @@ PaymentMethod _adaptMethod(List<db.OrderPayment> payments) {
       : payments.first.method;
   return switch (m) {
     db.OrderPaymentMethod.cash => PaymentMethod.cash,
-    db.OrderPaymentMethod.card => PaymentMethod.card,
     db.OrderPaymentMethod.gcash => PaymentMethod.gcash,
-    db.OrderPaymentMethod.paymaya => PaymentMethod.paymaya,
-    db.OrderPaymentMethod.bankTransfer => PaymentMethod.card,
-    db.OrderPaymentMethod.other => PaymentMethod.account,
+    db.OrderPaymentMethod.bankTransfer => PaymentMethod.bank,
+    db.OrderPaymentMethod.qrPh => PaymentMethod.qrph,
+    db.OrderPaymentMethod.paymaya => PaymentMethod.qrph,
+    db.OrderPaymentMethod.card => PaymentMethod.other,
+    db.OrderPaymentMethod.other => PaymentMethod.other,
   };
 }
 

@@ -22,7 +22,7 @@ extension OrderStatusX on OrderStatus {
       };
 }
 
-enum OrderPaymentMethod { cash, gcash, paymaya, card, bankTransfer, other }
+enum OrderPaymentMethod { cash, gcash, paymaya, card, bankTransfer, qrPh, other }
 
 extension OrderPaymentMethodX on OrderPaymentMethod {
   String get label => switch (this) {
@@ -30,7 +30,8 @@ extension OrderPaymentMethodX on OrderPaymentMethod {
         OrderPaymentMethod.gcash => 'GCash',
         OrderPaymentMethod.paymaya => 'PayMaya',
         OrderPaymentMethod.card => 'Card',
-        OrderPaymentMethod.bankTransfer => 'Bank Transfer',
+        OrderPaymentMethod.bankTransfer => 'Bank',
+        OrderPaymentMethod.qrPh => 'QR Ph',
         OrderPaymentMethod.other => 'Other',
       };
 
@@ -41,6 +42,7 @@ extension OrderPaymentMethodX on OrderPaymentMethod {
         OrderPaymentMethod.paymaya => 'paymaya',
         OrderPaymentMethod.card => 'card',
         OrderPaymentMethod.bankTransfer => 'bank_transfer',
+        OrderPaymentMethod.qrPh => 'qrph',
         OrderPaymentMethod.other => 'other',
       };
 
@@ -50,6 +52,7 @@ extension OrderPaymentMethodX on OrderPaymentMethod {
         'paymaya' => OrderPaymentMethod.paymaya,
         'card' => OrderPaymentMethod.card,
         'bank_transfer' => OrderPaymentMethod.bankTransfer,
+        'qrph' => OrderPaymentMethod.qrPh,
         _ => OrderPaymentMethod.other,
       };
 }
@@ -156,6 +159,11 @@ class Order {
   final String? branchId;
   final String? cashierId;
   final String? cashierName;
+  // The real person who rang the order up (a cashier or the owner operating
+  // the till). Distinct from cashier_id/cashier_name, which record the
+  // Supabase ACCOUNT (always the owner, since staff share one login).
+  final String? employeeId;
+  final String? employeeName;
   final int orderNumber;
   final OrderStatus status;
   final int subtotalCents;
@@ -181,6 +189,8 @@ class Order {
     this.branchId,
     this.cashierId,
     this.cashierName,
+    this.employeeId,
+    this.employeeName,
     required this.orderNumber,
     required this.status,
     required this.subtotalCents,
@@ -208,6 +218,8 @@ class Order {
         branchId: row['branch_id'] as String?,
         cashierId: row['cashier_id'] as String?,
         cashierName: row['cashier_name'] as String?,
+        employeeId: row['employee_id'] as String?,
+        employeeName: row['employee_name'] as String?,
         orderNumber: (row['order_number'] as int?) ?? 0,
         status: OrderStatusX.fromString(row['status'] as String? ?? 'open'),
         subtotalCents: (row['subtotal_cents'] as int?) ?? 0,

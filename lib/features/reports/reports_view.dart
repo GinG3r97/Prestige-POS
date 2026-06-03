@@ -1583,6 +1583,7 @@ class _ByPaymentSection extends StatelessWidget {
     o.OrderPaymentMethod.paymaya: Color(0xFF8A5A8A),
     o.OrderPaymentMethod.card: Color(0xFFC29A36),
     o.OrderPaymentMethod.bankTransfer: Color(0xFF7C8F65),
+    o.OrderPaymentMethod.qrPh: Color(0xFF6E5AA0),
     o.OrderPaymentMethod.other: Color(0xFF8A8A8A),
   };
 

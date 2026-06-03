@@ -60,11 +60,12 @@ class CartPanel extends StatelessWidget {
   }
 
   Widget _empty() {
-    return Center(
+    return Align(
+      alignment: const Alignment(0, -0.35),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 88, height: 88,

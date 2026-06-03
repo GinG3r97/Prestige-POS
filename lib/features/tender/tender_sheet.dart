@@ -12,28 +12,29 @@ import '../../models/money.dart';
 import '../../models/order.dart' as o;
 import '../printing/print_jobs.dart';
 import '../printing/receipt_builder.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
-enum TenderMethod { cash, card, gcash, paymaya, points, account }
+enum TenderMethod { cash, gcash, bank, qrph }
 
 extension on TenderMethod {
   String get title => switch (this) {
         TenderMethod.cash => 'Cash',
-        TenderMethod.card => 'Card',
         TenderMethod.gcash => 'GCash',
-        TenderMethod.paymaya => 'PayMaya',
-        TenderMethod.points => 'Points',
-        TenderMethod.account => 'On Account',
+        TenderMethod.bank => 'Bank',
+        TenderMethod.qrph => 'QR Ph',
       };
 
   IconData get icon => switch (this) {
         TenderMethod.cash => Icons.payments,
-        TenderMethod.card => Icons.credit_card,
         TenderMethod.gcash => Icons.qr_code_2,
-        TenderMethod.paymaya => Icons.qr_code,
-        TenderMethod.points => Icons.star,
-        TenderMethod.account => Icons.account_circle,
+        TenderMethod.bank => Icons.account_balance,
+        TenderMethod.qrph => Icons.qr_code,
       };
+
+  /// QR / e-wallet methods settle outside the POS (into the owner's wallet or
+  /// bank), so they need a reference number for end-of-day reconciliation.
+  bool get needsReference => this != TenderMethod.cash;
 }
 
 class TenderSheet extends StatefulWidget {
@@ -46,6 +47,17 @@ class TenderSheet extends StatefulWidget {
 class _TenderSheetState extends State<TenderSheet> {
   TenderMethod? method;
   String cashReceived = '';
+  // Reference / transaction number for QR / e-wallet payments. Required
+  // before a non-cash sale can be charged (used to reconcile against the
+  // GCash / bank statement later).
+  String _reference = '';
+  final TextEditingController _refController = TextEditingController();
+
+  @override
+  void dispose() {
+    _refController.dispose();
+    super.dispose();
+  }
   bool completed = false;
   bool _busy = false;
   String? _error;
@@ -234,12 +246,12 @@ class _TenderSheetState extends State<TenderSheet> {
           ),
           const SizedBox(height: 20),
           GridView.count(
-            crossAxisCount: 3,
+            crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 0.95,
+            childAspectRatio: 1.4,
             children: TenderMethod.values.map(_methodTile).toList(),
           ),
           const Spacer(),
@@ -269,89 +281,56 @@ class _TenderSheetState extends State<TenderSheet> {
   }
 
   Widget _methodTile(TenderMethod m) {
-    // Cash is the only payment we actually process today. Lock the rest
-    // visually + behaviourally so cashiers don't pick a half-built flow.
-    // When we wire GCash / Card / etc. in a later sprint, swap this to
-    // a per-tenant feature flag instead of a hardcoded set.
-    final enabled = m == TenderMethod.cash;
+    // All four methods (Cash, GCash, Bank, QR Ph) are live. Non-cash ones
+    // settle outside the POS and just get recorded with a reference number.
     return GestureDetector(
-      onTap: enabled
-          ? () {
-              HapticFeedback.lightImpact();
-              setState(() {
-                method = m;
-                cashReceived = '';
-              });
-            }
-          : null,
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.45,
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: YColor.surface1,
-            borderRadius: BorderRadius.circular(YRadius.md),
-            border: Border.all(color: YColor.hairline),
-            // Soft floating shadow so the tiles read as tappable cards
-            // instead of flat outlined boxes. Skipped when disabled so
-            // locked tiles also visually recede.
-            boxShadow: enabled
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                      spreadRadius: -6,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Stack(
-            children: [
-              // Fills the tile so the column actually centers vertically
-              // + horizontally inside the box (was only horizontal before
-              // because the Column was sized to its content at top-left).
-              Positioned.fill(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(m.icon, color: YColor.brand, size: 32),
-                    const SizedBox(height: 10),
-                    Flexible(
-                      child: Text(
-                        m.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: YFont.bodyStrong().copyWith(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _refController.clear();
+        setState(() {
+          method = m;
+          cashReceived = '';
+          _reference = '';
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(YRadius.md),
+          border: Border.all(color: YColor.hairline),
+          // Soft floating shadow so the tiles read as tappable cards
+          // instead of flat outlined boxes.
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+              spreadRadius: -6,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(m.icon, color: YColor.brand, size: 32),
+            const SizedBox(height: 10),
+            Flexible(
+              child: Text(
+                m.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.bodyStrong().copyWith(fontSize: 16),
               ),
-              if (!enabled)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: YColor.surface3,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Icon(Icons.lock_outline,
-                        size: 10, color: YColor.inkMuted),
-                  ),
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -542,7 +521,7 @@ class _TenderSheetState extends State<TenderSheet> {
                   .copyWith(fontSize: 36, color: YColor.brand),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Center(
             child: Text(
               _hintFor(m),
@@ -550,6 +529,41 @@ class _TenderSheetState extends State<TenderSheet> {
               style: YFont.body().copyWith(color: YColor.inkMuted),
             ),
           ),
+          const SizedBox(height: 18),
+          // Required reference number — settles outside the POS, so this is
+          // the only thread that lets the owner reconcile with the wallet/bank.
+          // Uses the floating accessory card above the keyboard for clarity.
+          KeyboardAccessoryField(
+            controller: _refController,
+            accessoryLabel: 'REFERENCE NUMBER',
+            label: 'Reference number',
+            hint: 'From the customer\'s payment confirmation',
+            keyboardType: TextInputType.text,
+            fillColor: YColor.surface1,
+            borderColor: YColor.hairline,
+            onChanged: (v) => setState(() => _reference = v),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(
+              _reference.trim().isEmpty
+                  ? Icons.info_outline
+                  : Icons.check_circle_outline,
+              size: 14,
+              color: _reference.trim().isEmpty
+                  ? YColor.inkSubtle
+                  : YColor.success,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _reference.trim().isEmpty
+                    ? 'Required before charging — ask the customer to show their reference no.'
+                    : 'Reference recorded — you can charge now.',
+                style: YFont.caption().copyWith(color: YColor.inkSubtle),
+              ),
+            ),
+          ]),
           const Spacer(),
           if (_error != null) ...[
             _ErrorBanner(message: _error!),
@@ -558,7 +572,9 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _busy ? null : () { _complete(state); },
+              onPressed: (_busy || _reference.trim().isEmpty)
+                  ? null
+                  : () { _complete(state); },
               style: ElevatedButton.styleFrom(
                 backgroundColor: YColor.brand,
                 foregroundColor: Colors.white,
@@ -587,11 +603,12 @@ class _TenderSheetState extends State<TenderSheet> {
 
   String _hintFor(TenderMethod m) => switch (m) {
         TenderMethod.cash => '',
-        TenderMethod.card => 'Tap, insert, or swipe the card on the terminal.',
-        TenderMethod.gcash => 'Show the GCash QR for the customer to scan.',
-        TenderMethod.paymaya => 'Show the PayMaya QR for the customer to scan.',
-        TenderMethod.points => 'Look up the member to redeem loyalty points.',
-        TenderMethod.account => 'Bill to the member\'s on-account balance.',
+        TenderMethod.gcash =>
+          'Show the store GCash QR. Customer pays, then enter their reference no.',
+        TenderMethod.bank =>
+          'Show the bank QR / details. Customer pays, then enter the reference no.',
+        TenderMethod.qrph =>
+          'Show the QR Ph code. Customer pays, then enter their reference no.',
       };
 
   Widget _backRow() {
@@ -600,9 +617,11 @@ class _TenderSheetState extends State<TenderSheet> {
         borderRadius: BorderRadius.circular(YRadius.md),
         onTap: () {
           HapticFeedback.lightImpact();
+          _refController.clear();
           setState(() {
             method = null;
             cashReceived = '';
+            _reference = '';
           });
         },
         child: Padding(
@@ -739,15 +758,12 @@ class _TenderSheetState extends State<TenderSheet> {
     final m = method ?? TenderMethod.cash;
     final totalCents = cart.total.centavos;
 
-    // Map the chosen tender into the DB-compatible enum. Loyalty / on-account
-    // aren't real money methods yet — fall back to "other" so the audit row
-    // is still complete.
+    // Map the chosen tender into the DB-compatible enum.
     final dbMethod = switch (m) {
       TenderMethod.cash => o.OrderPaymentMethod.cash,
       TenderMethod.gcash => o.OrderPaymentMethod.gcash,
-      TenderMethod.paymaya => o.OrderPaymentMethod.paymaya,
-      TenderMethod.card => o.OrderPaymentMethod.card,
-      _ => o.OrderPaymentMethod.other,
+      TenderMethod.bank => o.OrderPaymentMethod.bankTransfer,
+      TenderMethod.qrph => o.OrderPaymentMethod.qrPh,
     };
 
     int? tenderedCents;
@@ -789,11 +805,10 @@ class _TenderSheetState extends State<TenderSheet> {
     final payments = [
       (
         method: dbMethod,
-        amountCents:
-            m == TenderMethod.cash ? totalCents : totalCents, // single-tender
+        amountCents: totalCents, // single-tender, exact total
         tenderedCents: tenderedCents,
         changeCents: changeCents,
-        reference: null as String?,
+        reference: m.needsReference ? _reference.trim() : null,
       ),
     ];
 
