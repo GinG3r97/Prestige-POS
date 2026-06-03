@@ -52,6 +52,23 @@ class PrintJobs {
     return _send(config, bytes);
   }
 
+  /// Sales report (e.g. today's sales) — totals only, no cash reconciliation.
+  static Future<bool> salesReport({
+    required Tenant tenant,
+    required PrinterConfig config,
+    required String title,
+    required ShiftTotals totals,
+    String? subtitle,
+  }) async {
+    final bytes = await ReceiptBuilder.salesReport(
+        tenant: tenant,
+        printer: config,
+        title: title,
+        totals: totals,
+        subtitle: subtitle);
+    return _send(config, bytes);
+  }
+
   /// Z-Reading end-of-shift report.
   static Future<bool> zReading({
     required CashierShift shift,

@@ -334,6 +334,60 @@ class ReceiptBuilder {
     return bytes;
   }
 
+  /// Sales report (X-reading style) — totals for a period, no cash-drawer
+  /// reconciliation. Used for "today's sales".
+  static Future<List<int>> salesReport({
+    required Tenant tenant,
+    required PrinterConfig printer,
+    required String title,
+    required ShiftTotals totals,
+    String? subtitle,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final g = Generator(size, profile);
+    final bytes = <int>[];
+    final font =
+        tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA;
+
+    bytes.addAll(g.reset());
+    bytes.addAll(g.text(_san(tenant.businessName),
+        styles: PosStyles(
+            fontType: font,
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2)));
+    bytes.addAll(g.text(title,
+        styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
+    if (subtitle != null && subtitle.isNotEmpty) {
+      bytes.addAll(g.text(_san(subtitle),
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+    }
+    bytes.addAll(g.text(_fmtDateTime(DateTime.now()),
+        styles: PosStyles(fontType: font, align: PosAlign.center)));
+    bytes.addAll(g.hr());
+    bytes.addAll(_kv(g, 'Cash', _peso(totals.cashSalesCents), font: font));
+    bytes.addAll(_kv(g, 'Card', _peso(totals.cardSalesCents), font: font));
+    bytes.addAll(_kv(g, 'Other', _peso(totals.otherSalesCents), font: font));
+    bytes.addAll(g.hr(ch: '='));
+    bytes.addAll(g.row([
+      PosColumn(
+          text: 'TOTAL SALES',
+          width: 7,
+          styles: PosStyles(fontType: font, bold: true)),
+      PosColumn(
+          text: _peso(totals.totalSalesCents),
+          width: 5,
+          styles: PosStyles(
+              fontType: font, align: PosAlign.right, bold: true)),
+    ]));
+    bytes.addAll(_kv(g, 'Orders', '${totals.orderCount}', font: font));
+    bytes.addAll(g.hr());
+    bytes.addAll(_endFeed(g, tenant.printTailLines));
+    return bytes;
+  }
+
   /// Z-Reading — the end-of-shift cash-up report.
   static Future<List<int>> zReading({
     required CashierShift shift,

@@ -73,15 +73,19 @@ class _SellViewState extends State<SellView> {
         children: [
           const ShiftBar(),
           Container(height: 0.5, color: YColor.hairline),
-          _header(usedCategories: usedCategories),
-          Expanded(
-            child: filtered.isEmpty
-                ? _empty()
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 140),
-                    child: _grid(filtered, state),
-                  ),
-          ),
+          if (!state.hasOpenShift)
+            Expanded(child: _cashierClosed(context))
+          else ...[
+            _header(usedCategories: usedCategories),
+            Expanded(
+              child: filtered.isEmpty
+                  ? _empty()
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 140),
+                      child: _grid(filtered, state),
+                    ),
+            ),
+          ],
         ],
       ),
     );
@@ -174,6 +178,53 @@ class _SellViewState extends State<SellView> {
                   color: selected ? Colors.white : YColor.ink,
                 )),
           ]),
+        ),
+      ),
+    );
+  }
+
+  /// Shown instead of the catalog when no cashier shift is open — selling is
+  /// blocked until the drawer is opened with a starting float.
+  Widget _cashierClosed(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: YColor.brandTint,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.lock_clock_outlined,
+                  size: 38, color: YColor.brandDeep),
+            ),
+            const SizedBox(height: 16),
+            Text('Cashier is closed', style: YFont.titleMD()),
+            const SizedBox(height: 4),
+            Text('Open the cashier with your starting cash to begin selling.',
+                textAlign: TextAlign.center,
+                style: YFont.caption().copyWith(color: YColor.inkMuted)),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: () => showOpenCashier(context),
+              icon: const Icon(Icons.lock_open_outlined, size: 18),
+              label: const Text('Open Cashier'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+          ],
         ),
       ),
     );

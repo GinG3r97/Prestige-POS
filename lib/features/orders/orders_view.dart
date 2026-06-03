@@ -5,6 +5,7 @@ import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../printing/print_jobs.dart';
+import '../sell/shift_bar.dart';
 import '../widgets/push_toast.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
@@ -157,6 +158,20 @@ class _OrdersViewState extends State<OrdersView> {
             Text('Orders',
                 style: YFont.titleLG().copyWith(fontSize: 22)),
             const Spacer(),
+            OutlinedButton.icon(
+              onPressed: () => showShiftsSheet(context),
+              icon: const Icon(Icons.summarize_outlined, size: 16),
+              label: const Text('Shifts'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: YColor.brandDeep,
+                side: const BorderSide(color: YColor.hairline),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+            const SizedBox(width: 10),
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

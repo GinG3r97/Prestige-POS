@@ -13,6 +13,18 @@ import '../printing/print_jobs.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
+/// Opens the "Open cashier" dialog (start a shift with a float).
+Future<void> showOpenCashier(BuildContext context) =>
+    showDialog(context: context, builder: (_) => const _OpenShiftDialog());
+
+/// Opens the "Close cashier" (Z-reading) dialog.
+Future<void> showCloseCashier(BuildContext context) =>
+    showDialog(context: context, builder: (_) => const _CloseShiftDialog());
+
+/// Shows a (read-only) Z-reading summary for a past/closed shift.
+void showZReadingFor(BuildContext context, CashierShift shift) =>
+    showDialog(context: context, builder: (_) => _ZReadingDialog(shift: shift));
+
 /// The cashier-shift bar shown at the top of the Sell page. Open Cashier (with
 /// a starting float) when closed; live sales + Close Cashier (Z-reading) when
 /// open.
@@ -487,5 +499,196 @@ class _ZReadingDialog extends StatelessWidget {
                 .copyWith(color: tone ?? YColor.ink)),
       ]),
     );
+  }
+}
+
+/// Opens the Shifts history (Z-readings) — reprint any past Z-reading and
+/// print a today's-sales report.
+void showShiftsSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _ShiftsSheet(),
+  );
+}
+
+class _ShiftsSheet extends StatefulWidget {
+  const _ShiftsSheet();
+  @override
+  State<_ShiftsSheet> createState() => _ShiftsSheetState();
+}
+
+class _ShiftsSheetState extends State<_ShiftsSheet> {
+  List<CashierShift>? _shifts;
+  bool _printingToday = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final s = await context.read<AppState>().fetchShifts();
+    if (mounted) setState(() => _shifts = s);
+  }
+
+  Future<void> _printToday() async {
+    final state = context.read<AppState>();
+    final tenant = state.tenant;
+    final printer = state.printerConfig;
+    if (tenant == null || printer == null) {
+      PushToast.show(context,
+          title: 'No printer connected',
+          subtitle: 'Set one up in Settings → Receipt printer.',
+          leadingIcon: Icons.print_disabled_outlined);
+      return;
+    }
+    setState(() => _printingToday = true);
+    final totals = await state.salesTotalsForToday();
+    final ok = await PrintJobs.salesReport(
+      tenant: tenant,
+      config: printer,
+      title: 'SALES REPORT',
+      subtitle: 'Today',
+      totals: totals,
+    );
+    if (!mounted) return;
+    setState(() => _printingToday = false);
+    PushToast.show(context,
+        title: ok ? "Today's sales printed" : 'Print failed',
+        leadingIcon:
+            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shifts = _shifts;
+    return Container(
+      margin: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
+      decoration: BoxDecoration(
+        color: YColor.surface1,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+            child: Row(children: [
+              const Icon(Icons.summarize_outlined, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Shifts & Z-readings', style: YFont.titleMD())),
+              OutlinedButton.icon(
+                onPressed: _printingToday ? null : _printToday,
+                icon: _printingToday
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.print_outlined, size: 16),
+                label: const Text("Print today's sales"),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: YColor.brand,
+                    side: const BorderSide(color: YColor.hairline)),
+              ),
+              IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          Flexible(
+            child: shifts == null
+                ? const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Center(child: CircularProgressIndicator()))
+                : shifts.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Center(
+                          child: Text('No shifts yet.',
+                              style: YFont.caption()
+                                  .copyWith(color: YColor.inkMuted)),
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: shifts.length,
+                        separatorBuilder: (_, __) =>
+                            Container(height: 0.5, color: YColor.hairline),
+                        itemBuilder: (_, i) => _shiftRow(shifts[i]),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shiftRow(CashierShift s) {
+    final over = s.overShortCents ?? 0;
+    final closed = s.status == 'closed';
+    return InkWell(
+      onTap: () => showZReadingFor(context, s),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: closed ? YColor.surface2 : YColor.brandTint,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(closed ? Icons.receipt_long_outlined : Icons.lock_open,
+                size: 18,
+                color: closed ? YColor.inkMuted : YColor.brandDeep),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_fmt(s.openedAt),
+                    style: YFont.bodyStrong(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                Text(
+                    closed
+                        ? '${s.openedByName ?? 'Cashier'} · ${s.orderCount ?? 0} orders'
+                        : 'OPEN · ${s.openedByName ?? 'Cashier'}',
+                    style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(Money(s.totalSalesCents ?? 0).formatted,
+                  style: YFont.bodyStrong().copyWith(color: YColor.brand)),
+              if (closed)
+                Text(
+                    over == 0
+                        ? 'Balanced'
+                        : '${over > 0 ? 'Over' : 'Short'} ${Money(over.abs()).formatted}',
+                    style: YFont.caption().copyWith(
+                        color: over == 0 ? YColor.success : YColor.danger)),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+
+  String _fmt(DateTime dt) {
+    final d = dt.toLocal();
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final ap = d.hour >= 12 ? 'PM' : 'AM';
+    return '${m[d.month-1]} ${d.day}, ${d.year} · $h:${d.minute.toString().padLeft(2,'0')} $ap';
   }
 }

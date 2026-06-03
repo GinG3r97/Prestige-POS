@@ -1896,17 +1896,53 @@ class AppState extends ChangeNotifier {
   }
 
   /// Live sales totals since the current shift opened (by payment method).
-  Future<ShiftTotals> shiftTotals() async {
+  Future<ShiftTotals> shiftTotals() {
     final shift = _shift;
+    if (shift == null) return Future.value(const ShiftTotals());
+    return _salesTotals(shift.openedAt.toUtc(), null);
+  }
+
+  /// Sales totals for the local calendar day (for a "today's sales" report).
+  Future<ShiftTotals> salesTotalsForToday() {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    return _salesTotals(start.toUtc(), start.add(const Duration(days: 1)).toUtc());
+  }
+
+  /// Past + current shifts, newest first.
+  Future<List<CashierShift>> fetchShifts({int limit = 30}) async {
     final tenantId = _currentTenantDbId;
-    if (shift == null || tenantId == null) return const ShiftTotals();
+    if (tenantId == null) return const [];
     try {
       final rows = await supabase
+          .from('cashier_shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .order('opened_at', ascending: false)
+          .limit(limit);
+      return [
+        for (final r in rows as List)
+          CashierShift.fromRow(r as Map<String, dynamic>)
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Aggregates paid-order totals + cash/card/other splits over a UTC window.
+  Future<ShiftTotals> _salesTotals(DateTime sinceUtc, DateTime? untilUtc) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return const ShiftTotals();
+    try {
+      final base = supabase
           .from('orders')
           .select('total_cents, status, '
               'payments(method, amount_cents, refunded)')
           .eq('tenant_id', tenantId)
-          .gte('created_at', shift.openedAt.toUtc().toIso8601String());
+          .gte('created_at', sinceUtc.toIso8601String());
+      final rows = untilUtc != null
+          ? await base.lt('created_at', untilUtc.toIso8601String())
+          : await base;
       var cash = 0, card = 0, other = 0, total = 0, count = 0;
       for (final r in rows as List) {
         final m = r as Map<String, dynamic>;
