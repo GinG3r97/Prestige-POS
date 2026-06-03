@@ -17,6 +17,7 @@ import '../models/inventory.dart';
 import '../models/member.dart';
 import '../models/mock_data.dart';
 import '../models/order.dart' as o;
+import '../models/printer_config.dart';
 import '../models/payroll.dart';
 import '../models/payroll_rules.dart';
 import '../models/tenant.dart';
@@ -380,6 +381,9 @@ class AppState extends ChangeNotifier {
       _addOns = (addOnRows as List)
           .map((r) => AddOn.fromRow(r as Map<String, dynamic>))
           .toList();
+
+      // Configured receipt printer (single default).
+      await _loadPrinter();
 
       // Bookable resources (rooms, hot desks, event spaces). The actual
       // [Booking] rows are loaded per-day on demand from BookingsView.
@@ -1777,6 +1781,73 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return 'Could not reach the server. Please try again.';
     }
+  }
+
+  // ───── Receipt printer (single default, persisted in printer_configs) ──
+  PrinterConfig? _printer;
+  PrinterConfig? get printerConfig => _printer;
+  bool get hasPrinter => _printer != null;
+
+  Future<void> _loadPrinter() async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return;
+    try {
+      final rows = await supabase
+          .from('printer_configs')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .order('sort_order')
+          .limit(1);
+      _printer = (rows as List).isNotEmpty
+          ? PrinterConfig.fromRow(rows.first as Map<String, dynamic>)
+          : null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Load printer failed: $e');
+    }
+  }
+
+  /// Saves the chosen Bluetooth printer as the store's single default printer
+  /// (replaces any existing). Returns null on success.
+  Future<String?> saveBluetoothPrinter({
+    required String name,
+    required String address,
+    required int paperWidth,
+  }) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return 'No store selected.';
+    try {
+      await supabase.from('printer_configs').delete().eq('tenant_id', tenantId);
+      final cfg = PrinterConfig(
+        id: _uuid.v4(),
+        name: name,
+        role: PrinterRole.receipt,
+        transport: PrinterTransport.bluetooth,
+        bluetoothId: address,
+        paperWidth: paperWidth,
+        autoPrint: true,
+      );
+      final inserted = await supabase
+          .from('printer_configs')
+          .insert(cfg.toRowPayload(tenantId))
+          .select()
+          .single();
+      _printer = PrinterConfig.fromRow(inserted);
+      notifyListeners();
+      return null;
+    } catch (_) {
+      return 'Could not save the printer. Please try again.';
+    }
+  }
+
+  /// Forgets the configured printer.
+  Future<void> clearPrinter() async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return;
+    try {
+      await supabase.from('printer_configs').delete().eq('tenant_id', tenantId);
+    } catch (_) {/* best effort */}
+    _printer = null;
+    notifyListeners();
   }
 
   /// Saves the custom receipt header / footer text + alignment on the tenant.

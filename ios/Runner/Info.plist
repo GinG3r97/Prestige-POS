@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Connect to your Bluetooth receipt printer to print receipts and prep tickets.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Connect to your Bluetooth receipt printer.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

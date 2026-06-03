@@ -10,6 +10,8 @@ import '../../design_system/typography.dart';
 import '../../models/cart.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
+import '../printing/print_jobs.dart';
+import '../printing/receipt_builder.dart';
 import '../widgets/push_toast.dart';
 
 enum TenderMethod { cash, card, gcash, paymaya, points, account }
@@ -48,6 +50,7 @@ class _TenderSheetState extends State<TenderSheet> {
   bool _busy = false;
   String? _error;
   int? _orderNumber;
+  o.Order? _completedOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -808,7 +811,10 @@ class _TenderSheetState extends State<TenderSheet> {
     try {
       await state.refreshOrders();
       final fresh = state.recentOrders.where((o) => o.id == result.id);
-      if (fresh.isNotEmpty) orderNumber = fresh.first.orderNumber;
+      if (fresh.isNotEmpty) {
+        orderNumber = fresh.first.orderNumber;
+        _completedOrder = fresh.first;
+      }
     } catch (_) {/* receipt # is best-effort */}
 
     if (!mounted) return;
@@ -817,6 +823,21 @@ class _TenderSheetState extends State<TenderSheet> {
       _orderNumber = orderNumber;
       completed = true;
     });
+
+    // Auto-print the customer receipt to the configured printer (best-effort).
+    final order = _completedOrder;
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (order != null && printer != null && tenant != null) {
+      final ok = await PrintJobs.receipt(
+          order: order, tenant: tenant, config: printer);
+      if (mounted && !ok) {
+        PushToast.show(context,
+            title: 'Receipt didn\'t print',
+            subtitle: 'Check the printer connection in Settings.',
+            leadingIcon: Icons.print_disabled_outlined);
+      }
+    }
 
     if (summary.isEmpty) return;
     final stockLines = <String>[];
@@ -900,6 +921,7 @@ class _TenderSheetState extends State<TenderSheet> {
           Text(state.cart.total.formatted,
               style: YFont.titleLG().copyWith(color: YColor.brand)),
           const SizedBox(height: 24),
+          _printActions(state),
           ElevatedButton(
             onPressed: () {
               state.cart.clear();
@@ -916,6 +938,64 @@ class _TenderSheetState extends State<TenderSheet> {
             child: const Text('New Order'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Print buttons on the success screen — reprint the receipt and route prep
+  /// tickets (Barista for drinks, Kitchen for food). Hidden when no printer is
+  /// configured.
+  Widget _printActions(AppState state) {
+    final order = _completedOrder;
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (order == null || printer == null) return const SizedBox.shrink();
+    final drinks = ReceiptBuilder.hasDrinks(order);
+    final food = ReceiptBuilder.hasFood(order);
+    return Column(children: [
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        alignment: WrapAlignment.center,
+        children: [
+          if (tenant != null)
+            _prepBtn('Reprint receipt', Icons.receipt_long_outlined,
+                () => _doPrint(() => PrintJobs.receipt(
+                    order: order, tenant: tenant, config: printer))),
+          if (drinks)
+            _prepBtn('Barista ticket', Icons.local_cafe_outlined,
+                () => _doPrint(
+                    () => PrintJobs.barista(order: order, config: printer))),
+          if (food)
+            _prepBtn('Kitchen ticket', Icons.restaurant_outlined,
+                () => _doPrint(
+                    () => PrintJobs.kitchen(order: order, config: printer))),
+        ],
+      ),
+      const SizedBox(height: 16),
+    ]);
+  }
+
+  Future<void> _doPrint(Future<bool> Function() job) async {
+    final ok = await job();
+    if (!mounted) return;
+    PushToast.show(context,
+        title: ok ? 'Sent to printer' : 'Print failed',
+        leadingIcon:
+            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
+  }
+
+  Widget _prepBtn(String label, IconData icon, VoidCallback onTap) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: YColor.brandDeep,
+        side: const BorderSide(color: YColor.hairline),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
       ),
     );
   }

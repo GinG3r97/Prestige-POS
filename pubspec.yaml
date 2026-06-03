@@ -42,6 +42,7 @@ dependencies:
   image_picker: ^1.1.2      # gallery / camera image picker for product photos
   image: ^4.3.0             # client-side resize + JPEG re-encode (no native deps)
   esc_pos_utils_plus: ^2.0.4   # maintained fork; same API as esc_pos_utils, compatible with image ^4.x
+  print_bluetooth_thermal: ^1.1.1  # BLE thermal printing — iOS (BLE) + Android. Drives PT-210 etc.
 
 dev_dependencies:
   flutter_test:

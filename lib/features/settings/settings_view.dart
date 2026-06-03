@@ -8,6 +8,7 @@ import '../../design_system/image_util.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../widgets/push_toast.dart';
+import '../printing/printer_setup_sheet.dart';
 import '../shell/nav_controller.dart';
 import 'store_qr_modal.dart';
 
@@ -239,8 +240,11 @@ class SettingsView extends StatelessWidget {
                     _Row(
                       leading: const Icon(Icons.print_outlined, color: YColor.brandDeep),
                       title: 'Receipt printer',
-                      subtitle: 'Not paired',
-                      onTap: () => _comingSoon(context, 'Printer pairing'),
+                      subtitle: state.printerConfig != null
+                          ? '${state.printerConfig!.name} · '
+                              '${state.printerConfig!.paperWidth}mm · tap to change'
+                          : 'Tap to connect a Bluetooth printer',
+                      onTap: () => showPrinterSetup(context),
                     ),
                     const _Divider(),
                     _Row(

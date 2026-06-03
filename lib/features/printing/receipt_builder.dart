@@ -282,6 +282,171 @@ class ReceiptBuilder {
     return bytes;
   }
 
+  /// Tiny test print used by the printer setup screen to confirm a printer is
+  /// connected and the paper width is right.
+  static Future<List<int>> testTicket({
+    required Tenant tenant,
+    required PrinterConfig printer,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final g = Generator(size, profile);
+    final bytes = <int>[];
+    bytes.addAll(g.reset());
+    bytes.addAll(g.text(tenant.businessName,
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        )));
+    bytes.addAll(g.feed(1));
+    bytes.addAll(g.text('Printer connected!',
+        styles: const PosStyles(align: PosAlign.center, bold: true)));
+    bytes.addAll(g.text('Prestige POS test print',
+        styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(g.text('${printer.paperWidth}mm paper',
+        styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(g.feed(1));
+    bytes.addAll(g.hr());
+    bytes.addAll(g.text('ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(g.text('0123456789  \$ ₱ % &',
+        styles: const PosStyles(align: PosAlign.center)));
+    bytes.addAll(g.feed(3));
+    bytes.addAll(g.cut());
+    return bytes;
+  }
+
+  /// Barista ticket — drinks only, no prices, big text. Routed to the bar.
+  static Future<List<int>> barista({
+    required o.Order order,
+    required PrinterConfig printer,
+  }) =>
+      _prepTicket(
+        order: order,
+        printer: printer,
+        title: 'BARISTA',
+        lines: order.lines.where((l) => _isDrink(l.categoryName)).toList(),
+      );
+
+  /// Kitchen ticket — food only (excludes drinks + retail/service), no prices.
+  static Future<List<int>> kitchenFood({
+    required o.Order order,
+    required PrinterConfig printer,
+  }) =>
+      _prepTicket(
+        order: order,
+        printer: printer,
+        title: 'KITCHEN',
+        lines: order.lines
+            .where((l) =>
+                !_isDrink(l.categoryName) && !_isRetailOrService(l.categoryName))
+            .toList(),
+      );
+
+  /// True if [order] has any drink line (so a Barista ticket is worth offering).
+  static bool hasDrinks(o.Order order) =>
+      order.lines.any((l) => _isDrink(l.categoryName));
+
+  /// True if [order] has any food line (so a Kitchen ticket is worth offering).
+  static bool hasFood(o.Order order) => order.lines.any((l) =>
+      !_isDrink(l.categoryName) && !_isRetailOrService(l.categoryName));
+
+  /// Shared prep-ticket layout: big order number, big item names + mods, no
+  /// prices. Used by both the barista and kitchen tickets.
+  static Future<List<int>> _prepTicket({
+    required o.Order order,
+    required PrinterConfig printer,
+    required String title,
+    required List<o.OrderLine> lines,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
+    final g = Generator(size, profile);
+    final bytes = <int>[];
+
+    bytes.addAll(g.reset());
+    bytes.addAll(g.text(title,
+        styles: const PosStyles(align: PosAlign.center, bold: true)));
+    bytes.addAll(g.text('#${order.orderNumber.toString().padLeft(4, '0')}',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size3,
+          width: PosTextSize.size3,
+        )));
+    bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
+        styles: const PosStyles(align: PosAlign.center)));
+    if ((order.customerName ?? '').trim().isNotEmpty) {
+      bytes.addAll(g.text('For: ${order.customerName}',
+          styles: const PosStyles(align: PosAlign.center, bold: true)));
+    }
+    bytes.addAll(g.hr(ch: '='));
+
+    for (final line in lines) {
+      bytes.addAll(g.text('${line.quantity}× ${line.name}',
+          styles: const PosStyles(
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2,
+          )));
+      final mods = line.modifiers;
+      if (mods != null) {
+        final opts = mods['options'];
+        if (opts is Map) {
+          for (final entry in opts.entries) {
+            bytes.addAll(g.text('  · ${entry.key}: ${entry.value}',
+                styles: const PosStyles(bold: true)));
+          }
+        }
+        final addOns = mods['add_ons'];
+        if (addOns is List) {
+          for (final a in addOns) {
+            if (a is Map) {
+              bytes.addAll(g.text('  + ${a['quantity']}× ${a['name']}',
+                  styles: const PosStyles(bold: true)));
+            }
+          }
+        }
+      }
+      bytes.addAll(g.feed(1));
+    }
+
+    if ((order.notes ?? '').trim().isNotEmpty) {
+      bytes.addAll(g.hr());
+      bytes.addAll(g.text('Notes:', styles: const PosStyles(bold: true)));
+      bytes.addAll(g.text(order.notes!.trim()));
+    }
+
+    bytes.addAll(g.feed(2));
+    bytes.addAll(g.cut());
+    return bytes;
+  }
+
+  static const _drinkCats = {
+    'coffee', 'tea', 'soda', 'milk tea', 'milktea', 'smoothie', 'frappe',
+    'frappé', 'juice', 'drink', 'drinks', 'beverage', 'beverages', 'espresso',
+    'shakes', 'shake',
+  };
+  static const _retailCats = {
+    'books', 'book', 'merch', 'merchandise', 'retail', 'sticker', 'stickers',
+    'painting', 'paintings', 'flower', 'flowers', 'gift', 'gifts', 'toy',
+    'toys', 'membership', 'memberships', 'day pass', 'hot desk', 'meeting room',
+  };
+
+  static bool _isDrink(String? category) {
+    final c = (category ?? '').toLowerCase().trim();
+    if (c.isEmpty) return false;
+    return _drinkCats.contains(c) || _drinkCats.any((d) => c.contains(d));
+  }
+
+  static bool _isRetailOrService(String? category) {
+    final c = (category ?? '').toLowerCase().trim();
+    if (c.isEmpty) return false;
+    return _retailCats.contains(c) || _retailCats.any((r) => c.contains(r));
+  }
+
   // ─── helpers ──────────────────────────────────────────────────────
 
   static List<int> _kv(Generator g, String k, String v,
