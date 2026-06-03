@@ -1,0 +1,61 @@
+import 'package:uuid/uuid.dart';
+
+import 'catalog.dart';
+import 'employee.dart';
+
+const _uuid = Uuid();
+
+class Tenant {
+  final String id;
+  String businessName;
+  String address;
+  String currency;
+  String timezone;
+  /// Public URL of the store's uploaded logo (in the product-images bucket).
+  /// Shown on the login screen, top bar, and printed receipts. Null = use the
+  /// default storefront mark.
+  String? logoUrl;
+  /// Optional extra lines printed under the business name on receipts (e.g.
+  /// TIN, tagline). Null/empty = nothing extra.
+  String? receiptHeader;
+  /// Optional footer printed at the bottom of receipts (thank-you / promo /
+  /// return policy). Null/empty falls back to a default thank-you line.
+  String? receiptFooter;
+  /// Alignment for the custom header/footer text — 'center' or 'left'.
+  String receiptAlign;
+  List<Branch> branches;
+
+  List<CustomCategory> customCategories;
+
+  Tenant({
+    String? id,
+    required this.businessName,
+    this.address = '',
+    this.currency = 'PHP',
+    this.timezone = 'Asia/Manila',
+    this.logoUrl,
+    this.receiptHeader,
+    this.receiptFooter,
+    this.receiptAlign = 'center',
+    List<Branch>? branches,
+    List<CustomCategory>? customCategories,
+  })  : id = id ?? _uuid.v4(),
+        branches = branches ?? <Branch>[],
+        customCategories = customCategories ?? <CustomCategory>[];
+}
+
+class OwnerAccount {
+  final String id;
+  final String email;
+  final String password;
+  final String displayName;
+  final String tenantId;
+
+  OwnerAccount({
+    String? id,
+    required this.email,
+    required this.password,
+    required this.displayName,
+    required this.tenantId,
+  }) : id = id ?? _uuid.v4();
+}

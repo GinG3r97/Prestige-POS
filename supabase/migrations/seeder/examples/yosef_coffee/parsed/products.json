@@ -1,0 +1,655 @@
+[
+  {
+    "name": "agli e olio pasta",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "spaghetti",
+        "original_name": "spaghetti",
+        "unit": "g",
+        "quantity_in_base_unit": 150.0,
+        "line_cost_php": 13.2
+      },
+      {
+        "ingredient_name": "parmesan cheese",
+        "original_name": "parmesan",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 12.951541850220265
+      },
+      {
+        "ingredient_name": "cheese cheddar",
+        "original_name": "cheese",
+        "unit": "g",
+        "quantity_in_base_unit": 45.0,
+        "line_cost_php": 16.655
+      },
+      {
+        "ingredient_name": "milk",
+        "original_name": "milk",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 9.700000000000001
+      },
+      {
+        "ingredient_name": "chicken powder",
+        "original_name": "Chxpow",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 2.57
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 55.076541850220266,
+    "costed": true
+  },
+  {
+    "name": "alfredo",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "milk",
+        "original_name": "milk",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 9.700000000000001
+      },
+      {
+        "ingredient_name": "cream",
+        "original_name": "cream",
+        "unit": "g",
+        "quantity_in_base_unit": 50.0,
+        "line_cost_php": 10.0
+      },
+      {
+        "ingredient_name": "parmesan cheese",
+        "original_name": "parmesan",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 12.951541850220265
+      },
+      {
+        "ingredient_name": "spaghetti",
+        "original_name": "spaghetti",
+        "unit": "g",
+        "quantity_in_base_unit": 150.0,
+        "line_cost_php": 13.2
+      },
+      {
+        "ingredient_name": "chicken powder",
+        "original_name": "chicken pow",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 2.57
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 48.42154185022027,
+    "costed": true
+  },
+  {
+    "name": "chicken sandwich",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "chicken breast",
+        "original_name": "chicken breast",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 18.5
+      },
+      {
+        "ingredient_name": "mayonnaise",
+        "original_name": "garlic mayo",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 2.5
+      },
+      {
+        "ingredient_name": "tomato",
+        "original_name": "tomato",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 0.315
+      },
+      {
+        "ingredient_name": "cucumber",
+        "original_name": "cucumber",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 0.12
+      },
+      {
+        "ingredient_name": "burger buns",
+        "original_name": "buns",
+        "unit": "g",
+        "quantity_in_base_unit": 1.0,
+        "line_cost_php": 5.0
+      },
+      {
+        "ingredient_name": "lettuce",
+        "original_name": "lettuce",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 1.4900000000000002
+      },
+      {
+        "ingredient_name": "bread crumbs",
+        "original_name": "bread Crumbs",
+        "unit": "g",
+        "quantity_in_base_unit": 30.0,
+        "line_cost_php": 5.08695652173913
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 33.01195652173914,
+    "costed": true
+  },
+  {
+    "name": "fluffy pancake",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "all-purpose flour",
+        "original_name": "apf",
+        "unit": "g",
+        "quantity_in_base_unit": 250.0,
+        "line_cost_php": 16.75
+      },
+      {
+        "ingredient_name": "baking powder",
+        "original_name": "baking powder",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 3.2579999999999996
+      },
+      {
+        "ingredient_name": "salt",
+        "original_name": "salt",
+        "unit": "g",
+        "quantity_in_base_unit": 2.0,
+        "line_cost_php": 0.15533333333333335
+      },
+      {
+        "ingredient_name": "confectionary sugar",
+        "original_name": "confecionarry sugar",
+        "unit": "g",
+        "quantity_in_base_unit": 10.0,
+        "line_cost_php": 1.7
+      },
+      {
+        "ingredient_name": "milk",
+        "original_name": "milk",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 14.3
+      },
+      {
+        "ingredient_name": "meringue",
+        "original_name": "merangue",
+        "unit": "g",
+        "quantity_in_base_unit": 2.0,
+        "line_cost_php": 11.7
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 47.86333333333333,
+    "costed": true
+  },
+  {
+    "name": "garlic chicken fingers",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "chicken breast",
+        "original_name": "chicken breast",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 18.5
+      },
+      {
+        "ingredient_name": "bread crumbs",
+        "original_name": "bread crumbs",
+        "unit": "g",
+        "quantity_in_base_unit": 20.0,
+        "line_cost_php": 3.391304347826087
+      },
+      {
+        "ingredient_name": "parmesan cheese",
+        "original_name": "parmesan",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 4.3
+      },
+      {
+        "ingredient_name": "mayonnaise",
+        "original_name": "garlic mayo",
+        "unit": "g",
+        "quantity_in_base_unit": 20.0,
+        "line_cost_php": 3.3333333333333335
+      },
+      {
+        "ingredient_name": "mustard",
+        "original_name": "mustard",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 2.475
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 31.99963768115942,
+    "costed": true
+  },
+  {
+    "name": "garlic peppered beef",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "beef tapa",
+        "original_name": "beef tapa",
+        "unit": "g",
+        "quantity_in_base_unit": 150.0,
+        "line_cost_php": 78.6
+      },
+      {
+        "ingredient_name": "soy sauce",
+        "original_name": "soy",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 0.8999999999999999
+      },
+      {
+        "ingredient_name": "sugar white",
+        "original_name": "sugar",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 1.17
+      },
+      {
+        "ingredient_name": "butter",
+        "original_name": "butter",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 2.34
+      },
+      {
+        "ingredient_name": "fried garlic",
+        "original_name": "fried garlic",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": 1.7999999999999998
+      },
+      {
+        "ingredient_name": "worcestershire sauce",
+        "original_name": "worcetershire",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 1.8684210526315788
+      },
+      {
+        "ingredient_name": "cornstarch",
+        "original_name": "cornstartch",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 1.06
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 87.73842105263158,
+    "costed": true
+  },
+  {
+    "name": "pumpkin soup",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "pumpkin",
+        "original_name": "pumpkin",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 15.0
+      },
+      {
+        "ingredient_name": "garlic",
+        "original_name": "garlic",
+        "unit": "g",
+        "quantity_in_base_unit": 10.0,
+        "line_cost_php": 1.2
+      },
+      {
+        "ingredient_name": "red onion",
+        "original_name": "onion",
+        "unit": "g",
+        "quantity_in_base_unit": 10.0,
+        "line_cost_php": 0.79
+      },
+      {
+        "ingredient_name": "milk",
+        "original_name": "milk",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 9.700000000000001
+      },
+      {
+        "ingredient_name": "cream",
+        "original_name": "cream",
+        "unit": "g",
+        "quantity_in_base_unit": 50.0,
+        "line_cost_php": 10.0
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": 36.69,
+    "costed": true
+  },
+  {
+    "name": "chicken nuggets",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "ground chicken",
+        "original_name": "ground chicken",
+        "unit": "g",
+        "quantity_in_base_unit": 1000.0,
+        "line_cost_php": 253.0
+      },
+      {
+        "ingredient_name": "parsley",
+        "original_name": "parsley",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": 11.6
+      },
+      {
+        "ingredient_name": "cornstarch",
+        "original_name": "cornstarch",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": 8.8
+      },
+      {
+        "ingredient_name": "all-purpose flour",
+        "original_name": "Flour",
+        "unit": "g",
+        "quantity_in_base_unit": 500.0,
+        "line_cost_php": 33.5
+      },
+      {
+        "ingredient_name": "egg",
+        "original_name": "egg",
+        "unit": "pcs",
+        "quantity_in_base_unit": 2.0,
+        "line_cost_php": 11.7
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "chicken teriyaki",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "chicken breast",
+        "original_name": "chx breast",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "sesame seeds",
+        "original_name": "sesame seeds",
+        "unit": "g",
+        "quantity_in_base_unit": 3.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "churros",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "butter",
+        "original_name": "Butter",
+        "unit": "ml",
+        "quantity_in_base_unit": 30.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "sugar white",
+        "original_name": "Sugar(white)",
+        "unit": "ml",
+        "quantity_in_base_unit": 30.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "salt",
+        "original_name": "salt",
+        "unit": "ml",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "water",
+        "original_name": "boiling water",
+        "unit": "ml",
+        "quantity_in_base_unit": 240.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "all-purpose flour",
+        "original_name": "apf",
+        "unit": "ml",
+        "quantity_in_base_unit": 240.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "full english sausage",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "white beans",
+        "original_name": "beans",
+        "unit": "g",
+        "quantity_in_base_unit": 50.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "egg",
+        "original_name": "egg",
+        "unit": "pcs",
+        "quantity_in_base_unit": 2.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "gyudon",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "beef tapa",
+        "original_name": "beef tapa",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "kani salad",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "crab sticks",
+        "original_name": "crab sticks",
+        "unit": "pcs",
+        "quantity_in_base_unit": 1.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "cucumber",
+        "original_name": "cucumber",
+        "unit": "g",
+        "quantity_in_base_unit": 20.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "carrot",
+        "original_name": "carrot",
+        "unit": "g",
+        "quantity_in_base_unit": 20.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "corn kernel",
+        "original_name": "corn kernel",
+        "unit": "g",
+        "quantity_in_base_unit": 50.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "mango",
+        "original_name": "mango",
+        "unit": "g",
+        "quantity_in_base_unit": 50.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "salad dressing",
+        "original_name": "dressing",
+        "unit": "g",
+        "quantity_in_base_unit": 30.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "hot sauce",
+        "original_name": "hotsauce",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "ketchup",
+        "original_name": "ketchup",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "paprika",
+        "original_name": "paprika",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "cornstarch",
+        "original_name": "cornstarch",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "sugar white",
+        "original_name": "white sugar",
+        "unit": "g",
+        "quantity_in_base_unit": 10.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "lasgna",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "lasagna",
+        "original_name": "lasgna pasta",
+        "unit": "g",
+        "quantity_in_base_unit": 1000.0,
+        "line_cost_php": 143.0
+      },
+      {
+        "ingredient_name": "marinara sauce",
+        "original_name": "marinara sauce",
+        "unit": "g",
+        "quantity_in_base_unit": 1200.0,
+        "line_cost_php": 35.0
+      },
+      {
+        "ingredient_name": "cream",
+        "original_name": "cream",
+        "unit": "ml",
+        "quantity_in_base_unit": 380.0,
+        "line_cost_php": 134.0
+      },
+      {
+        "ingredient_name": "cheese cheddar",
+        "original_name": "cheese",
+        "unit": "g",
+        "quantity_in_base_unit": 90.0,
+        "line_cost_php": 38.0
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  },
+  {
+    "name": "pesto parmesan pizza",
+    "category": "Food",
+    "recipe": [
+      {
+        "ingredient_name": "mozzarella cheese",
+        "original_name": "white cheese",
+        "unit": "g",
+        "quantity_in_base_unit": 100.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "pesto",
+        "original_name": "pesto",
+        "unit": "g",
+        "quantity_in_base_unit": 20.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "parmesan cheese",
+        "original_name": "parmesan chesse",
+        "unit": "g",
+        "quantity_in_base_unit": 15.0,
+        "line_cost_php": null
+      },
+      {
+        "ingredient_name": "tomato",
+        "original_name": "tomato",
+        "unit": "g",
+        "quantity_in_base_unit": 5.0,
+        "line_cost_php": null
+      }
+    ],
+    "base_price_php": 250.0,
+    "cost_total_php": null,
+    "costed": false
+  }
+]

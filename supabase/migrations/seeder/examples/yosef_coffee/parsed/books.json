@@ -1,0 +1,359 @@
+[
+  {
+    "sku": "19885223575",
+    "title": "101 Essays (Soft Cover) by Brianna Wiest",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 15
+  },
+  {
+    "sku": "24027321096",
+    "title": "12 Rules for Life by Jordan B. Peterson",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18033914284",
+    "title": "7 Habits of Highly Effective People - Stephen Covey",
+    "selling_price_php": 429.0,
+    "cost_php": 128.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "15191162009",
+    "title": "Atomic Habits - James Clear",
+    "selling_price_php": 399.0,
+    "cost_php": 119.7,
+    "starting_stock": 30
+  },
+  {
+    "sku": "289534742319",
+    "title": "Blue Ocean Shift (Hardcover)",
+    "selling_price_php": 520.0,
+    "cost_php": 156.0,
+    "starting_stock": 5
+  },
+  {
+    "sku": "26053653188",
+    "title": "Concise Mastery by Robert Greene",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "24632555378",
+    "title": "Concise, The Art of Seduction by Robert Greene",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134257879",
+    "title": "Days at the Morisaki Bookshop (Paperback) by Satoshi Yagisawa",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134027119",
+    "title": "Don't Believe Everything You Think: Why Your Thinking Is The Beginning & End Of Suffering (Beyond Suffering) by Joseph Nguyen (Paperback)",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134027123",
+    "title": "Ego is the Enemy by Ryan Holiday (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "20533928994",
+    "title": "Everything is Fucked - Mark Manson",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "23688321566",
+    "title": "Good Vibes, Good Life by Vex King (Flip Cover)",
+    "selling_price_php": 349.0,
+    "cost_php": 89.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "25077313571",
+    "title": "How to Talk to Anyone by Leil Lowndes",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "28156556255",
+    "title": "I Want to Die but I Want to Eat Tteokbokki by Baek Sehee (Paperback)",
+    "selling_price_php": 349.0,
+    "cost_php": 89.7,
+    "starting_stock": 18
+  },
+  {
+    "sku": "18294184258",
+    "title": "Twice by Mitch Albom Paperback",
+    "selling_price_php": 379.0,
+    "cost_php": null,
+    "starting_stock": 20
+  },
+  {
+    "sku": "19035864236",
+    "title": "Ikigai - The Japanese Secret to a long and Healthy Life",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18184763436",
+    "title": "Losing Myself Brought Me Here (Paperback) by Jennae Cecelia",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 5
+  },
+  {
+    "sku": "18134024859",
+    "title": "Make Your Bed (Paperback) by William H. McRaven",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 5
+  },
+  {
+    "sku": "26956556735",
+    "title": "Man's Search for Meaning by Viktor E. Frankl (Mass Market)",
+    "selling_price_php": 229.0,
+    "cost_php": 68.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "28006556449",
+    "title": "Meditations by Marcus Aurelius, Dover Thrift Edition (Paperback)",
+    "selling_price_php": 229.0,
+    "cost_php": 68.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134027119",
+    "title": "Obstacle is the Way by Ryan Holiday (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "19057967575",
+    "title": "Psychology of Money by Morgan Housel",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18112569758",
+    "title": "Read People Like a Book (Paperback) by Patrick King",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "20234021774",
+    "title": "Rich Dad Poor Dad - Robert Kiyosaki",
+    "selling_price_php": 279.0,
+    "cost_php": 83.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "27400798742",
+    "title": "Courage to be Happy Paperback",
+    "selling_price_php": 379.0,
+    "cost_php": null,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134026465",
+    "title": "Start With Why (Paperback) by Simon Sinek",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027124",
+    "title": "Sapiens, History of Humankind by Yuval Noah Harrari",
+    "selling_price_php": 349.0,
+    "cost_php": null,
+    "starting_stock": 10
+  },
+  {
+    "sku": "22157855715",
+    "title": "Strenght in our Scars (Soft Cover) | Basa Piipinas",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18782386756",
+    "title": "Surrounded by idiots (Paperback) by Thomas Erickson",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18134021141",
+    "title": "Surrounded by Liars (Paperback) by Thomas Erickson",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "25953486378",
+    "title": "The 80/20 Principle by Richard Koch (Paperback)",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 15
+  },
+  {
+    "sku": "18134027121",
+    "title": "The Concise 33 Strategies of War by Robert Greene (Paperback)",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 19
+  },
+  {
+    "sku": "18134027119",
+    "title": "The Concise 48 Laws of Power by Robert Greene (Paperback)",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "21877838427",
+    "title": "The Concise Laws of Human Nature by Robert Greene (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "28003474806",
+    "title": "The Courage to Be Disliked by Ichiro Kishimi (Paperback)",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18077901840",
+    "title": "The Daily Stoic by Ryan Holiday (Soft Cover)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "18655879977",
+    "title": "The Diary of a CEO (Paperback) by Steven Bartlet",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 15
+  },
+  {
+    "sku": "18134027357",
+    "title": "The Midnight library - Matt Haig (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 15
+  },
+  {
+    "sku": "18134027125",
+    "title": "The Power of Your Subconscious Mind",
+    "selling_price_php": 279.0,
+    "cost_php": null,
+    "starting_stock": 5
+  },
+  {
+    "sku": "13395664115",
+    "title": "The Subtle Art of not giving a Fuck - Mark Manson",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 20
+  },
+  {
+    "sku": "27803478476",
+    "title": "Think Again by Adam Grant (Paperback)",
+    "selling_price_php": 329.0,
+    "cost_php": 98.7,
+    "starting_stock": 5
+  },
+  {
+    "sku": "18840400374",
+    "title": "To Kill a Mocking Bird - Harper Lee",
+    "selling_price_php": 349.0,
+    "cost_php": 104.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027122",
+    "title": "Why Nobody Has Told me This Before? By Dr. Julie Smith (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": 113.7,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027119",
+    "title": "The Let Them Theory by Mel Robbins Paperback",
+    "selling_price_php": 450.0,
+    "cost_php": null,
+    "starting_stock": 40
+  },
+  {
+    "sku": "18134027119",
+    "title": "30 Days to Better English Mass Market",
+    "selling_price_php": 199.0,
+    "cost_php": 59.7,
+    "starting_stock": 14
+  },
+  {
+    "sku": "18134027120",
+    "title": "Atomic Habits Workbook by James Clear",
+    "selling_price_php": 450.0,
+    "cost_php": null,
+    "starting_stock": 25
+  },
+  {
+    "sku": "18134027121",
+    "title": "The 50th Law by Robert Greene and 50 Cent",
+    "selling_price_php": 349.0,
+    "cost_php": null,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027122",
+    "title": "Full Version of the 48 Laws of Power by Robert Greene",
+    "selling_price_php": 699.0,
+    "cost_php": null,
+    "starting_stock": 15
+  },
+  {
+    "sku": "18134027123",
+    "title": "When Breathe Becomes Air by Paul Kalantihi (Paperback)",
+    "selling_price_php": 249.0,
+    "cost_php": null,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027124",
+    "title": "The Mountain is You by Brianna Wiest (Paperback)",
+    "selling_price_php": 379.0,
+    "cost_php": null,
+    "starting_stock": 10
+  },
+  {
+    "sku": "18134027125",
+    "title": "The 5 Second Rule by Mel Robbins Paperback",
+    "selling_price_php": 379.0,
+    "cost_php": null,
+    "starting_stock": 15
+  }
+]

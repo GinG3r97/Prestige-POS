@@ -1,0 +1,16 @@
+name: prestige_seeder
+description: One-shot data importer that reads the canonical client onboarding xlsx and writes inventory items, products, recipes and books to a Prestige POS tenant.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  args: ^2.5.0
+  spreadsheet_decoder: ^2.3.0
+  supabase: ^2.5.1
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^4.0.0
