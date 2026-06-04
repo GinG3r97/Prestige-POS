@@ -478,14 +478,22 @@ class _SettingsViewState extends State<SettingsView> {
                     leading: const Icon(Icons.description_outlined,
                         color: YColor.brandDeep),
                     title: 'Terms of service',
-                    onTap: () => _comingSoon(context, 'Terms'),
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (_) => const _LegalDialog(
+                          title: 'Terms & Conditions', body: _kTermsText),
+                    ),
                   ),
                   const _Divider(),
                   _Row(
                     leading: const Icon(Icons.privacy_tip_outlined,
                         color: YColor.brandDeep),
                     title: 'Privacy policy',
-                    onTap: () => _comingSoon(context, 'Privacy'),
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (_) => const _LegalDialog(
+                          title: 'Privacy Policy', body: _kPrivacyText),
+                    ),
                   ),
                 ]),
 
@@ -1634,6 +1642,90 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
           border: Border.all(color: YColor.hairline),
         ),
         child: Icon(icon, size: 18, color: YColor.brandDeep),
+      ),
+    );
+  }
+}
+
+const String _kTermsText = '''
+By using Prestige POS ("the app"), provided by Prestige IT Solutions, you agree to these terms.
+
+1. Licence. The app is licensed to you to operate your point-of-sale. You are responsible for the accuracy of your products, prices, taxes, and the sales you record.
+
+2. Compliance. You are responsible for your own tax and BIR compliance — registration, permits, and the accuracy of any receipts or invoices issued through the app.
+
+3. Accounts. Keep your login and staff PINs confidential. You are responsible for activity under your account.
+
+4. "As is". The app is provided as is. We work to keep it reliable but do not guarantee uninterrupted service and are not liable for losses arising from downtime, device, or network issues.
+
+5. Changes. We may update these terms and the app from time to time. Continued use means you accept the changes.
+
+Questions? Contact us at hello@prestigeitsolutions.com.
+''';
+
+const String _kPrivacyText = '''
+Prestige IT Solutions respects your privacy. This explains what the app stores and why.
+
+• What we store: your store details, products, inventory, staff, and the sales/orders you record — used only to operate the POS.
+
+• Payments: card and e-wallet payments are processed outside the app. We store only the amount and any reference number you enter, for your records.
+
+• We do not sell your data.
+
+• Access is protected by your account login and staff PINs.
+
+• Your data: to access, correct, or delete your store's data, contact us.
+
+Questions? Contact us at hello@prestigeitsolutions.com.
+''';
+
+/// A small read-only legal text viewer (Terms / Privacy).
+class _LegalDialog extends StatelessWidget {
+  const _LegalDialog({required this.title, required this.body});
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        width: 560,
+        constraints: BoxConstraints(maxHeight: h < 760 ? h - 96 : 640),
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+            child: Row(children: [
+              const Icon(Icons.gavel_outlined, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: YFont.titleMD())),
+              IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(body.trim(),
+                  style: YFont.body().copyWith(height: 1.5)),
+            ),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text('Prestige POS · v1.0.0',
+                style: YFont.caption().copyWith(color: YColor.inkMuted)),
+          ),
+        ]),
       ),
     );
   }
