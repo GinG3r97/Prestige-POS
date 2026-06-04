@@ -229,7 +229,10 @@ class ReceiptBuilder {
         bytes.addAll(_kv(g, 'Zero-Rated Sales', _peso(0), font: font));
         bytes.addAll(_kv(g, 'VAT (12%)', _peso(vat), font: font));
       } else if (!birReady) {
-        bytes.addAll(_kv(g, 'VAT (incl.)', _peso(order.vatCents),
+        // vat_cents isn't computed server-side, so back it out of the
+        // VAT-inclusive total instead of printing a stored 0.
+        final vat = order.totalCents - (order.totalCents / 1.12).round();
+        bytes.addAll(_kv(g, 'VAT (incl.)', _peso(vat),
             fadedFirstCol: true, font: font));
       }
     }
