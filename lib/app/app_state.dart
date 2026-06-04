@@ -233,136 +233,146 @@ class AppState extends ChangeNotifier {
       _currentStoreIndex = 0;
       _currentTenantDbId = tenantRows.first['id'] as String;
 
-      // Categories, features, and PIN status — all for the active tenant.
-      final categoriesRes = await supabase
-          .from('categories')
-          .select('id, name, emoji, icon_name, sort_order, is_system')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _categories = (categoriesRes as List)
-          .map((r) => cat.Category.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      final featRow = await supabase
-          .from('tenant_features')
-          .select(
-              'reserve_enabled, timer_enabled, subscribe_enabled, service_enabled')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .maybeSingle();
-      _features = featRow == null
-          ? cat.TenantFeatures()
-          : cat.TenantFeatures.fromRow(featRow);
-
-      final pinRow = await supabase
-          .from('owner_pins')
-          .select('tenant_id')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .maybeSingle();
-      _ownerPinSet = pinRow != null;
-
-      // Master modifier groups + their options (one nested PostgREST call).
-      final mgRows = await supabase
-          .from('modifier_groups')
-          .select(
-              'id, name, emoji, icon_name, required, default_index, sort_order, is_system, '
-              'modifier_options(id, name, price_delta_cents, sort_order)')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _modifierGroups = (mgRows as List).map((r) {
-        final row = r as Map<String, dynamic>;
-        // Sort the raw rows by sort_order first (O(n log n)), then map —
-        // avoids an indexWhere-in-comparator O(n²) scan.
-        final optsRaw = [...(row['modifier_options'] as List? ?? const [])]
-          ..sort((a, b) => (((a as Map)['sort_order'] as int?) ?? 0)
-              .compareTo(((b as Map)['sort_order'] as int?) ?? 0));
-        final opts = optsRaw
-            .map((o) => MasterOption.fromRow(o as Map<String, dynamic>))
-            .toList();
-        return MasterModifierGroup.fromRow(row, options: opts);
-      }).toList();
-
-      // Employee roles, then employees (joined with role name).
-      final roleRows = await supabase
-          .from('employee_roles')
-          .select(
-              'id, name, icon_name, permissions, requires_pin, is_system, sort_order')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _employeeRoles = (roleRows as List)
-          .map((r) => EmployeeRole.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      final empRows = await supabase
-          .from('employees')
-          .select('*, role:employee_roles(id, name)')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('created_at');
-      _employees = (empRows as List).map((r) {
-        final row = r as Map<String, dynamic>;
-        final joined = row['role'] as Map<String, dynamic>?;
-        return Employee.fromRow(row, roleRow: joined);
-      }).toList();
-
-      // Payroll rules — single row per tenant. If somehow missing (e.g. a
-      // tenant predates the back-fill), fall back to defaults so the UI
-      // still renders.
-      final rulesRow = await supabase
-          .from('payroll_rules')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .maybeSingle();
-      _payrollRules = rulesRow == null
-          ? PayrollRules()
-          : PayrollRules.fromRow(rulesRow);
-
-      // Leave types and employment templates.
-      final ltRows = await supabase
-          .from('leave_types')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _leaveTypes = (ltRows as List)
-          .map((r) => LeaveType.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      final tplRows = await supabase
-          .from('employment_templates')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('employment_type');
-      _employmentTemplates = (tplRows as List)
-          .map((r) => EmploymentTemplate.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      // Product types — tenant-owned behavior buckets.
-      final typeRows = await supabase
-          .from('product_types')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _productTypes = (typeRows as List)
-          .map((r) => ProductType.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      // Inventory categories — tenant-owned (Maintenance → Inventory cats).
-      final invCatRows = await supabase
-          .from('inventory_categories')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('sort_order');
-      _inventoryCategories = (invCatRows as List)
-          .map((r) => InventoryCategory.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      // Inventory items — tenant-owned stock.
-      final invRows = await supabase
-          .from('inventory_items')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('name');
-      _inventory = (invRows as List)
-          .map((r) => InventoryItem.fromRow(r as Map<String, dynamic>))
-          .toList();
+      // These per-tenant reads are independent of each other, so run them
+      // CONCURRENTLY (was ~12 serial round-trips on every cold start). Each
+      // closure does its own fetch + assignment exactly as before. Products
+      // are fetched AFTER this batch because their post-processing joins
+      // against _modifierGroups + _categories loaded here.
+      final tid = _currentTenantDbId as Object;
+      await Future.wait<void>([
+        () async {
+          final categoriesRes = await supabase
+              .from('categories')
+              .select('id, name, emoji, icon_name, sort_order, is_system')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _categories = (categoriesRes as List)
+              .map((r) => cat.Category.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final featRow = await supabase
+              .from('tenant_features')
+              .select(
+                  'reserve_enabled, timer_enabled, subscribe_enabled, service_enabled')
+              .eq('tenant_id', tid)
+              .maybeSingle();
+          _features = featRow == null
+              ? cat.TenantFeatures()
+              : cat.TenantFeatures.fromRow(featRow);
+        }(),
+        () async {
+          final pinRow = await supabase
+              .from('owner_pins')
+              .select('tenant_id')
+              .eq('tenant_id', tid)
+              .maybeSingle();
+          _ownerPinSet = pinRow != null;
+        }(),
+        () async {
+          final mgRows = await supabase
+              .from('modifier_groups')
+              .select(
+                  'id, name, emoji, icon_name, required, default_index, sort_order, is_system, '
+                  'modifier_options(id, name, price_delta_cents, sort_order)')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _modifierGroups = (mgRows as List).map((r) {
+            final row = r as Map<String, dynamic>;
+            // Sort the raw rows by sort_order first (O(n log n)), then map.
+            final optsRaw = [...(row['modifier_options'] as List? ?? const [])]
+              ..sort((a, b) => (((a as Map)['sort_order'] as int?) ?? 0)
+                  .compareTo(((b as Map)['sort_order'] as int?) ?? 0));
+            final opts = optsRaw
+                .map((o) => MasterOption.fromRow(o as Map<String, dynamic>))
+                .toList();
+            return MasterModifierGroup.fromRow(row, options: opts);
+          }).toList();
+        }(),
+        () async {
+          final roleRows = await supabase
+              .from('employee_roles')
+              .select(
+                  'id, name, icon_name, permissions, requires_pin, is_system, sort_order')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _employeeRoles = (roleRows as List)
+              .map((r) => EmployeeRole.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final empRows = await supabase
+              .from('employees')
+              .select('*, role:employee_roles(id, name)')
+              .eq('tenant_id', tid)
+              .order('created_at');
+          _employees = (empRows as List).map((r) {
+            final row = r as Map<String, dynamic>;
+            final joined = row['role'] as Map<String, dynamic>?;
+            return Employee.fromRow(row, roleRow: joined);
+          }).toList();
+        }(),
+        () async {
+          final rulesRow = await supabase
+              .from('payroll_rules')
+              .select('*')
+              .eq('tenant_id', tid)
+              .maybeSingle();
+          _payrollRules = rulesRow == null
+              ? PayrollRules()
+              : PayrollRules.fromRow(rulesRow);
+        }(),
+        () async {
+          final ltRows = await supabase
+              .from('leave_types')
+              .select('*')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _leaveTypes = (ltRows as List)
+              .map((r) => LeaveType.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final tplRows = await supabase
+              .from('employment_templates')
+              .select('*')
+              .eq('tenant_id', tid)
+              .order('employment_type');
+          _employmentTemplates = (tplRows as List)
+              .map((r) => EmploymentTemplate.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final typeRows = await supabase
+              .from('product_types')
+              .select('*')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _productTypes = (typeRows as List)
+              .map((r) => ProductType.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final invCatRows = await supabase
+              .from('inventory_categories')
+              .select('*')
+              .eq('tenant_id', tid)
+              .order('sort_order');
+          _inventoryCategories = (invCatRows as List)
+              .map((r) => InventoryCategory.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+        () async {
+          final invRows = await supabase
+              .from('inventory_items')
+              .select('*')
+              .eq('tenant_id', tid)
+              .order('name');
+          _inventory = (invRows as List)
+              .map((r) => InventoryItem.fromRow(r as Map<String, dynamic>))
+              .toList();
+        }(),
+      ]);
 
       // Products — joined with type + category for denormalized names.
       final prodRows = await supabase
