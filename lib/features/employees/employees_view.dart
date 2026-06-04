@@ -1133,13 +1133,11 @@ class _DetailRow extends StatelessWidget {
     required this.icon,
     required this.label,
     this.value,
-    this.valueWidget,
     this.trailing,
   });
   final IconData icon;
   final String label;
   final String? value;
-  final Widget? valueWidget;
   final Widget? trailing;
 
   @override
@@ -1172,14 +1170,11 @@ class _DetailRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                if (valueWidget != null)
-                  valueWidget!
-                else
-                  Text(
-                    value ?? '—',
-                    style: YFont.bodyStrong().copyWith(fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                Text(
+                  value ?? '—',
+                  style: YFont.bodyStrong().copyWith(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),

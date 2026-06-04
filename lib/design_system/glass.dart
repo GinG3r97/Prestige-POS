@@ -59,9 +59,9 @@ class YFloatingCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: tint ?? YColor.surface1.withOpacity(0.78),
+            color: tint ?? YColor.surface1.withValues(alpha: 0.78),
             borderRadius: BorderRadius.circular(corner),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 0.6),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 0.6),
             boxShadow: const [
               BoxShadow(color: Color(0x1A000000), blurRadius: 18, offset: Offset(0, 10)),
               BoxShadow(color: Color(0x0A000000), blurRadius: 3, offset: Offset(0, 1)),
@@ -98,7 +98,7 @@ class YGlassPill extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: tint.withOpacity(0.85),
+            color: tint.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(999),
           ),
           child: child,

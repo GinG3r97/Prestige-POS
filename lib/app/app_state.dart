@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
@@ -175,12 +174,21 @@ class AppState extends ChangeNotifier {
       }
 
       _stores.clear();
+      // Fetch every store's branches in ONE query, then group — avoids an
+      // N+1 query per tenant during hydration.
+      final tenantIds = [for (final t in tenantRows) t['id'] as String];
+      final allBranchRows = await supabase
+          .from('branches')
+          .select('id, name, tenant_id')
+          .inFilter('tenant_id', tenantIds)
+          .order('created_at');
+      final branchesByTenant = <String, List<dynamic>>{};
+      for (final b in allBranchRows as List) {
+        (branchesByTenant[(b as Map)['tenant_id'] as String] ??= <dynamic>[])
+            .add(b);
+      }
       for (final t in tenantRows) {
-        final branchRows = await supabase
-            .from('branches')
-            .select('id, name')
-            .eq('tenant_id', t['id'])
-            .order('created_at');
+        final branchRows = branchesByTenant[t['id'] as String] ?? const [];
 
         final tenantObj = Tenant(
           businessName: t['business_name'] as String,
@@ -259,19 +267,14 @@ class AppState extends ChangeNotifier {
           .order('sort_order');
       _modifierGroups = (mgRows as List).map((r) {
         final row = r as Map<String, dynamic>;
-        final optsRaw = (row['modifier_options'] as List? ?? const []);
+        // Sort the raw rows by sort_order first (O(n log n)), then map —
+        // avoids an indexWhere-in-comparator O(n²) scan.
+        final optsRaw = [...(row['modifier_options'] as List? ?? const [])]
+          ..sort((a, b) => (((a as Map)['sort_order'] as int?) ?? 0)
+              .compareTo(((b as Map)['sort_order'] as int?) ?? 0));
         final opts = optsRaw
             .map((o) => MasterOption.fromRow(o as Map<String, dynamic>))
-            .toList()
-          ..sort((a, b) {
-            final ai = optsRaw
-                .indexWhere((x) => (x as Map)['id'] == a.id);
-            final bi = optsRaw
-                .indexWhere((x) => (x as Map)['id'] == b.id);
-            final aSort = (optsRaw[ai] as Map)['sort_order'] as int? ?? 0;
-            final bSort = (optsRaw[bi] as Map)['sort_order'] as int? ?? 0;
-            return aSort.compareTo(bSort);
-          });
+            .toList();
         return MasterModifierGroup.fromRow(row, options: opts);
       }).toList();
 
@@ -2041,7 +2044,7 @@ class AppState extends ChangeNotifier {
           .order('sort_order')
           .limit(1);
       _printer = (rows as List).isNotEmpty
-          ? PrinterConfig.fromRow(rows.first as Map<String, dynamic>)
+          ? PrinterConfig.fromRow(rows.first)
           : null;
       // Warm up the saved Bluetooth printer in the background so the first
       // print after launch connects instantly — no manual reconnect needed.
@@ -2121,7 +2124,7 @@ class AppState extends ChangeNotifier {
           .order('opened_at', ascending: false)
           .limit(1);
       _shift = (rows as List).isNotEmpty
-          ? CashierShift.fromRow(rows.first as Map<String, dynamic>)
+          ? CashierShift.fromRow(rows.first)
           : null;
     } catch (e) {
       if (kDebugMode) debugPrint('Load shift failed: $e');
@@ -2223,10 +2226,10 @@ class AppState extends ChangeNotifier {
           .select('grand_total_cents, z_counter, last_number')
           .eq('tenant_id', tenantId)
           .limit(1);
-      if ((rows as List).isEmpty) {
+      if (rows.isEmpty) {
         return (grandTotal: 0, zCounter: 0, lastNumber: 0);
       }
-      final r = rows.first as Map<String, dynamic>;
+      final r = rows.first;
       return (
         grandTotal: (r['grand_total_cents'] as num?)?.toInt() ?? 0,
         zCounter: (r['z_counter'] as int?) ?? 0,

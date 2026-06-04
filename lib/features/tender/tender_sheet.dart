@@ -858,6 +858,16 @@ class _TenderSheetState extends State<TenderSheet> {
     final scDiscountCents = _scDiscountCents(state);
     final totalCents = cart.total.centavos - scDiscountCents; // amount due
 
+    // The server rejects a ₱0 payment (amount_cents > 0 CHECK). Catch it here
+    // with a clear message instead of a cryptic save error.
+    if (totalCents <= 0) {
+      setState(() {
+        _busy = false;
+        _error = 'This order totals ₱0. Add a priced item before charging.';
+      });
+      return;
+    }
+
     // Map the chosen tender into the DB-compatible enum.
     final dbMethod = switch (m) {
       TenderMethod.cash => o.OrderPaymentMethod.cash,

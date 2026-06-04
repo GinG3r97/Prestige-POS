@@ -357,8 +357,8 @@ class _SettingsViewState extends State<SettingsView> {
                     _Row(
                       leading: const Icon(Icons.receipt_outlined, color: YColor.brandDeep),
                       title: 'Receipt header & footer',
-                      subtitle: (tenant?.receiptHeader?.isNotEmpty ?? false) ||
-                              (tenant?.receiptFooter?.isNotEmpty ?? false)
+                      subtitle: (tenant.receiptHeader?.isNotEmpty ?? false) ||
+                              (tenant.receiptFooter?.isNotEmpty ?? false)
                           ? 'Custom text set · tap to edit'
                           : 'Add lines under your name + a footer message',
                       onTap: () => showDialog(
@@ -371,11 +371,9 @@ class _SettingsViewState extends State<SettingsView> {
                       leading: const Icon(Icons.dashboard_customize_outlined,
                           color: YColor.brandDeep),
                       title: 'Print templates & spacing',
-                      subtitle: tenant != null
-                          ? 'Receipt #${tenant.receiptTemplate} · '
-                              'Ticket #${tenant.ticketTemplate} · '
-                              '${tenant.printTailLines}-line gap'
-                          : 'Choose receipt & ticket layouts, paper spacing',
+                      subtitle: 'Receipt #${tenant.receiptTemplate} · '
+                          'Ticket #${tenant.ticketTemplate} · '
+                          '${tenant.printTailLines}-line gap',
                       onTap: () => showDialog(
                         context: context,
                         builder: (_) => const _PrintTemplateDialog(),
@@ -383,9 +381,9 @@ class _SettingsViewState extends State<SettingsView> {
                     ),
                     const _Divider(),
                     _Row(
-                      leading: _logoLeading(tenant?.logoUrl),
+                      leading: _logoLeading(tenant.logoUrl),
                       title: 'Logo',
-                      subtitle: (tenant?.logoUrl?.isNotEmpty ?? false)
+                      subtitle: (tenant.logoUrl?.isNotEmpty ?? false)
                           ? 'Tap to change or remove'
                           : 'Upload a logo for receipts & screens',
                       onTap: () => showDialog(
