@@ -614,7 +614,7 @@ class _ItemRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onEdit,
+        onTap: () => _showItemActions(context),
         child: Opacity(
           opacity: dim ? 0.55 : 1.0,
           child: Padding(
@@ -736,58 +736,40 @@ class _ItemRow extends StatelessWidget {
                 ],
               ),
             ),
-            // Actions
+            // Actions — themed menu, Edit + Remove only
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_horiz, color: YColor.inkMuted),
+              color: YColor.surface1,
+              elevation: 8,
+              shadowColor: Colors.black.withValues(alpha: 0.18),
+              position: PopupMenuPosition.under,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(YRadius.md),
+                side: const BorderSide(color: YColor.hairline),
+              ),
               onSelected: (v) {
-                switch (v) {
-                  case 'restock':
-                    onRestock();
-                    break;
-                  case 'stocktake':
-                    onStockTake();
-                    break;
-                  case 'edit':
-                    onEdit();
-                    break;
-                  case 'remove':
-                    onRemove();
-                    break;
-                }
+                if (v == 'edit') onEdit();
+                if (v == 'remove') onRemove();
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'restock',
-                  child: Row(children: [
-                    Icon(Icons.add_box_outlined, size: 16),
-                    SizedBox(width: 8),
-                    Text('Restock'),
-                  ]),
-                ),
-                const PopupMenuItem(
-                  value: 'stocktake',
-                  child: Row(children: [
-                    Icon(Icons.tune, size: 16),
-                    SizedBox(width: 8),
-                    Text('Stock take'),
-                  ]),
-                ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'edit',
                   child: Row(children: [
-                    Icon(Icons.edit_outlined, size: 16),
-                    SizedBox(width: 8),
-                    Text('Edit'),
+                    const Icon(Icons.edit_outlined,
+                        size: 18, color: YColor.brandDeep),
+                    const SizedBox(width: 10),
+                    Text('Edit', style: YFont.bodyStrong()),
                   ]),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'remove',
                   child: Row(children: [
-                    Icon(Icons.delete_outline,
-                        size: 16, color: YColor.danger),
-                    SizedBox(width: 8),
+                    const Icon(Icons.delete_outline,
+                        size: 18, color: YColor.danger),
+                    const SizedBox(width: 10),
                     Text('Remove',
-                        style: TextStyle(color: YColor.danger)),
+                        style:
+                            YFont.bodyStrong().copyWith(color: YColor.danger)),
                   ]),
                 ),
               ],
@@ -804,5 +786,100 @@ class _ItemRow extends StatelessWidget {
       return amount.toStringAsFixed(0);
     }
     return amount.toStringAsFixed(amount % 1 == 0 ? 0 : 1);
+  }
+
+  /// Tapping a row asks what to do with the stock: Restock or Stock take.
+  void _showItemActions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Container(
+          width: 380,
+          decoration: BoxDecoration(
+            color: YColor.surface1,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(children: [
+                const Icon(Icons.inventory_2_outlined,
+                    color: YColor.brandDeep),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(item.name,
+                      style: YFont.titleMD(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close)),
+              ]),
+            ),
+            Container(height: 0.5, color: YColor.hairline),
+            _actionTile(
+              context,
+              Icons.add_box_outlined,
+              'Restock',
+              'Add new stock you received',
+              () {
+                Navigator.of(context).pop();
+                onRestock();
+              },
+            ),
+            Container(height: 0.5, color: YColor.hairline),
+            _actionTile(
+              context,
+              Icons.fact_check_outlined,
+              'Stock take',
+              'Count and correct the on-hand quantity',
+              () {
+                Navigator.of(context).pop();
+                onStockTake();
+              },
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile(BuildContext context, IconData icon, String title,
+      String subtitle, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: YColor.brandTint,
+              borderRadius: BorderRadius.circular(YRadius.md),
+            ),
+            child: Icon(icon, size: 20, color: YColor.brandDeep),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: YFont.bodyStrong()),
+                const SizedBox(height: 2),
+                Text(subtitle, style: YFont.caption()),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: YColor.inkMuted, size: 18),
+        ]),
+      ),
+    );
   }
 }
