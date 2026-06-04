@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
@@ -654,6 +655,13 @@ class _ShiftsSheetState extends State<_ShiftsSheet> {
                       foregroundColor: YColor.brand,
                       side: const BorderSide(color: YColor.hairline)),
                 ),
+              if (isOwner)
+                IconButton(
+                  tooltip: 'BIR exports',
+                  onPressed: () => showBirExports(context),
+                  icon: const Icon(Icons.description_outlined,
+                      color: YColor.brandDeep),
+                ),
               IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close)),
@@ -795,5 +803,189 @@ class _ShiftsSheetState extends State<_ShiftsSheet> {
     final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
     final ap = d.hour >= 12 ? 'PM' : 'AM';
     return '${m[d.month-1]} ${d.day}, ${d.year} · $h:${d.minute.toString().padLeft(2,'0')} $ap';
+  }
+}
+
+/// Owner-only BIR export menu: e-Journal, monthly eSales summary, and an
+/// EIS-style JSON export. Each generates text the owner can copy out.
+void showBirExports(BuildContext context) {
+  showDialog(context: context, builder: (_) => const _BirExportsDialog());
+}
+
+class _BirExportsDialog extends StatelessWidget {
+  const _BirExportsDialog();
+
+  Future<void> _run(
+    BuildContext context,
+    String title,
+    Future<String> Function(AppState s, DateTimeRange r) build,
+  ) async {
+    final range = await showDateRangeSheet(context);
+    if (range == null || !context.mounted) return;
+    final state = context.read<AppState>();
+    final text = await build(state, range);
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => _TextViewerDialog(title: title, text: text),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        width: 420,
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+            child: Row(children: [
+              const Icon(Icons.description_outlined, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Expanded(child: Text('BIR exports', style: YFont.titleMD())),
+              IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          _option(
+            context,
+            Icons.menu_book_outlined,
+            'Electronic Journal',
+            'All invoices for a date range (chronological).',
+            () => _run(context, 'Electronic Journal',
+                (s, r) => s.buildEJournal(r.start, r.end)),
+          ),
+          _option(
+            context,
+            Icons.summarize_outlined,
+            'eSales monthly summary',
+            'Gross / VATable / VAT-exempt for the month you pick.',
+            () => _run(context, 'eSales Monthly Summary',
+                (s, r) => s.buildESalesSummary(r.start.year, r.start.month)),
+          ),
+          _option(
+            context,
+            Icons.data_object_outlined,
+            'EIS invoice JSON',
+            'Invoice data for a range (e-invoicing stepping stone).',
+            () => _run(context, 'EIS Invoice JSON',
+                (s, r) => s.buildEisInvoicesJson(r.start, r.end)),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
+  Widget _option(BuildContext context, IconData icon, String title,
+      String subtitle, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(children: [
+          Icon(icon, size: 20, color: YColor.brandDeep),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: YFont.bodyStrong()),
+                const SizedBox(height: 2),
+                Text(subtitle, style: YFont.caption()),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: YColor.inkMuted, size: 18),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Read-only monospace viewer with a Copy-to-clipboard action.
+class _TextViewerDialog extends StatelessWidget {
+  const _TextViewerDialog({required this.title, required this.text});
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        width: 560,
+        height: h < 720 ? h - 96 : 620,
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+            child: Row(children: [
+              Expanded(child: Text(title, style: YFont.titleMD())),
+              IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close)),
+            ]),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              color: YColor.surface2,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(
+                  text,
+                  style: const TextStyle(
+                      fontFamily: 'monospace', fontSize: 12, height: 1.4),
+                ),
+              ),
+            ),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: text));
+                  if (!context.mounted) return;
+                  PushToast.show(context,
+                      title: 'Copied to clipboard',
+                      leadingIcon: Icons.check_circle_outline);
+                },
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copy'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }

@@ -573,6 +573,41 @@ class ReceiptBuilder {
               fontType: font, align: PosAlign.right, bold: true)),
     ]));
     bytes.addAll(_kv(g, 'Orders', '${shift.orderCount ?? 0}', font: font));
+
+    // ─── BIR accumulated grand total (non-resettable) ───
+    final beg = shift.beginningGtCents;
+    final end = shift.endingGtCents;
+    if (beg != null || end != null) {
+      bytes.addAll(g.hr());
+      if (shift.zCounter != null) {
+        bytes.addAll(
+            _kv(g, 'Reset (Z) counter', '${shift.zCounter}', font: font));
+      }
+      bytes.addAll(_kv(g, 'Beginning GT', _peso(beg ?? 0), font: font));
+      bytes.addAll(_kv(g, 'Ending GT', _peso(end ?? 0), font: font));
+      if (beg != null && end != null) {
+        bytes.addAll(
+            _kv(g, 'Net sales (GT diff)', _peso(end - beg), font: font));
+      }
+    }
+    // BIR machine identity (when configured).
+    if ((tenant.tin ?? '').trim().isNotEmpty) {
+      bytes.addAll(g.hr());
+      bytes.addAll(g.text(
+          _san('TIN: ${tenant.tin}  Branch: ${tenant.branchCode}'),
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+      final idb = <String>[];
+      if ((tenant.birMin ?? '').trim().isNotEmpty) {
+        idb.add('MIN ${tenant.birMin}');
+      }
+      if ((tenant.birSerial ?? '').trim().isNotEmpty) {
+        idb.add('SN ${tenant.birSerial}');
+      }
+      if (idb.isNotEmpty) {
+        bytes.addAll(g.text(_san(idb.join('  ')),
+            styles: PosStyles(fontType: font, align: PosAlign.center)));
+      }
+    }
     bytes.addAll(g.hr());
     bytes.addAll(_endFeed(g, tenant.printTailLines));
     return bytes;

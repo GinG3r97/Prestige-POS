@@ -14,6 +14,11 @@ class CashierShift {
   final int? cashSalesCents;
   final int? totalSalesCents;
   final int? orderCount;
+  // BIR Z-reading: non-resettable accumulated grand total snapshot at open /
+  // close, and the reset (Z) counter for this reading.
+  final int? beginningGtCents;
+  final int? endingGtCents;
+  final int? zCounter;
 
   CashierShift({
     required this.id,
@@ -29,6 +34,9 @@ class CashierShift {
     this.cashSalesCents,
     this.totalSalesCents,
     this.orderCount,
+    this.beginningGtCents,
+    this.endingGtCents,
+    this.zCounter,
   });
 
   bool get isOpen => status == 'open';
@@ -49,6 +57,9 @@ class CashierShift {
         cashSalesCents: r['cash_sales_cents'] as int?,
         totalSalesCents: r['total_sales_cents'] as int?,
         orderCount: r['order_count'] as int?,
+        beginningGtCents: (r['beginning_gt_cents'] as num?)?.toInt(),
+        endingGtCents: (r['ending_gt_cents'] as num?)?.toInt(),
+        zCounter: r['z_counter'] as int?,
       );
 }
 

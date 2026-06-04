@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import '../models/inventory.dart';
 import '../models/member.dart';
 import '../models/mock_data.dart';
 import '../features/printing/bt_printer.dart';
+import '../models/money.dart';
 import '../models/order.dart' as o;
 import '../models/printer_config.dart';
 import '../models/shift.dart';
@@ -2209,11 +2211,38 @@ class AppState extends ChangeNotifier {
   }
 
   /// Opens a cashier shift with a starting cash float. Returns null on success.
+  /// Reads the tenant's non-resettable counters (accumulated grand total,
+  /// Z-counter, last invoice number) for BIR Z-readings + reports.
+  Future<({int grandTotal, int zCounter, int lastNumber})>
+      _fetchCounters() async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return (grandTotal: 0, zCounter: 0, lastNumber: 0);
+    try {
+      final rows = await supabase
+          .from('tenant_order_counters')
+          .select('grand_total_cents, z_counter, last_number')
+          .eq('tenant_id', tenantId)
+          .limit(1);
+      if ((rows as List).isEmpty) {
+        return (grandTotal: 0, zCounter: 0, lastNumber: 0);
+      }
+      final r = rows.first as Map<String, dynamic>;
+      return (
+        grandTotal: (r['grand_total_cents'] as num?)?.toInt() ?? 0,
+        zCounter: (r['z_counter'] as int?) ?? 0,
+        lastNumber: (r['last_number'] as int?) ?? 0,
+      );
+    } catch (_) {
+      return (grandTotal: 0, zCounter: 0, lastNumber: 0);
+    }
+  }
+
   Future<String?> openShift(int openingFloatCents) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return 'No store selected.';
     if (_shift != null) return 'A shift is already open.';
     try {
+      final counters = await _fetchCounters();
       final inserted = await supabase
           .from('cashier_shifts')
           .insert({
@@ -2224,6 +2253,7 @@ class AppState extends ChangeNotifier {
                 currentOwner?.displayName ??
                 'Cashier',
             'opening_float_cents': openingFloatCents,
+            'beginning_gt_cents': counters.grandTotal,
           })
           .select()
           .single();
@@ -2243,9 +2273,20 @@ class AppState extends ChangeNotifier {
   Future<CashierShift?> closeShift(int countedCashCents) async {
     final shift = _shift;
     if (shift == null) return null;
+    final tenantId = _currentTenantDbId;
     final totals = await shiftTotals();
     final expected = shift.openingFloatCents + totals.cashSalesCents;
     final overShort = countedCashCents - expected;
+    // Snapshot the ending grand total + advance the non-resettable Z-counter.
+    final counters = await _fetchCounters();
+    final newZ = counters.zCounter + 1;
+    if (tenantId != null) {
+      try {
+        await supabase
+            .from('tenant_order_counters')
+            .update({'z_counter': newZ}).eq('tenant_id', tenantId);
+      } catch (_) {/* best effort */}
+    }
     try {
       final updated = await supabase
           .from('cashier_shifts')
@@ -2262,6 +2303,8 @@ class AppState extends ChangeNotifier {
             'cash_sales_cents': totals.cashSalesCents,
             'total_sales_cents': totals.totalSalesCents,
             'order_count': totals.orderCount,
+            'ending_gt_cents': counters.grandTotal,
+            'z_counter': newZ,
           })
           .eq('id', shift.id)
           .select()
@@ -2273,6 +2316,185 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  // ───── BIR exports (Phase 2 e-Journal / Phase 4 eSales + EIS) ─────
+
+  static String _stamp(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  /// Electronic Journal — chronological text of every invoice (with lines +
+  /// status) for a date range. Inclusive of both end days (local time).
+  Future<String> buildEJournal(DateTime fromLocal, DateTime toLocal) async {
+    final tenantId = _currentTenantDbId;
+    final t = tenant;
+    if (tenantId == null || t == null) return 'No store selected.';
+    final fromUtc = DateTime(fromLocal.year, fromLocal.month, fromLocal.day)
+        .toUtc();
+    final toUtc = DateTime(toLocal.year, toLocal.month, toLocal.day)
+        .add(const Duration(days: 1))
+        .toUtc();
+    final rows = await supabase
+        .from('orders')
+        .select('order_number, status, total_cents, discount_cents, '
+            'created_at, sc_pwd_type, '
+            'order_lines(sellable_name, quantity, line_total_cents)')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', fromUtc.toIso8601String())
+        .lt('created_at', toUtc.toIso8601String())
+        .order('created_at');
+    final b = StringBuffer();
+    b.writeln('ELECTRONIC JOURNAL');
+    b.writeln(t.businessName);
+    if ((t.tin ?? '').isNotEmpty) {
+      b.writeln('TIN: ${t.tin}   MIN: ${t.birMin ?? '-'}   SN: ${t.birSerial ?? '-'}');
+    }
+    b.writeln('Period: ${_stamp(fromLocal)} to ${_stamp(toLocal)}');
+    b.writeln('=' * 42);
+    final list = rows as List;
+    for (final r in list) {
+      final m = r as Map<String, dynamic>;
+      final dt = DateTime.parse(m['created_at'] as String).toLocal();
+      final no = (m['order_number'] as int?) ?? 0;
+      final st = ((m['status'] as String?) ?? '').toUpperCase();
+      b.writeln(
+          '${_stamp(dt)}  INV ${no.toString().padLeft(7, '0')}  $st');
+      for (final l in (m['order_lines'] as List? ?? const [])) {
+        final lm = l as Map<String, dynamic>;
+        b.writeln('   ${lm['quantity']}x ${lm['sellable_name']}'
+            '  ${Money((lm['line_total_cents'] as int?) ?? 0).formatted}');
+      }
+      if ((m['sc_pwd_type'] as String?) != null) {
+        b.writeln('   [${(m['sc_pwd_type'] as String).toUpperCase()} 20% + VAT-EXEMPT]');
+      }
+      b.writeln('   TOTAL ${Money((m['total_cents'] as int?) ?? 0).formatted}');
+    }
+    b.writeln('=' * 42);
+    b.writeln('Invoices: ${list.length}');
+    return b.toString();
+  }
+
+  /// Monthly sales summary for the BIR eSales portal (one machine).
+  Future<String> buildESalesSummary(int year, int month) async {
+    final tenantId = _currentTenantDbId;
+    final t = tenant;
+    if (tenantId == null || t == null) return 'No store selected.';
+    final from = DateTime(year, month, 1);
+    final to = DateTime(year, month + 1, 1);
+    final rows = await supabase
+        .from('orders')
+        .select('order_number, status, total_cents, sc_pwd_type')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', from.toUtc().toIso8601String())
+        .lt('created_at', to.toUtc().toIso8601String());
+    var gross = 0, exemptGross = 0, lastNo = 0, count = 0;
+    for (final r in rows as List) {
+      final m = r as Map<String, dynamic>;
+      if (m['status'] != 'paid') continue;
+      final tot = (m['total_cents'] as int?) ?? 0;
+      gross += tot;
+      count++;
+      final no = (m['order_number'] as int?) ?? 0;
+      if (no > lastNo) lastNo = no;
+      if ((m['sc_pwd_type'] as String?) != null) exemptGross += tot;
+    }
+    final vatReg = t.vatRegistered;
+    final taxable = gross - exemptGross;
+    final vatableNet = vatReg ? (taxable / 1.12).round() : taxable;
+    final vat = vatReg ? taxable - vatableNet : 0;
+    const months = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    final b = StringBuffer();
+    b.writeln('eSALES MONTHLY SALES REPORT');
+    b.writeln(t.businessName);
+    b.writeln('TIN: ${t.tin ?? '-'}   Branch: ${t.branchCode}');
+    b.writeln('MIN: ${t.birMin ?? '-'}   SN: ${t.birSerial ?? '-'}');
+    b.writeln('Period: ${months[month]} $year');
+    b.writeln('=' * 42);
+    b.writeln('Last invoice no : ${lastNo.toString().padLeft(7, '0')}');
+    b.writeln('Invoices        : $count');
+    if (vatReg) {
+      b.writeln('VATable sales   : ${Money(vatableNet).formatted}');
+      b.writeln('VAT-exempt sales: ${Money(exemptGross).formatted}');
+      b.writeln('VAT (12%)       : ${Money(vat).formatted}');
+    } else {
+      b.writeln('Non-VAT sales   : ${Money(taxable).formatted}');
+      b.writeln('VAT-exempt sales: ${Money(exemptGross).formatted}');
+    }
+    b.writeln('-' * 42);
+    b.writeln('GROSS SALES     : ${Money(gross).formatted}');
+    return b.toString();
+  }
+
+  /// EIS-style JSON export of invoices for a date range (a stepping stone to
+  /// the BIR Electronic Invoicing System; this produces the data, not the
+  /// live transmission).
+  Future<String> buildEisInvoicesJson(
+      DateTime fromLocal, DateTime toLocal) async {
+    final tenantId = _currentTenantDbId;
+    final t = tenant;
+    if (tenantId == null || t == null) return '{}';
+    final fromUtc = DateTime(fromLocal.year, fromLocal.month, fromLocal.day)
+        .toUtc();
+    final toUtc = DateTime(toLocal.year, toLocal.month, toLocal.day)
+        .add(const Duration(days: 1))
+        .toUtc();
+    final rows = await supabase
+        .from('orders')
+        .select('order_number, status, total_cents, discount_cents, '
+            'created_at, sc_pwd_type, sc_pwd_name, sc_pwd_id, customer_name, '
+            'order_lines(sellable_name, quantity, unit_price_cents, line_total_cents)')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', fromUtc.toIso8601String())
+        .lt('created_at', toUtc.toIso8601String())
+        .order('created_at');
+    final invoices = [
+      for (final r in rows as List)
+        if (r is Map<String, dynamic>)
+          {
+            'invoiceNo': (r['order_number'] as int?) ?? 0,
+            'dateTime': r['created_at'],
+            'status': r['status'],
+            'vatExempt': r['sc_pwd_type'] != null,
+            'scPwd': r['sc_pwd_type'] == null
+                ? null
+                : {
+                    'type': r['sc_pwd_type'],
+                    'name': r['sc_pwd_name'],
+                    'id': r['sc_pwd_id'],
+                  },
+            'customer': r['customer_name'],
+            'discountCents': r['discount_cents'],
+            'totalCents': r['total_cents'],
+            'lines': [
+              for (final l in (r['order_lines'] as List? ?? const []))
+                if (l is Map<String, dynamic>)
+                  {
+                    'name': l['sellable_name'],
+                    'qty': l['quantity'],
+                    'unitPriceCents': l['unit_price_cents'],
+                    'lineTotalCents': l['line_total_cents'],
+                  }
+            ],
+          }
+    ];
+    final doc = {
+      'seller': {
+        'name': t.businessName,
+        'tin': t.tin,
+        'branch': t.branchCode,
+        'min': t.birMin,
+        'sn': t.birSerial,
+        'vatRegistered': t.vatRegistered,
+      },
+      'from': fromUtc.toIso8601String(),
+      'to': toUtc.toIso8601String(),
+      'count': invoices.length,
+      'invoices': invoices,
+    };
+    return const JsonEncoder.withIndent('  ').convert(doc);
   }
 
   /// Forgets the configured printer.
