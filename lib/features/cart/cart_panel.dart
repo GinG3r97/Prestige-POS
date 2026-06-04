@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../models/cart.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -12,8 +13,9 @@ class CartPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final cart = state.cart;
+    // Watch the cart only — cart edits repaint just this panel, not the
+    // whole app (AppState no longer re-broadcasts cart changes).
+    final cart = context.watch<CartStore>();
     return Container(
       color: YColor.surface1,
       child: Column(
@@ -53,7 +55,7 @@ class CartPanel extends StatelessWidget {
                   ),
           ),
           // Totals + Pay
-          if (cart.lines.isNotEmpty) _totals(state),
+          if (cart.lines.isNotEmpty) _totals(context, cart),
         ],
       ),
     );
@@ -133,8 +135,7 @@ class CartPanel extends StatelessWidget {
         ),
       );
 
-  Widget _totals(AppState state) {
-    final cart = state.cart;
+  Widget _totals(BuildContext context, CartStore cart) {
     return Container(
       // The cart panel sits flush against the right edge of the Sell
       // layout; the floating bottom nav lives in the centre and doesn't
@@ -160,7 +161,7 @@ class CartPanel extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => state.openTender(),
+              onPressed: () => context.read<AppState>().openTender(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: YColor.brand,
                 foregroundColor: Colors.white,

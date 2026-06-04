@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app_state.dart';
+import 'models/cart.dart';
 import 'data/supabase_client.dart';
 import 'design_system/colors.dart';
 import 'features/auth/welcome_view.dart';
@@ -137,6 +138,13 @@ class YosefPOSApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => NavController()),
+        // Scope the cart so cart edits repaint only cart-watching widgets,
+        // not every context.watch<AppState>() in the app. Same CartStore
+        // instance AppState owns (provided by value, never recreated).
+        ChangeNotifierProxyProvider<AppState, CartStore>(
+          create: (ctx) => ctx.read<AppState>().cart,
+          update: (_, app, __) => app.cart,
+        ),
       ],
       child: MaterialApp(
         title: 'Prestige POS',

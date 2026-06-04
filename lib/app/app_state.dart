@@ -49,7 +49,10 @@ enum AppRoute {
 
 class AppState extends ChangeNotifier {
   AppState() {
-    cart.addListener(notifyListeners);
+    // NOTE: the cart is exposed via its own CartStore provider (see main.dart)
+    // so cart edits repaint only cart-watching widgets, not every
+    // context.watch<AppState>() consumer. Do NOT re-add a cart->AppState
+    // listener here or you reintroduce the app-wide rebuild storm.
     _bindAuth();
   }
 
@@ -495,7 +498,6 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    cart.removeListener(notifyListeners);
     _authSub?.cancel();
     super.dispose();
   }
