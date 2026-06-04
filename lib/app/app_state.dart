@@ -4565,7 +4565,12 @@ class AppState extends ChangeNotifier {
   /// [refreshOrders] (called on Orders screen open + after a sale). Read
   /// by widgets via [recentOrders].
   List<o.Order> _orderCache = [];
-  List<o.Order> get recentOrders => List.unmodifiable(_orderCache);
+  // Stable unmodifiable view — same instance until the cache actually changes,
+  // so consumers can `identical()`-check to skip re-deriving (e.g. the Orders
+  // screen's DB->MockOrder adaptation). Rebuilt lazily after a refresh.
+  List<o.Order>? _recentOrdersView;
+  List<o.Order> get recentOrders =>
+      _recentOrdersView ??= List.unmodifiable(_orderCache);
 
   /// Refresh the [recentOrders] cache by re-fetching the last [days] days
   /// of orders for the active tenant. Safe to call repeatedly.
@@ -4573,6 +4578,7 @@ class AppState extends ChangeNotifier {
     final since = DateTime.now().subtract(Duration(days: days));
     final fetched = await fetchOrders(since: since, limit: 200);
     _orderCache = fetched;
+    _recentOrdersView = null; // invalidate the stable view
     notifyListeners();
   }
 

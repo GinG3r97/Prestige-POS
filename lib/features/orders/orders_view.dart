@@ -32,6 +32,11 @@ class _OrdersViewState extends State<OrdersView> {
   String? _selectedId;
   PaymentMethod? _method;
 
+  // Cache the DB->MockOrder adaptation so it only re-runs when the underlying
+  // order list changes — not on every keystroke / filter rebuild.
+  List<db.Order>? _adaptedSource;
+  List<MockOrder> _adaptedCache = const [];
+
   @override
   void initState() {
     super.initState();
@@ -47,8 +52,13 @@ class _OrdersViewState extends State<OrdersView> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     // Real DB-backed orders, adapted to the UI's existing MockOrder shape so
-    // the 700-line layout doesn't need to be rewritten this turn.
-    final allOrders = state.recentOrders.map(_adaptToMock).toList();
+    // the 700-line layout doesn't need to be rewritten this turn. Re-adapt
+    // only when the source list actually changes (not per keystroke).
+    if (!identical(state.recentOrders, _adaptedSource)) {
+      _adaptedSource = state.recentOrders;
+      _adaptedCache = state.recentOrders.map(_adaptToMock).toList();
+    }
+    final allOrders = _adaptedCache;
     // Cashier scoping: a non-owner sees ONLY the orders they rang up. The
     // owner (or any owner-session) sees everything.
     final myName = state.currentStaff?.name;
