@@ -13,8 +13,22 @@ import '../printing/printer_setup_sheet.dart';
 import '../shell/nav_controller.dart';
 import 'store_qr_modal.dart';
 
-class SettingsView extends StatelessWidget {
+class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
+
+  @override
+  State<SettingsView> createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<SettingsView> {
+  String _query = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +84,10 @@ class SettingsView extends StatelessWidget {
                       ),
                   ],
                 ),
+                const SizedBox(height: 20),
+                _searchField(),
+                if (_query.trim().isNotEmpty) _searchResults(context, state),
+                if (_query.trim().isEmpty) ...[
                 const SizedBox(height: 28),
 
                 // ── Account
@@ -474,12 +492,114 @@ class SettingsView extends StatelessWidget {
                 ]),
 
                 const SizedBox(height: 32),
+                ],
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _searchField() {
+    return TextField(
+      controller: _searchCtrl,
+      onChanged: (v) => setState(() => _query = v),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.search, size: 18),
+        suffixIcon: _query.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() => _query = '');
+                },
+              ),
+        hintText: 'Search settings…',
+        hintStyle: YFont.body().copyWith(color: YColor.inkSubtle),
+        filled: true,
+        fillColor: YColor.surface1,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.hairline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.hairline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: const BorderSide(color: YColor.brand, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchResults(BuildContext context, AppState state) {
+    final q = _query.trim().toLowerCase();
+    final hits = _settingsIndex(context, state)
+        .where((e) =>
+            e.title.toLowerCase().contains(q) ||
+            e.section.toLowerCase().contains(q) ||
+            e.keywords.any((k) => k.contains(q)))
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: hits.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text('No settings match "${_query.trim()}"',
+                    style: YFont.body().copyWith(color: YColor.inkMuted)),
+              ),
+            )
+          : _Card(children: [
+              for (var i = 0; i < hits.length; i++) ...[
+                _Row(
+                  leading: Icon(hits[i].icon, color: YColor.brandDeep),
+                  title: hits[i].title,
+                  subtitle: hits[i].section,
+                  onTap: hits[i].onTap,
+                ),
+                if (i != hits.length - 1) const _Divider(),
+              ],
+            ]),
+    );
+  }
+
+  /// Flat, searchable index of the actionable settings.
+  List<
+      ({
+        IconData icon,
+        String title,
+        String section,
+        List<String> keywords,
+        VoidCallback onTap
+      })> _settingsIndex(BuildContext context, AppState state) {
+    final t = state.tenant;
+    return [
+      (icon: Icons.person_outline, title: 'Owner name', section: 'Account', keywords: const ['name','profile'], onTap: () => _editOwnerName(context, state)),
+      (icon: Icons.alternate_email, title: 'Email', section: 'Account', keywords: const ['email','login'], onTap: () => _editEmail(context, state)),
+      (icon: Icons.lock_outline, title: 'Change password', section: 'Account', keywords: const ['password','security'], onTap: () => _comingSoon(context, 'Change password')),
+      (icon: Icons.logout, title: 'Sign out', section: 'Account', keywords: const ['logout','exit'], onTap: () => _confirmSignOut(context, state)),
+      (icon: Icons.storefront, title: 'Business name', section: 'This Store', keywords: const ['store','shop','name'], onTap: () => _editStoreName(context, state)),
+      (icon: Icons.place_outlined, title: 'Business address', section: 'This Store', keywords: const ['address','location'], onTap: () => _editStoreAddress(context, state)),
+      (icon: Icons.badge_outlined, title: 'TIN', section: 'Tax / BIR', keywords: const ['tax','bir','tin'], onTap: () => _editBirField(context, state, title: 'TIN', current: t?.tin, save: (v) => state.updateBirInfo(tin: v))),
+      (icon: Icons.account_tree_outlined, title: 'Branch code', section: 'Tax / BIR', keywords: const ['bir','branch'], onTap: () => _editBirField(context, state, title: 'Branch code', current: t?.branchCode, save: (v) => state.updateBirInfo(branchCode: v))),
+      (icon: Icons.memory_outlined, title: 'Machine ID (MIN)', section: 'Tax / BIR', keywords: const ['bir','min','machine'], onTap: () => _editBirField(context, state, title: 'Machine ID (MIN)', current: t?.birMin, save: (v) => state.updateBirInfo(birMin: v))),
+      (icon: Icons.tag_outlined, title: 'Serial number', section: 'Tax / BIR', keywords: const ['bir','serial','sn'], onTap: () => _editBirField(context, state, title: 'Serial number', current: t?.birSerial, save: (v) => state.updateBirInfo(birSerial: v))),
+      (icon: Icons.verified_outlined, title: 'PTU number', section: 'Tax / BIR', keywords: const ['bir','ptu','permit'], onTap: () => _editBirField(context, state, title: 'PTU number', current: t?.ptuNumber, save: (v) => state.updateBirInfo(ptuNumber: v))),
+      (icon: Icons.event_available_outlined, title: 'PTU valid until', section: 'Tax / BIR', keywords: const ['bir','ptu','permit'], onTap: () => _editBirField(context, state, title: 'PTU valid until', current: t?.ptuValidUntil, save: (v) => state.updateBirInfo(ptuValidUntil: v))),
+      (icon: Icons.workspace_premium_outlined, title: 'Accreditation no.', section: 'Tax / BIR', keywords: const ['bir','accreditation'], onTap: () => _editBirField(context, state, title: 'Accreditation no.', current: t?.birAccreditationNo, save: (v) => state.updateBirInfo(birAccreditationNo: v))),
+      (icon: Icons.receipt_outlined, title: 'Receipt header & footer', section: 'Tax & Receipts', keywords: const ['receipt','header','footer','tin'], onTap: () => showDialog(context: context, builder: (_) => const _ReceiptTextDialog())),
+      (icon: Icons.dashboard_customize_outlined, title: 'Print templates & spacing', section: 'Tax & Receipts', keywords: const ['print','template','spacing','ticket','receipt'], onTap: () => showDialog(context: context, builder: (_) => const _PrintTemplateDialog())),
+      (icon: Icons.image_outlined, title: 'Logo', section: 'Tax & Receipts', keywords: const ['logo','image','brand'], onTap: () => showDialog(context: context, builder: (_) => const _LogoDialog())),
+      (icon: Icons.print_outlined, title: 'Receipt printer', section: 'Hardware', keywords: const ['printer','bluetooth','hardware'], onTap: () => showPrinterSetup(context)),
+    ];
   }
 
   // ── Actions ──
