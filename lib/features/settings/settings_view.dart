@@ -1660,7 +1660,7 @@ By using Prestige POS ("the app"), provided by Prestige IT Solutions, you agree 
 
 5. Changes. We may update these terms and the app from time to time. Continued use means you accept the changes.
 
-Questions? Contact us at hello@prestigeitsolutions.com.
+Questions? Contact us at hello@prestigeitsolutions.tech.
 ''';
 
 const String _kPrivacyText = '''
@@ -1676,7 +1676,7 @@ Prestige IT Solutions respects your privacy. This explains what the app stores a
 
 • Your data: to access, correct, or delete your store's data, contact us.
 
-Questions? Contact us at hello@prestigeitsolutions.com.
+Questions? Contact us at hello@prestigeitsolutions.tech.
 ''';
 
 /// A small read-only legal text viewer (Terms / Privacy).
