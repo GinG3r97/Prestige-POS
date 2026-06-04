@@ -147,8 +147,6 @@ class CartPanel extends StatelessWidget {
       child: Column(
         children: [
           _totalRow('Subtotal', cart.subtotal.formatted),
-          if (cart.memberDiscount.centavos > 0)
-            _totalRow('Member (5%)', '-${cart.memberDiscount.formatted}', tint: YColor.success),
           _totalRow('VAT (incl.)', cart.vat.formatted, faded: true),
           const SizedBox(height: 8),
           const Divider(color: YColor.hairline, height: 1),

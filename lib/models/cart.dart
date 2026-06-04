@@ -110,12 +110,13 @@ class CartStore extends ChangeNotifier {
   Money get subtotal =>
       lines.fold(Money.zero, (acc, l) => acc + l.lineTotal);
 
-  Money get memberDiscount =>
-      customer?.tier == MemberTier.gold ? subtotal * 0.05 : Money.zero;
+  // NOTE: member-tier auto-discount isn't wired end-to-end (no UI attaches a
+  // member, and it wasn't passed to create_paid_order), so the cart total is
+  // the plain subtotal. Re-introduce a discount only by routing it through
+  // createPaidOrder's discountCents to keep the charged amount consistent.
+  Money get vat => subtotal * 0.12 / 1.12;
 
-  Money get vat => (subtotal - memberDiscount) * 0.12 / 1.12;
-
-  Money get total => subtotal - memberDiscount;
+  Money get total => subtotal;
 
   int get itemCount => lines.fold(0, (acc, l) => acc + l.quantity);
 
