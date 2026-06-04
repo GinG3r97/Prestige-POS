@@ -13,7 +13,17 @@ import '../../design_system/typography.dart';
 ///   Step 2: confirm by entering it again.
 /// Mismatch → shake + reset to step 1. Match → calls `setOwnerPin` RPC.
 class SetPinView extends StatefulWidget {
-  const SetPinView({super.key});
+  const SetPinView({super.key, this.onCompleted, this.title, this.subtitle});
+
+  /// When provided (e.g. pushed as a route from Settings → Change PIN), this
+  /// is called on a successful save instead of relying on the root Consumer
+  /// rerouting via `hasOwnerPin`. Use it to `Navigator.pop` back.
+  final VoidCallback? onCompleted;
+
+  /// Optional overrides for the first-step header/copy. Default to the
+  /// onboarding wording ("Create your owner PIN").
+  final String? title;
+  final String? subtitle;
 
   @override
   State<SetPinView> createState() => _SetPinViewState();
@@ -99,9 +109,10 @@ class _SetPinViewState extends State<SetPinView>
       });
       return;
     }
-    // Success — the root Consumer reroutes to LoginView / ShellView via
-    // hasOwnerPin flipping true.
+    // Success. If launched as a pushed route (Change PIN), hand control back
+    // to the caller; otherwise the root Consumer reroutes via hasOwnerPin.
     HapticFeedback.mediumImpact();
+    widget.onCompleted?.call();
   }
 
   @override
@@ -132,7 +143,9 @@ class _SetPinViewState extends State<SetPinView>
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    _confirmStep ? 'Confirm your PIN' : 'Create your owner PIN',
+                    _confirmStep
+                        ? 'Confirm your PIN'
+                        : (widget.title ?? 'Create your owner PIN'),
                     style: YFont.titleLG().copyWith(fontSize: 26),
                     textAlign: TextAlign.center,
                   ),
@@ -140,7 +153,8 @@ class _SetPinViewState extends State<SetPinView>
                   Text(
                     _confirmStep
                         ? 'Enter the same 4-digit code again.'
-                        : 'You\'ll use this PIN to sign in to $businessName on this device.',
+                        : (widget.subtitle ??
+                            'You\'ll use this PIN to sign in to $businessName on this device.'),
                     style: YFont.body().copyWith(
                       color: YColor.inkMuted,
                       fontSize: 14,

@@ -23,8 +23,11 @@ class MaintenanceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    // Only surface the Bookable tab when the store enabled bookings/co-working
+    // at setup (same flag that drives the Bookings nav). Otherwise it's noise.
+    final showBookable = state.features.reserveEnabled;
     return DefaultTabController(
-      length: 8,
+      length: showBookable ? 8 : 7,
       child: Container(
         color: YColor.surface2,
         child: Column(
@@ -58,48 +61,49 @@ class MaintenanceView extends StatelessWidget {
                     labelStyle: YFont.bodyStrong().copyWith(fontSize: 14),
                     unselectedLabelStyle:
                         YFont.bodyStrong().copyWith(fontSize: 14),
-                    tabs: const [
-                      Tab(
+                    tabs: [
+                      const Tab(
                         icon: Icon(Icons.tune_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Modifiers',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.add_circle_outline, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Add-ons',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.category_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Categories',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.inventory_2_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Inventory',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.label_outline, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Product',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.badge_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Roles',
                       ),
-                      Tab(
+                      const Tab(
                         icon: Icon(Icons.account_balance_wallet_outlined,
                             size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Payroll',
                       ),
-                      Tab(
-                        icon: Icon(Icons.event_available_outlined, size: 18),
-                        iconMargin: EdgeInsets.only(bottom: 2),
-                        text: 'Bookable',
-                      ),
+                      if (showBookable)
+                        const Tab(
+                          icon: Icon(Icons.event_available_outlined, size: 18),
+                          iconMargin: EdgeInsets.only(bottom: 2),
+                          text: 'Bookable',
+                        ),
                     ],
                   ),
                 ],
@@ -116,7 +120,7 @@ class MaintenanceView extends StatelessWidget {
                   _ProductTypesTab(state: state),
                   _RolesTab(state: state),
                   PayrollRulesTab(state: state),
-                  BookableResourcesTab(state: state),
+                  if (showBookable) BookableResourcesTab(state: state),
                 ],
               ),
             ),

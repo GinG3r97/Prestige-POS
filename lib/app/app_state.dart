@@ -694,6 +694,20 @@ class AppState extends ChangeNotifier {
     final cleanEmail = email.trim().toLowerCase();
     if (cleanEmail.isEmpty) return 'Please enter your email.';
     try {
+      // Shield: block sign-up for an address that already has an account.
+      // Otherwise OTP would silently sign them into their existing store,
+      // which reads as "my new account is gone". Guide them to sign in.
+      // Fail OPEN — a transient RPC error must never block a real sign-up;
+      // auth.users.email is unique anyway, so the worst case is the old flow.
+      try {
+        final exists = await supabase
+            .rpc('email_is_registered', params: {'p_email': cleanEmail});
+        if (exists == true) {
+          return 'This email is already registered. Please sign in instead.';
+        }
+      } catch (_) {
+        // ignore — proceed to send the OTP as before
+      }
       await supabase.auth.signInWithOtp(
         email: cleanEmail,
         shouldCreateUser: true,
@@ -893,7 +907,14 @@ class AppState extends ChangeNotifier {
             'tenant_id': tenantDbId,
             'name': c.name,
             'emoji': c.emoji,
+            // icon_name + is_system MUST be present on every row in the batch:
+            // a Supabase batch insert unions the keys across all maps and fills
+            // any missing key with NULL. Baseline rows omitting is_system would
+            // otherwise be sent as is_system=NULL → NOT NULL violation once a
+            // pack row in the same batch carries is_system. Keep keys uniform.
+            'icon_name': null,
             'sort_order': c.sortOrder,
+            'is_system': false,
           });
         }
       }
@@ -1382,22 +1403,94 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Starts an email change for the owner's account. Supabase sends a
-  /// confirmation link to the new address; the email only changes once the
-  /// owner clicks it. Returns null on success or a user-safe error message.
-  Future<String?> updateOwnerEmail(String newEmail) async {
-    final e = newEmail.trim();
+  /// The new address an in-progress email change is verifying against, or
+  /// null when no change is underway. Drives the OTP confirm dialog.
+  String? _pendingEmailChange;
+  String? get pendingEmailChange => _pendingEmailChange;
+
+  /// Step 1 of changing the owner's login email: sends a 6-digit OTP to the
+  /// NEW address. The change only applies once [confirmEmailChange] verifies
+  /// that code — the OLD email is never involved, so a lost old inbox can't
+  /// lock anyone out, and a typo'd new address simply never confirms.
+  ///
+  /// Requires "Secure email change" to be OFF in Supabase Auth (otherwise the
+  /// old address must also confirm). Returns null on success, else a message.
+  Future<String?> startEmailChange(String newEmail) async {
+    final e = newEmail.trim().toLowerCase();
     if (e.isEmpty || !e.contains('@') || !e.contains('.')) {
       return 'Enter a valid email address.';
     }
+    if (e == (currentOwner?.email ?? '').trim().toLowerCase()) {
+      return 'That is already your email.';
+    }
+    try {
+      // Shield: don't move to an address that already has its own account.
+      // Fail OPEN — a transient RPC error must never block a real change.
+      try {
+        final exists = await supabase
+            .rpc('email_is_registered', params: {'p_email': e});
+        if (exists == true) {
+          return 'That email is already used by another account.';
+        }
+      } catch (_) {/* ignore — proceed */}
+      await supabase.auth.updateUser(sb.UserAttributes(email: e));
+      _pendingEmailChange = e;
+      notifyListeners();
+      return null;
+    } on sb.AuthException catch (ex) {
+      return _humanizeAuthError(ex);
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  /// Step 2: verifies the [token] sent to the pending new address and
+  /// finalizes the change. The session is updated in place — the owner stays
+  /// signed in and the PIN (tenant-scoped) is untouched. The auth listener
+  /// refreshes [currentOwner] with the new email. Returns null on success.
+  Future<String?> confirmEmailChange(String token) async {
+    final e = _pendingEmailChange;
+    if (e == null) return 'No email change in progress.';
+    final code = token.trim();
+    final expectedLen = SupabaseBootstrap.otpLength;
+    if (code.length != expectedLen || int.tryParse(code) == null) {
+      return 'Enter the $expectedLen-digit code from your email.';
+    }
+    try {
+      await supabase.auth.verifyOTP(
+        email: e,
+        token: code,
+        type: sb.OtpType.emailChange,
+      );
+      _pendingEmailChange = null;
+      notifyListeners();
+      return null;
+    } on sb.AuthException catch (ex) {
+      return _humanizeAuthError(ex);
+    } catch (_) {
+      return 'Could not verify the code. Try again in a moment.';
+    }
+  }
+
+  /// Re-sends the OTP for an in-progress email change to the new address.
+  Future<String?> resendEmailChangeOtp() async {
+    final e = _pendingEmailChange;
+    if (e == null) return 'No email change in progress.';
     try {
       await supabase.auth.updateUser(sb.UserAttributes(email: e));
       return null;
     } on sb.AuthException catch (ex) {
-      return ex.message;
+      return _humanizeAuthError(ex);
     } catch (_) {
-      return 'Could not reach the server. Please try again.';
+      return 'Could not resend the code. Try again in a moment.';
     }
+  }
+
+  /// Abandons an in-progress email change (user closed the OTP dialog).
+  void cancelEmailChange() {
+    if (_pendingEmailChange == null) return;
+    _pendingEmailChange = null;
+    notifyListeners();
   }
 
   /// Renames the owner. Persists to the Supabase auth user metadata

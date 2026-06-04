@@ -3,10 +3,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/image_util.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../pin/set_pin_view.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import '../printing/printer_setup_sheet.dart';
@@ -113,9 +115,9 @@ class _SettingsViewState extends State<SettingsView> {
                   const _Divider(),
                   _Row(
                     leading: const Icon(Icons.lock_outline, color: YColor.brandDeep),
-                    title: 'Change password',
-                    subtitle: 'Update your account password',
-                    onTap: () => _comingSoon(context, 'Change password'),
+                    title: 'Change PIN',
+                    subtitle: 'Verify by email, then set a new PIN',
+                    onTap: () => _changePin(context, state),
                   ),
                   const _Divider(),
                   _Row(
@@ -590,7 +592,7 @@ class _SettingsViewState extends State<SettingsView> {
     return [
       (icon: Icons.person_outline, title: 'Owner name', section: 'Account', keywords: const ['name','profile'], onTap: () => _editOwnerName(context, state)),
       (icon: Icons.alternate_email, title: 'Email', section: 'Account', keywords: const ['email','login'], onTap: () => _editEmail(context, state)),
-      (icon: Icons.lock_outline, title: 'Change password', section: 'Account', keywords: const ['password','security'], onTap: () => _comingSoon(context, 'Change password')),
+      (icon: Icons.lock_outline, title: 'Change PIN', section: 'Account', keywords: const ['pin','password','security'], onTap: () => _changePin(context, state)),
       (icon: Icons.logout, title: 'Sign out', section: 'Account', keywords: const ['logout','exit'], onTap: () => _confirmSignOut(context, state)),
       (icon: Icons.storefront, title: 'Business name', section: 'This Store', keywords: const ['store','shop','name'], onTap: () => _editStoreName(context, state)),
       (icon: Icons.place_outlined, title: 'Business address', section: 'This Store', keywords: const ['address','location'], onTap: () => _editStoreAddress(context, state)),
@@ -713,33 +715,133 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _editEmail(BuildContext context, AppState state) async {
-    final controller =
-        TextEditingController(text: state.currentOwner?.email ?? '');
-    final result = await showDialog<String>(
+    // Step 1 — collect the NEW email. Start blank so they type the new one
+    // rather than editing the old (clearer, and avoids accidental no-ops).
+    final controller = TextEditingController();
+    final newEmail = await showDialog<String>(
       context: context,
       builder: (_) => _TextFieldDialog(
         title: 'Change email',
         controller: controller,
-        hint: 'name@example.com',
-        confirmLabel: 'Send confirmation',
+        hint: 'new-email@example.com',
+        confirmLabel: 'Send code',
       ),
     );
-    if (result != null && result.trim().isNotEmpty) {
-      final err = await state.updateOwnerEmail(result.trim());
-      if (!context.mounted) return;
-      if (err != null) {
-        PushToast.show(context,
-            title: 'Could not change email',
-            subtitle: err,
-            leadingIcon: Icons.error_outline);
-      } else {
-        PushToast.show(context,
-            title: 'Confirmation sent',
-            subtitle:
-                'Check the new inbox and tap the link to finish the change.',
-            leadingIcon: Icons.mark_email_read_outlined);
-      }
+    if (newEmail == null || newEmail.trim().isEmpty) return;
+
+    // Step 1b — send the OTP to the new address.
+    final startErr = await state.startEmailChange(newEmail.trim());
+    if (!context.mounted) return;
+    if (startErr != null) {
+      PushToast.show(context,
+          title: 'Could not change email',
+          subtitle: startErr,
+          leadingIcon: Icons.error_outline);
+      return;
     }
+
+    // Step 2 — verify the 6-digit code sent to the new inbox.
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _OtpDialog(
+        email: newEmail.trim().toLowerCase(),
+        purpose: 'to finish changing your email',
+        verifyLabel: 'Verify & change email',
+        onVerify: (code) => state.confirmEmailChange(code),
+        onResend: () => state.resendEmailChangeOtp(),
+      ),
+    );
+    if (!context.mounted) return;
+    if (changed == true) {
+      PushToast.show(context,
+          title: 'Email updated',
+          subtitle: 'Use your new email to sign in from now on.',
+          leadingIcon: Icons.mark_email_read_outlined);
+    } else {
+      // Dialog closed without finishing — drop the pending change.
+      state.cancelEmailChange();
+    }
+  }
+
+  /// Change PIN: verify it's really the owner via an email OTP first, then
+  /// push the PIN screen to set a new one. The new PIN overwrites the old via
+  /// setOwnerPin, so this works whether or not a PIN already exists.
+  Future<void> _changePin(BuildContext context, AppState state) async {
+    final email = state.currentOwner?.email ?? '';
+    if (email.isEmpty) {
+      PushToast.show(context,
+          title: "Can't verify you",
+          subtitle: 'No account email on file.',
+          leadingIcon: Icons.error_outline);
+      return;
+    }
+
+    // 1) Confirm + send the identity code.
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Change PIN'),
+        content: Text(
+            "We'll send a 6-digit code to $email to confirm it's you. "
+            'Then you can set a new PIN.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand, foregroundColor: Colors.white),
+            child: const Text('Send code'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !context.mounted) return;
+
+    final sendErr = await state.sendLoginOtp(email: email);
+    if (!context.mounted) return;
+    if (sendErr != null) {
+      PushToast.show(context,
+          title: 'Could not send code',
+          subtitle: sendErr,
+          leadingIcon: Icons.error_outline);
+      return;
+    }
+
+    // 2) Verify the code.
+    final verified = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _OtpDialog(
+        email: email,
+        purpose: 'to continue',
+        verifyLabel: 'Verify',
+        onVerify: (code) => state.verifyOtp(code),
+        onResend: () => state.resendOtp(),
+      ),
+    );
+    if (!context.mounted) return;
+    if (verified != true) {
+      state.cancelOtpVerification();
+      return;
+    }
+
+    // 3) Identity confirmed — set a new PIN (overwrites the old one).
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (ctx) => SetPinView(
+        title: 'Set a new PIN',
+        subtitle: 'Enter a new 4-digit PIN for signing in on this device.',
+        onCompleted: () => Navigator.of(ctx).pop(),
+      ),
+    ));
+    if (!context.mounted) return;
+    PushToast.show(context,
+        title: 'PIN updated', leadingIcon: Icons.check_circle_outline);
   }
 
   void _saveToast(BuildContext context, String? err, String okMsg) {
@@ -961,86 +1063,234 @@ class _TextFieldDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    // Strip the keyboard inset so the dialog stays full-size when the keyboard
-    // opens — the KeyboardAccessoryField floats the value above the keyboard.
-    return MediaQuery.removeViewInsets(
-      context: context,
-      removeBottom: true,
-      child: Dialog(
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
+    // Compact, auto-height dialog — sized to its content rather than the
+    // whole screen. KeyboardAccessoryField still floats the value above the
+    // keyboard, so a small centered dialog stays usable when it opens.
+    return Dialog(
       backgroundColor: YColor.surface1,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: size.width - 200,
-        height: size.height - 120,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 18, 16, 14),
-            child: Row(children: [
-              Text(title,
-                  style: YFont.titleLG().copyWith(fontSize: 22)),
-              const Spacer(),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ]),
-          ),
-          Container(height: 0.5, color: YColor.hairline),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Floats a blurred preview card above the keyboard (so the
-                    // value stays visible) and the dialog doesn't collapse.
-                    KeyboardAccessoryField(
-                      controller: controller,
-                      accessoryLabel: title,
-                      hint: hint,
-                      fillColor: YColor.surface2,
-                      borderColor: YColor.hairline,
-                    ),
-                  ],
+      insetPadding: const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Text(title, style: YFont.titleLG().copyWith(fontSize: 22)),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
                 ),
+              ]),
+              const SizedBox(height: 14),
+              KeyboardAccessoryField(
+                controller: controller,
+                accessoryLabel: title,
+                hint: hint,
+                fillColor: YColor.surface2,
+                borderColor: YColor.hairline,
               ),
-            ),
+              const SizedBox(height: 20),
+              Row(children: [
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, controller.text),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: YColor.brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md)),
+                  ),
+                  child: Text(confirmLabel),
+                ),
+              ]),
+            ],
           ),
-          Container(height: 0.5, color: YColor.hairline),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(children: [
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reusable 6-digit OTP confirm dialog. Pops `true` once [onVerify] succeeds.
+/// Used for both email-change (verify the new address) and PIN-change (verify
+/// the owner via a login code before letting them set a new PIN).
+class _OtpDialog extends StatefulWidget {
+  const _OtpDialog({
+    required this.email,
+    required this.purpose,
+    required this.verifyLabel,
+    required this.onVerify,
+    required this.onResend,
+  });
+
+  /// Address the code was sent to (shown to the user).
+  final String email;
+
+  /// Sentence explaining what finishing does, e.g. "to finish changing your
+  /// email" / "to continue".
+  final String purpose;
+  final String verifyLabel;
+
+  /// Verifies [code]; returns null on success or a user-safe error message.
+  final Future<String?> Function(String code) onVerify;
+
+  /// Re-sends the code; returns null on success or a message.
+  final Future<String?> Function() onResend;
+
+  @override
+  State<_OtpDialog> createState() => _OtpDialogState();
+}
+
+class _OtpDialogState extends State<_OtpDialog> {
+  final _code = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  int get _digits => SupabaseBootstrap.otpLength;
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final err = await widget.onVerify(_code.text);
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _busy = false;
+        _error = err;
+        _code.clear();
+      });
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _resend() async {
+    if (_busy) return;
+    final err = await widget.onResend();
+    if (!mounted) return;
+    PushToast.show(context,
+        title: err == null ? 'Code resent' : 'Could not resend',
+        subtitle: err ?? 'Check ${widget.email} again.',
+        leadingIcon: err == null
+            ? Icons.mark_email_read_outlined
+            : Icons.error_outline);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: YColor.surface1,
+      insetPadding:
+          const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Text('Enter code', style: YFont.titleLG().copyWith(fontSize: 22)),
+                const Spacer(),
+                IconButton(
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+                  icon: const Icon(Icons.close),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text(
+                'We sent a $_digits-digit code to ${widget.email}. '
+                'Enter it below ${widget.purpose}.',
+                style: YFont.body().copyWith(color: YColor.inkMuted),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _code,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: _digits,
+                style: YFont.titleLG().copyWith(
+                    fontSize: 28, letterSpacing: 10, fontWeight: FontWeight.w700),
+                decoration: InputDecoration(
+                  counterText: '',
+                  hintText: '••••••'.substring(0, _digits),
+                  filled: true,
+                  fillColor: YColor.surface2,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                    borderSide: const BorderSide(color: YColor.hairline),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                    borderSide: const BorderSide(color: YColor.brand, width: 1.5),
+                  ),
+                ),
+                onChanged: (v) {
+                  if (_error != null) setState(() => _error = null);
+                  if (v.length == _digits) _verify();
+                },
+                onSubmitted: (_) => _verify(),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!,
+                    style: YFont.body()
+                        .copyWith(color: YColor.danger, fontSize: 13)),
+              ],
+              const SizedBox(height: 18),
               ElevatedButton(
-                onPressed: () =>
-                    Navigator.pop(context, controller.text),
+                onPressed:
+                    (_busy || _code.text.length != _digits) ? null : _verify,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: YColor.brand,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(YRadius.md)),
                 ),
-                child: Text(confirmLabel),
+                child: _busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.2, color: Colors.white))
+                    : Text(widget.verifyLabel),
               ),
-            ]),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: _busy ? null : _resend,
+                child: const Text("Didn't get it? Resend code"),
+              ),
+            ],
           ),
-        ]),
+        ),
       ),
-    ),
     );
   }
 }

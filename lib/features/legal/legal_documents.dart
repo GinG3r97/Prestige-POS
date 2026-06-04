@@ -11,12 +11,12 @@ library;
 const _effectiveDate = '2026-05-20';
 const _companyLegalName = 'Prestige IT Solutions';
 const _productName = 'Prestige POS';
-const _contactEmail = 'legal@prestigeit.solutions';
-const _contactSupportEmail = 'support@prestigeit.solutions';
+const _contactEmail = 'hello@prestigeitsolutions.tech';
+const _contactSupportEmail = 'hello@prestigeitsolutions.tech';
 const _companyAddress =
-    'Prestige IT Solutions, Metro Manila, Philippines';
+    'Prestige IT Solutions, General Santos City, Philippines';
 const _governingLawJurisdiction = 'Republic of the Philippines';
-const _venueCity = 'Pasay City, Metro Manila';
+const _venueCity = 'General Santos City';
 
 /// A heading + paragraphs block inside a legal document.
 class LegalSection {
