@@ -178,6 +178,160 @@ class _ShiftBarState extends State<ShiftBar> {
   }
 }
 
+/// Compact cashier-shift status for the global TopBar (sits beside the store
+/// name). Replaces the in-page bar while a shift is open:
+///  • On the Sell tab — live Float · Sales · Orders + Close Cashier.
+///  • On any other tab — collapses to a small "Cashier is still open" reminder
+///    that taps back to Sell.
+///  • Hidden entirely when no shift is open (the Sell page shows Open Cashier).
+/// Slides + fades between the two states as the active tab changes.
+class ShiftHeaderBar extends StatefulWidget {
+  const ShiftHeaderBar({super.key});
+
+  @override
+  State<ShiftHeaderBar> createState() => _ShiftHeaderBarState();
+}
+
+class _ShiftHeaderBarState extends State<ShiftHeaderBar> {
+  Timer? _timer;
+  ShiftTotals _totals = const ShiftTotals();
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _refresh());
+  }
+
+  Future<void> _refresh() async {
+    final state = context.read<AppState>();
+    if (!state.hasOpenShift) return;
+    final t = await state.shiftTotals();
+    if (mounted) setState(() => _totals = t);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final shift = state.currentShift;
+    final open = state.hasOpenShift && shift != null;
+    final onSell = state.selectedRoute == AppRoute.sell;
+
+    Widget child;
+    if (!open) {
+      child = const SizedBox.shrink(key: ValueKey('shift-none'));
+    } else if (onSell) {
+      child = _full(shift, key: const ValueKey('shift-full'));
+    } else {
+      child = _reminder(state, key: const ValueKey('shift-reminder'));
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      // Keep entering/leaving children pinned to the left (the default
+      // centres them, which would make the pill jump as it animates).
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        alignment: Alignment.centerLeft,
+        children: <Widget>[
+          ...previousChildren,
+          if (currentChild != null) currentChild,
+        ],
+      ),
+      transitionBuilder: (w, anim) => ClipRect(
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(-0.12, 0),
+            end: Offset.zero,
+          ).animate(anim),
+          child: FadeTransition(opacity: anim, child: w),
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _full(CashierShift shift, {Key? key}) {
+    // scaleDown guarantees the pill never overflows the header on a narrow
+    // tablet — it shrinks slightly instead of throwing. Close Cashier now
+    // lives beside the Sell search box, not here.
+    return FittedBox(
+      key: key,
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: YColor.brandTint,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.point_of_sale, size: 14, color: YColor.brandDeep),
+          const SizedBox(width: 10),
+          _hstat('Float', Money(shift.openingFloatCents).formatted),
+          _hdot(),
+          _hstat('Sales', Money(_totals.totalSalesCents).formatted),
+          _hdot(),
+          _hstat('Orders', '${_totals.orderCount}'),
+        ]),
+      ),
+    );
+  }
+
+  Widget _reminder(AppState state, {Key? key}) {
+    return InkWell(
+      key: key,
+      onTap: () => state.selectRoute(AppRoute.sell),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: YColor.brandTint,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+                color: YColor.success, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text('Cashier is still open',
+              style: YFont.bodyStrong()
+                  .copyWith(fontSize: 12, color: YColor.brandDeep)),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right, size: 14, color: YColor.brandDeep),
+        ]),
+      ),
+    );
+  }
+
+  Widget _hstat(String label, String value) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text('${label.toUpperCase()} ',
+          style: YFont.caption().copyWith(
+              fontSize: 9, letterSpacing: 0.6, color: YColor.inkMuted)),
+      Text(value,
+          style: YFont.bodyStrong()
+              .copyWith(fontSize: 13, color: YColor.brandDeep)),
+    ]);
+  }
+
+  Widget _hdot() => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 10),
+        child: Text('·', style: TextStyle(color: YColor.inkMuted)),
+      );
+}
+
 class _OpenShiftDialog extends StatefulWidget {
   const _OpenShiftDialog();
   @override

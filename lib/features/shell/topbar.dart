@@ -8,6 +8,7 @@ import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
 import '../printing/bt_printer.dart';
 import '../printing/printer_setup_sheet.dart';
+import '../sell/shift_bar.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
@@ -64,7 +65,16 @@ class TopBar extends StatelessWidget {
               Text(_dateString(), style: YFont.caption()),
             ],
           ),
-          const Spacer(),
+          // Cashier-shift status lives here beside the store name: full
+          // float/sales/orders + Close on the Sell tab, a compact "still open"
+          // reminder elsewhere. Expanded so the right-side controls stay right.
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ShiftHeaderBar(),
+            ),
+          ),
           // Branch picker (current store's branches)
           PopupMenuButton<Branch>(
             position: PopupMenuPosition.under,

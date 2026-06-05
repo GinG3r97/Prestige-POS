@@ -71,11 +71,14 @@ class _SellViewState extends State<SellView> {
       color: YColor.surface2,
       child: Column(
         children: [
-          const ShiftBar(),
-          Container(height: 0.5, color: YColor.hairline),
-          if (!state.hasOpenShift)
-            Expanded(child: _cashierClosed(context))
-          else ...[
+          // While a shift is OPEN the float/sales/orders + Close Cashier live
+          // in the TopBar (see ShiftHeaderBar). Only the closed-state bar — the
+          // Open Cashier entry point — stays on the page.
+          if (!state.hasOpenShift) ...[
+            const ShiftBar(),
+            Container(height: 0.5, color: YColor.hairline),
+            Expanded(child: _cashierClosed(context)),
+          ] else ...[
             _header(usedCategories: usedCategories),
             Expanded(
               child: filtered.isEmpty
@@ -114,22 +117,30 @@ class _SellViewState extends State<SellView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: 'Search drinks, pastries, food…',
-              hintStyle: YFont.body().copyWith(color: YColor.inkSubtle),
-              filled: true,
-              fillColor: YColor.surface2,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(999),
-                borderSide: BorderSide.none,
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    hintText: 'Search drinks, pastries, food…',
+                    hintStyle: YFont.body().copyWith(color: YColor.inkSubtle),
+                    filled: true,
+                    fillColor: YColor.surface2,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              _closeCashierButton(),
+            ],
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -147,6 +158,30 @@ class _SellViewState extends State<SellView> {
             ]),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Close Cashier action sitting flush beside the search box. Mirrors the
+  /// search field's fill, pill shape and vertical padding so the two read as a
+  /// matched pair (same height).
+  Widget _closeCashierButton() {
+    return GestureDetector(
+      onTap: () => showCloseCashier(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: YColor.surface2,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.lock_outline, size: 16, color: YColor.danger),
+          const SizedBox(width: 8),
+          Text('Close Cashier',
+              style: YFont.bodyStrong()
+                  .copyWith(color: YColor.danger, fontSize: 13)),
+        ]),
       ),
     );
   }
