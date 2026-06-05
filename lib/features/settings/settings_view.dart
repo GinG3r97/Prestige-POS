@@ -11,6 +11,7 @@ import '../../design_system/typography.dart';
 import '../pin/set_pin_view.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
+import '../printing/cash_drawer_dialog.dart';
 import '../printing/printer_setup_sheet.dart';
 import '../shell/nav_controller.dart';
 import 'store_qr_modal.dart';
@@ -414,8 +415,13 @@ class _SettingsViewState extends State<SettingsView> {
                       leading: const Icon(Icons.monetization_on_outlined,
                           color: YColor.brandDeep),
                       title: 'Cash drawer',
-                      subtitle: 'Not connected',
-                      onTap: () => _comingSoon(context, 'Cash drawer'),
+                      subtitle: state.printerConfig != null
+                          ? 'Opens via the receipt printer on cash sales · tap to test'
+                          : 'Connect a receipt printer first',
+                      onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => const CashDrawerDialog(),
+                      ),
                     ),
                     const _Divider(),
                     _Row(

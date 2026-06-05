@@ -10,6 +10,7 @@ import '../../design_system/typography.dart';
 import '../../models/cart.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
+import '../printing/drawer_prefs.dart';
 import '../printing/print_jobs.dart';
 import '../printing/receipt_builder.dart';
 import '../widgets/keyboard_accessory_field.dart';
@@ -965,10 +966,18 @@ class _TenderSheetState extends State<TenderSheet> {
       completed = true;
     });
 
+    // Cash sale → pop the cash drawer wired to the receipt printer so the
+    // cashier can make change. Fires before the receipt so the drawer opens
+    // the instant the sale is charged. Best-effort and harmless if no drawer
+    // is connected (the printer just ignores the pulse).
+    final printer = state.printerConfig;
+    if (m == TenderMethod.cash && printer != null) {
+      await PrintJobs.openDrawer(printer, pin5: await DrawerPrefs.usesPin5());
+    }
+
     // Auto-print the customer receipt to the configured printer (best-effort,
     // serialized so it can't collide with a tapped prep ticket).
     final order = _completedOrder;
-    final printer = state.printerConfig;
     final tenant = state.tenant;
     if (order != null && printer != null && tenant != null) {
       await _doPrint(

@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,7 +9,9 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/printer_config.dart';
 import '../widgets/push_toast.dart';
+import 'bt_permissions.dart';
 import 'bt_printer.dart';
+import 'drawer_prefs.dart';
 import 'receipt_builder.dart';
 
 /// Opens the Bluetooth printer setup dialog (scan → select → test → save).
@@ -53,6 +57,20 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       _scanning = true;
       _status = null;
     });
+    // Android 12+ needs the runtime BLUETOOTH_CONNECT/SCAN permission before
+    // paired devices are visible — the plugin checks but never asks. No-op on
+    // iOS. If the user declines, the list below stays empty, so hint at it.
+    final granted = await BtPermissions.ensure();
+    if (!granted && mounted) {
+      setState(() {
+        _scanning = false;
+        _btOn = false;
+        _status = 'Bluetooth permission is needed to find printers. '
+            'Allow it when prompted, or enable it in Settings → Apps → '
+            'Prestige POS → Permissions, then tap rescan.';
+      });
+      return;
+    }
     // The BLE adapter often reports "off" right at launch before it's ready —
     // retry a few times before believing it.
     var on = await BtPrinter.isEnabled();
@@ -125,6 +143,40 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       _status = ok
           ? 'Test sent! Check the printer.'
           : 'Connected, but the test didn\'t print. Try again.';
+    });
+  }
+
+  /// Pops the cash drawer wired to the selected printer (ESC/POS kick). Lets
+  /// the owner confirm the printer→drawer cable works before relying on the
+  /// automatic open-on-cash-sale behaviour.
+  Future<void> _openDrawer() async {
+    final addr = _selectedAddress;
+    if (addr == null) {
+      setState(() => _status = 'Pick a printer first.');
+      return;
+    }
+    setState(() {
+      _working = true;
+      _status = 'Opening drawer…';
+    });
+    final connected = await BtPrinter.connect(addr);
+    if (!connected) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _status = 'Could not connect. Make sure the printer is on and nearby.';
+      });
+      return;
+    }
+    final ok = await BtPrinter.printBytes(
+        addr, ReceiptBuilder.drawerKick(pin5: await DrawerPrefs.usesPin5()));
+    if (!mounted) return;
+    setState(() {
+      _working = false;
+      _status = ok
+          ? 'Drawer signal sent — it should pop open.'
+          : 'Sent, but nothing happened. Check the cable from the printer to '
+              'the drawer (and that the drawer uses pin 2).';
     });
   }
 
@@ -248,6 +300,14 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
                 style: YFont.bodyStrong().copyWith(color: YColor.danger)),
           ),
         OutlinedButton(
+          onPressed: _working || _selectedAddress == null ? null : _openDrawer,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: YColor.brand,
+            side: const BorderSide(color: YColor.hairline),
+          ),
+          child: const Text('Open drawer'),
+        ),
+        OutlinedButton(
           onPressed: _working || _selectedAddress == null ? null : _testPrint,
           style: OutlinedButton.styleFrom(
             foregroundColor: YColor.brand,
@@ -346,7 +406,8 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
         _scanning
             ? 'Scanning…'
             : 'No printers found.\nTurn the printer on, make sure it\'s paired in '
-                'iPad Settings → Bluetooth, then tap rescan.',
+                '${Platform.isIOS ? 'iPad' : 'your tablet\'s'} Settings → '
+                'Bluetooth, then tap rescan.',
         textAlign: TextAlign.center,
         style: YFont.caption().copyWith(color: YColor.inkMuted),
       ),

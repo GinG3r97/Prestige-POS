@@ -24,6 +24,14 @@ class PrintJobs {
     return res.success;
   }
 
+  /// Pops the cash drawer wired to the configured printer's RJ11/RJ12 port.
+  /// Sends a bare ESC/POS drawer-kick over the same transport as receipts
+  /// (LAN socket or Bluetooth). Best-effort; returns true if the bytes were
+  /// delivered. Used for both "open on cash sale" and a manual no-sale open.
+  static Future<bool> openDrawer(PrinterConfig config, {bool pin5 = false}) {
+    return _send(config, ReceiptBuilder.drawerKick(pin5: pin5));
+  }
+
   /// Customer receipt (prices, totals, payment, header/footer).
   static Future<bool> receipt({
     required o.Order order,

@@ -43,6 +43,7 @@ dependencies:
   image: ^4.3.0             # client-side resize + JPEG re-encode (no native deps)
   esc_pos_utils_plus: ^2.0.4   # maintained fork; same API as esc_pos_utils, compatible with image ^4.x
   print_bluetooth_thermal: ^1.1.1  # BLE thermal printing — iOS (BLE) + Android. Drives PT-210 etc.
+  shared_preferences: ^2.5.0   # small device-local settings (e.g. cash-drawer pin)
 
 dev_dependencies:
   flutter_test:

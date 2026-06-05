@@ -8,6 +8,7 @@ import 'app/app_state.dart';
 import 'models/cart.dart';
 import 'data/supabase_client.dart';
 import 'design_system/colors.dart';
+import 'design_system/responsive_scaler.dart';
 import 'features/auth/welcome_view.dart';
 import 'features/login/login_view.dart';
 import 'features/onboarding/onboarding_view.dart';
@@ -150,6 +151,9 @@ class YosefPOSApp extends StatelessWidget {
         title: 'Prestige POS',
         debugShowCheckedModeBanner: false,
         theme: theme,
+        // Scales the whole app to fit any tablet so the UI looks the same
+        // proportionally on an iPad, a Lenovo, or a budget Android tablet.
+        builder: (context, child) => ResponsiveScaler(child: child!),
         home: Consumer<AppState>(
           builder: (_, state, _) {
             // Pick the right destination for the current session state.

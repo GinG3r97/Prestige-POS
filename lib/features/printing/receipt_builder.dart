@@ -17,6 +17,18 @@ import '../../models/tenant.dart';
 class ReceiptBuilder {
   ReceiptBuilder._();
 
+  /// ESC/POS cash-drawer "kick" — pulses the drawer wired to the printer's
+  /// RJ11/RJ12 port so it pops open. Command is `ESC p m t1 t2`:
+  ///   • `m`  selects the connector pin: 0 = pin 2 (the common default),
+  ///          1 = pin 5 (some drawers). Set [pin5] true only if pin 2 does
+  ///          nothing on your hardware.
+  ///   • `t1/t2` are the pulse on/off times in 2 ms units; 25/250 (0x19/0xFA)
+  ///          is the widely-compatible default.
+  /// Sending this to a printer with no drawer attached is harmless — the
+  /// printer simply ignores the pulse.
+  static List<int> drawerKick({bool pin5 = false}) =>
+      [0x1B, 0x70, pin5 ? 0x01 : 0x00, 0x19, 0xFA];
+
   /// BIR-style customer receipt. Header carries the business name +
   /// address, then order metadata, then line items with modifiers /
   /// add-ons + per-line totals, then a totals block (subtotal, VAT incl,

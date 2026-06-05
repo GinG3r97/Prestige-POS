@@ -1,10 +1,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Bluetooth thermal printing (PT-210 etc.) -->
+    <!-- Required for Supabase (HTTPS) and LAN thermal printing (raw TCP to
+         port 9100). Without this, a RELEASE build has no network at all —
+         the debug manifest grants it for dev only, so it must be declared
+         here too. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Lets the app check it's on Wi-Fi before reaching a LAN printer so we
+         can show a clearer "not on the same network" message. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- Bluetooth thermal printing (PT-210 / Goojprt / generic ESC-POS).
+         We connect to PAIRED (bonded) printers only — never active discovery —
+         so NO location permission is needed on any Android version.
+         · Android ≤ 11 (API ≤ 30): legacy install-time BLUETOOTH + ADMIN. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!--   · Android 12+ (API 31+): runtime BLUETOOTH_SCAN + BLUETOOTH_CONNECT.
+           neverForLocation asserts we don't derive physical location from BT,
+           so the OS skips the location-permission prompt entirely. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- Mark BT as optional so tablets without a BT radio (Wi-Fi-only LAN
+         printing) can still install the app. -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- Tablet POS: large-screen, landscape app. Declaring screen support
+         keeps it off the Play Store "phone-only" filter and marks it as
+         designed for tablets. -->
+    <supports-screens
+        android:largeScreens="true"
+        android:xlargeScreens="true"
+        android:requiresSmallestWidthDp="600"/>
 
     <application
         android:label="Prestige POS"
