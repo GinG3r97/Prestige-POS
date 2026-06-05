@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
@@ -16,6 +15,7 @@ import '../maintenance/maintenance_view.dart'
 import '../products/products_view.dart'
     show showProductEditor, showProductQuickEdit;
 import '../widgets/push_toast.dart';
+import 'reorder_grid.dart';
 import 'shift_bar.dart';
 
 /// Unified storefront for the coffee shop. Search + category chips on top,
@@ -260,44 +260,33 @@ class _SellViewState extends State<SellView> {
         height: h,
         child: Row(children: [
           Expanded(
-            child: ReorderableListView(
-              scrollDirection: Axis.horizontal,
-              buildDefaultDragHandles: false,
-              proxyDecorator: (c, i, a) => _dragProxy(c),
-              onReorder: (o, n) => _onReorderTypes(types, o, n),
-              children: [
-                for (var i = 0; i < types.length; i++)
-                  Padding(
-                    key: ValueKey('type-${types[i].id}'),
-                    padding: const EdgeInsets.only(right: 10),
-                    child: ReorderableDelayedDragStartListener(
-                      index: i,
-                      // Center so the dashed border hugs the box's natural
-                      // height instead of stretching to the row height.
-                      child: Center(
-                        child: Opacity(
-                          opacity:
-                              nonEmpty.contains(types[i].id) ? 1 : 0.45,
-                          child: _editChrome(
-                            child: _TypeBox(
-                              label: types[i].name,
-                              icon: resolveIcon(
-                                  iconName: types[i].iconName,
-                                  name: types[i].name),
-                              selected: _filterTypeId == types[i].id,
-                              onTap: () => setState(() {
-                                _filterTypeId = types[i].id;
-                                _filterCategoryId = null;
-                              }),
-                            ),
-                            onEdit: () => _editType(types[i]),
-                            radius: YRadius.lg,
-                          ),
-                        ),
-                      ),
+            child: ReorderStrip(
+              axis: Axis.horizontal,
+              itemCount: types.length,
+              mainExtent: 104,
+              spacing: 10,
+              onReorder: (from, to) => _onReorderTypes(types, from, to),
+              // Center so the dashed border hugs the box's natural height
+              // instead of stretching to the row height.
+              itemBuilder: (i) => Center(
+                child: Opacity(
+                  opacity: nonEmpty.contains(types[i].id) ? 1 : 0.45,
+                  child: _editChrome(
+                    child: _TypeBox(
+                      label: types[i].name,
+                      icon: resolveIcon(
+                          iconName: types[i].iconName, name: types[i].name),
+                      selected: _filterTypeId == types[i].id,
+                      onTap: () => setState(() {
+                        _filterTypeId = types[i].id;
+                        _filterCategoryId = null;
+                      }),
                     ),
+                    onEdit: () => _editType(types[i]),
+                    radius: YRadius.lg,
                   ),
-              ],
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -411,37 +400,28 @@ class _SellViewState extends State<SellView> {
               ),
             ),
             Expanded(
-              child: ReorderableListView(
-                buildDefaultDragHandles: false,
-                proxyDecorator: (c, i, a) => _dragProxy(c),
+              child: ReorderStrip(
+                axis: Axis.vertical,
+                itemCount: all.length,
+                mainExtent: 50,
+                spacing: 8,
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                onReorder: (o, n) => _onReorderSubTypes(all, o, n),
-                children: [
-                  for (var i = 0; i < all.length; i++)
-                    Padding(
-                      key: ValueKey('sub-${all[i].id}'),
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: ReorderableDelayedDragStartListener(
-                        index: i,
-                        child: Opacity(
-                          opacity: nonEmpty.contains(all[i].id) ? 1 : 0.45,
-                          child: _editChrome(
-                            child: _railBox(
-                              label: all[i].name,
-                              icon: resolveIcon(
-                                  iconName: all[i].iconName,
-                                  name: all[i].name),
-                              selected: _filterCategoryId == all[i].id,
-                              onTap: () => setState(
-                                  () => _filterCategoryId = all[i].id),
-                            ),
-                            onEdit: () => _editSubType(all[i]),
-                            radius: YRadius.md,
-                          ),
-                        ),
-                      ),
+                onReorder: (from, to) => _onReorderSubTypes(all, from, to),
+                itemBuilder: (i) => Opacity(
+                  opacity: nonEmpty.contains(all[i].id) ? 1 : 0.45,
+                  child: _editChrome(
+                    child: _railBox(
+                      label: all[i].name,
+                      icon: resolveIcon(
+                          iconName: all[i].iconName, name: all[i].name),
+                      selected: _filterCategoryId == all[i].id,
+                      onTap: () =>
+                          setState(() => _filterCategoryId = all[i].id),
                     ),
-                ],
+                    onEdit: () => _editSubType(all[i]),
+                    radius: YRadius.md,
+                  ),
+                ),
               ),
             ),
             Padding(
@@ -570,28 +550,9 @@ class _SellViewState extends State<SellView> {
     state.setArrangeMode(true);
   }
 
-  /// Drag proxy used by every reorderable surface: the SAME box (dashed border
-  /// included), lifted a touch (slightly bigger, from its centre so it stays in
-  /// place) and floated with a soft shadow. The drag overlay lives INSIDE the
-  /// app's responsive FittedBox, so it's already on-screen size — no rescale.
-  Widget _dragProxy(Widget child) => Transform.scale(
-        scale: 1.06,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(YRadius.lg),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.22),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6)),
-            ],
-          ),
-          child: Material(type: MaterialType.transparency, child: child),
-        ),
-      );
-
-  // Reorder handlers — apply the standard index fix-up, then persist. Surface
-  // a toast if the DB write fails (so a silent revert can't go unnoticed).
+  // Reorder handlers — move item from→to (ReorderStrip/ReorderGrid semantics),
+  // then persist. Surface a toast if the DB write fails (so a silent revert
+  // can't go unnoticed).
   void _toastIfFailed(String? err) {
     if (err != null && mounted) {
       PushToast.show(context,
@@ -602,26 +563,23 @@ class _SellViewState extends State<SellView> {
   }
 
   Future<void> _onReorderTypes(
-      List<ProductType> shown, int oldIndex, int newIndex) async {
+      List<ProductType> shown, int from, int to) async {
     final list = List<ProductType>.from(shown);
-    if (newIndex > oldIndex) newIndex -= 1;
-    list.insert(newIndex, list.removeAt(oldIndex));
+    list.insert(to, list.removeAt(from));
     _toastIfFailed(await context.read<AppState>().reorderProductTypes(list));
   }
 
   Future<void> _onReorderSubTypes(
-      List<cat.Category> shown, int oldIndex, int newIndex) async {
+      List<cat.Category> shown, int from, int to) async {
     final list = List<cat.Category>.from(shown);
-    if (newIndex > oldIndex) newIndex -= 1;
-    list.insert(newIndex, list.removeAt(oldIndex));
+    list.insert(to, list.removeAt(from));
     _toastIfFailed(await context.read<AppState>().reorderCategories(list));
   }
 
-  Future<void> _onReorderProducts(
-      List<CafeItem> shown, int oldIndex, int newIndex) async {
+  Future<void> _onReorderProductsMove(
+      List<CafeItem> shown, int from, int to) async {
     final list = List<CafeItem>.from(shown);
-    if (newIndex > oldIndex) newIndex -= 1;
-    list.insert(newIndex, list.removeAt(oldIndex));
+    list.insert(to, list.removeAt(from));
     _toastIfFailed(await context.read<AppState>().reorderProducts(list));
   }
 
@@ -736,34 +694,27 @@ class _SellViewState extends State<SellView> {
                   child: Text('No products here yet — tap "Add product".',
                       style:
                           YFont.caption().copyWith(color: YColor.inkMuted)))
-              : ReorderableGridView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 186,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.2,
-                  ),
+              : ReorderGrid(
+                  // Custom grid drag: the lifted tile is positioned in local
+                  // coordinates, so it grows in place and stays under the
+                  // finger even with the responsive scaler on. Tap = quick-edit,
+                  // hold + drag = reorder (with edge auto-scroll).
                   itemCount: filtered.length,
-                  onReorder: (o, n) => _onReorderProducts(filtered, o, n),
-                  dragWidgetBuilder: (index, child) => _dragProxy(child),
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    return KeyedSubtree(
-                      key: ValueKey('prod-${item.id}'),
-                      child: RepaintBoundary(
-                        child: _editBorder(
-                          _CafeCard(
-                            item: item,
-                            buildable: state.buildableCount(item),
-                            onTap: () => _editProduct(item),
-                          ),
-                          YRadius.lg,
-                        ),
-                      ),
-                    );
-                  },
+                  maxTileExtent: 186,
+                  childAspectRatio: 1.2,
+                  spacing: 12,
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                  onTapItem: (i) => _editProduct(filtered[i]),
+                  onReorder: (from, to) =>
+                      _onReorderProductsMove(filtered, from, to),
+                  itemBuilder: (i) => _editBorder(
+                    _CafeCard(
+                      item: filtered[i],
+                      buildable: state.buildableCount(filtered[i]),
+                      onTap: () {},
+                    ),
+                    YRadius.lg,
+                  ),
                 ),
         ),
         Padding(

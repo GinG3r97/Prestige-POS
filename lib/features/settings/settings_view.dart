@@ -1218,76 +1218,99 @@ class _OtpDialogState extends State<_OtpDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final left = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'We sent a $_digits-digit code to ${widget.email}. '
+          'Enter it ${widget.purpose}.',
+          style: YFont.body().copyWith(color: YColor.inkMuted, height: 1.4),
+        ),
+        const SizedBox(height: 20),
+        OtpCells(code: _code, length: _digits, hasError: _error != null),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(_error!,
+              style: YFont.body().copyWith(color: YColor.danger, fontSize: 13)),
+        ],
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: _busy ? null : _resend,
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text("Didn't get it? Resend code"),
+        ),
+      ],
+    );
+
+    final right = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OtpNumpad(
+          onDigit: _onDigit,
+          onBackspace: _onBackspace,
+          enabled: !_busy,
+          keyWidth: 62,
+          keyHeight: 46,
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: 250,
+          child: ElevatedButton(
+            onPressed: (_busy || _code.length != _digits) ? null : _verify,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: YColor.brand,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
+            ),
+            child: _busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.2, color: Colors.white))
+                : Text(widget.verifyLabel),
+          ),
+        ),
+      ],
+    );
+
     return Dialog(
       backgroundColor: YColor.surface1,
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
+        constraints: const BoxConstraints(maxWidth: 700),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(children: [
-                Text('Enter code', style: YFont.titleLG().copyWith(fontSize: 22)),
+                Text('Enter code',
+                    style: YFont.titleLG().copyWith(fontSize: 22)),
                 const Spacer(),
                 IconButton(
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+                  onPressed:
+                      _busy ? null : () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.close),
                 ),
               ]),
-              const SizedBox(height: 6),
-              Text(
-                'We sent a $_digits-digit code to ${widget.email}. '
-                'Enter it below ${widget.purpose}.',
-                style: YFont.body().copyWith(color: YColor.inkMuted),
-              ),
-              const SizedBox(height: 18),
-              OtpCells(
-                  code: _code, length: _digits, hasError: _error != null),
-              const SizedBox(height: 14),
-              Center(
-                child: OtpNumpad(
-                  onDigit: _onDigit,
-                  onBackspace: _onBackspace,
-                  enabled: !_busy,
-                  keyWidth: 62,
-                  keyHeight: 46,
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 10),
-                Text(_error!,
-                    style: YFont.body()
-                        .copyWith(color: YColor.danger, fontSize: 13)),
-              ],
-              const SizedBox(height: 18),
-              ElevatedButton(
-                onPressed:
-                    (_busy || _code.length != _digits) ? null : _verify,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
-                ),
-                child: _busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.white))
-                    : Text(widget.verifyLabel),
-              ),
-              const SizedBox(height: 4),
-              TextButton(
-                onPressed: _busy ? null : _resend,
-                child: const Text("Didn't get it? Resend code"),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: left),
+                  const SizedBox(width: 28),
+                  right,
+                ],
               ),
             ],
           ),
