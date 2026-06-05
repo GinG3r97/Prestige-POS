@@ -13,6 +13,11 @@ class Category {
   /// Maintenance). Null/empty falls back to keyword auto-mapping, then [emoji].
   String? iconName;
   int sortOrder;
+  /// FK to `public.product_types.id` — the parent Product Type this category
+  /// (sub-type) belongs to. Null = unassigned; the Sell page surfaces such
+  /// sub-types (and their products) under an "Other" bucket. Cleared to null
+  /// automatically if the parent type is deleted (DB ON DELETE SET NULL).
+  String? typeId;
   /// True for rows seeded by the tenant bootstrap. The Maintenance UI
   /// renders a BUILT-IN badge and blocks edit/remove for these so owners
   /// can't accidentally trash their starter catalog.
@@ -24,6 +29,7 @@ class Category {
     this.emoji = '',
     this.iconName,
     this.sortOrder = 0,
+    this.typeId,
     this.isSystem = false,
   });
 
@@ -33,6 +39,7 @@ class Category {
         emoji: (row['emoji'] as String?) ?? '',
         iconName: row['icon_name'] as String?,
         sortOrder: (row['sort_order'] as int?) ?? 0,
+        typeId: row['type_id'] as String?,
         isSystem: (row['is_system'] as bool?) ?? false,
       );
 }

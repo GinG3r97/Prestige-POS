@@ -24,7 +24,16 @@ class SellView extends StatefulWidget {
 }
 
 class _SellViewState extends State<SellView> {
-  /// Selected category id (the real DB FK). null = "All".
+  // Two-level browse: pick a Product Type box, then a Sub-type chip within it.
+  // Sentinels let `null` keep meaning "All in this type".
+  static const _kOtherType = '__other_type__';
+  static const _kOtherCat = '__other_cat__';
+
+  /// Selected Product Type box id; `_kOtherType` = the "Other" (untyped) box.
+  String? _filterTypeId;
+
+  /// Selected Sub-type chip within the type; null = "All", `_kOtherCat` =
+  /// products here with no sub-type (or one that belongs to another type).
   String? _filterCategoryId;
   String _query = '';
 
@@ -37,35 +46,76 @@ class _SellViewState extends State<SellView> {
     // Alfredo?" at a glance. (Selling is blocked on out-of-stock tiles.)
     final items = state.products.where((p) => p.available).toList();
 
-    // Chips = tenant-owned categories from the DB, in their declared
-    // sort_order. The legacy `CafeCategory` enum was only ever filled in
-    // for in-memory mock data; every DB-backed product hardcodes
-    // CafeCategory.food regardless of its real category, which is why
-    // filtering on the enum bucketed everything under Food.
-    final usedCategoryIds = items
-        .map((p) => p.categoryId)
-        .where((id) => id != null && id.isNotEmpty)
-        .cast<String>()
-        .toSet();
-    final usedCategories = state.categories
-        .where((c) => usedCategoryIds.contains(c.id))
-        .toList()
-      ..sort(_categoryRank);
-
-    // Default-select the first category once products are loaded so the
-    // cashier never lands on an "all categories" view (we don't ship the
-    // "All" chip anymore — owner wants Coffee → Food → rest priority).
-    if (_filterCategoryId == null && usedCategories.isNotEmpty) {
-      _filterCategoryId = usedCategories.first.id;
-    } else if (_filterCategoryId != null &&
-        !usedCategories.any((c) => c.id == _filterCategoryId)) {
-      // The selected category disappeared (e.g. owner deleted it or its
-      // last in-stock product). Fall back to the first available.
-      _filterCategoryId =
-          usedCategories.isEmpty ? null : usedCategories.first.id;
+    // ── Level 1: bucket products by their effective Product Type (the
+    // product's own type, else its sub-type's type, else null = "Other").
+    // Only types that actually have products ever render — empty ones can't
+    // crash anything because they simply don't appear.
+    final typeBuckets = <String?, List<CafeItem>>{};
+    for (final p in items) {
+      (typeBuckets[state.effectiveTypeId(p)] ??= <CafeItem>[]).add(p);
+    }
+    final typeBoxes = <_TypeEntry>[
+      for (final t in state.productTypes)
+        if (typeBuckets.containsKey(t.id))
+          _TypeEntry(id: t.id, name: t.name, iconName: t.iconName),
+    ];
+    if (typeBuckets.containsKey(null)) {
+      // Orphans (no resolvable type) get a catch-all box so they're never lost.
+      typeBoxes.add(const _TypeEntry(
+          id: _kOtherType, name: 'Other', isOther: true));
     }
 
-    final filtered = _filterItems(items);
+    // Auto-select / validate the active type box.
+    if (typeBoxes.isEmpty) {
+      _filterTypeId = null;
+    } else if (_filterTypeId == null ||
+        !typeBoxes.any((t) => t.id == _filterTypeId)) {
+      _filterTypeId = typeBoxes.first.id;
+      _filterCategoryId = null;
+    }
+
+    // Products inside the selected type box.
+    final inType = _filterTypeId == _kOtherType
+        ? (typeBuckets[null] ?? const <CafeItem>[])
+        : (typeBuckets[_filterTypeId] ?? const <CafeItem>[]);
+
+    // ── Level 2: sub-type chips for the selected (real) type — only those
+    // with products here. `hasOrphanCats` = some products in this type have no
+    // sub-type (or one belonging to a different type) → an "Other" chip. The
+    // Other type box has no sub-type row (its items are un-bucketable).
+    final subTypes = <cat.Category>[];
+    var hasOrphanCats = false;
+    if (_filterTypeId != null && _filterTypeId != _kOtherType) {
+      final catsOfType =
+          state.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
+      final present = <String>{};
+      for (final p in inType) {
+        final cid = p.categoryId;
+        if (cid != null && catsOfType.contains(cid)) {
+          present.add(cid);
+        } else {
+          hasOrphanCats = true;
+        }
+      }
+      subTypes.addAll(state
+          .categoriesForType(_filterTypeId)
+          .where((c) => present.contains(c.id)));
+    }
+
+    // Validate the selected sub-type chip against what's actually present.
+    final validCatIds = <String>{
+      ...subTypes.map((c) => c.id),
+      if (hasOrphanCats) _kOtherCat,
+    };
+    if (_filterCategoryId != null && !validCatIds.contains(_filterCategoryId)) {
+      _filterCategoryId = null;
+    }
+
+    final filtered = _filterItems(items, inType, state);
+
+    // The sub-type rail shows only when browsing a type that has sub-types.
+    // During global search it's hidden so the grid uses the full width.
+    final showRail = _query.isEmpty && (subTypes.isNotEmpty || hasOrphanCats);
 
     return Container(
       color: YColor.surface2,
@@ -79,14 +129,26 @@ class _SellViewState extends State<SellView> {
             Container(height: 0.5, color: YColor.hairline),
             Expanded(child: _cashierClosed(context)),
           ] else ...[
-            _header(usedCategories: usedCategories),
+            _header(typeBoxes: typeBoxes),
             Expanded(
-              child: filtered.isEmpty
-                  ? _empty()
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 2, 24, 140),
-                      child: _grid(filtered, state),
-                    ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Sub-types live in a vertical box rail beside the grid so
+                  // a long list scrolls in place instead of pushing the grid
+                  // down or forcing a horizontal swipe.
+                  if (showRail) _subTypeRail(subTypes, hasOrphanCats),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? _empty()
+                        : SingleChildScrollView(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 8, 20, 140),
+                            child: _grid(filtered, state),
+                          ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -94,26 +156,39 @@ class _SellViewState extends State<SellView> {
     );
   }
 
-  List<CafeItem> _filterItems(List<CafeItem> all) {
-    var list = all;
-    if (_filterCategoryId != null) {
-      list = list.where((p) => p.categoryId == _filterCategoryId).toList();
-    }
+  /// While searching, search ALL available products (global) so the cashier
+  /// can find anything regardless of the selected type/sub-type. Otherwise
+  /// filter the already-type-scoped [inType] by the selected sub-type chip.
+  List<CafeItem> _filterItems(
+      List<CafeItem> all, List<CafeItem> inType, AppState state) {
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
-      list = list
+      return all
           .where((p) =>
               p.name.toLowerCase().contains(q) ||
               p.subtitle.toLowerCase().contains(q))
           .toList();
     }
-    return list;
+    if (_filterCategoryId == null) return inType;
+    if (_filterCategoryId == _kOtherCat) {
+      // Products in this type with no sub-type, or one that belongs elsewhere.
+      final catsOfType =
+          state.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
+      return inType
+          .where((p) =>
+              p.categoryId == null || !catsOfType.contains(p.categoryId))
+          .toList();
+    }
+    return inType.where((p) => p.categoryId == _filterCategoryId).toList();
   }
 
-  Widget _header({required List<cat.Category> usedCategories}) {
+  Widget _header({required List<_TypeEntry> typeBoxes}) {
+    // When searching, results are global — dim and disable the type picker so
+    // it's clear it's not constraining the search.
+    final searching = _query.isNotEmpty;
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -142,22 +217,113 @@ class _SellViewState extends State<SellView> {
               _closeCashierButton(),
             ],
           ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            // No "All" chip — cashiers always land on a real category
-            // (Coffee → Food → rest). Tapping a chip swaps the grid.
-            child: Row(children: [
-              for (final c in usedCategories)
-                _chip(
-                  label: c.name,
-                  icon: resolveIcon(iconName: c.iconName, name: c.name),
-                  selected: _filterCategoryId == c.id,
-                  onTap: () => setState(() => _filterCategoryId = c.id),
-                ),
-            ]),
-          ),
+          // LEVEL 1 — Product Type boxes (Drinks, Foods, …, Other).
+          if (typeBoxes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Opacity(
+              opacity: searching ? 0.4 : 1,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final t in typeBoxes)
+                    _TypeBox(
+                      label: t.name,
+                      icon: t.isOther
+                          ? Icons.more_horiz
+                          : resolveIcon(iconName: t.iconName, name: t.name),
+                      selected: _filterTypeId == t.id,
+                      onTap: searching
+                          ? null
+                          : () => setState(() {
+                                _filterTypeId = t.id;
+                                _filterCategoryId = null;
+                              }),
+                    ),
+                ]),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// The vertical sub-type "box rail" beside the product grid. Each sub-type is
+  /// a small icon+label box; the list scrolls in place so 10+ sub-types stay
+  /// findable without pushing the grid down. Always leads with "All" and ends
+  /// with "Other" when the type has un-bucketed products.
+  Widget _subTypeRail(List<cat.Category> subTypes, bool hasOrphanCats) {
+    return Container(
+      width: 148,
+      decoration: const BoxDecoration(
+        color: YColor.surface1,
+        border: Border(right: BorderSide(color: YColor.hairline)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _railBox(
+              label: 'All',
+              icon: Icons.apps,
+              selected: _filterCategoryId == null,
+              onTap: () => setState(() => _filterCategoryId = null),
+            ),
+            for (final c in subTypes)
+              _railBox(
+                label: c.name,
+                icon: resolveIcon(iconName: c.iconName, name: c.name),
+                selected: _filterCategoryId == c.id,
+                onTap: () => setState(() => _filterCategoryId = c.id),
+              ),
+            if (hasOrphanCats)
+              _railBox(
+                label: 'Other',
+                icon: Icons.more_horiz,
+                selected: _filterCategoryId == _kOtherCat,
+                onTap: () => setState(() => _filterCategoryId = _kOtherCat),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _railBox({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border:
+                Border.all(color: selected ? YColor.brand : YColor.hairline),
+          ),
+          child: Row(children: [
+            Icon(icon,
+                size: 18, color: selected ? Colors.white : YColor.brandDeep),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 12,
+                      height: 1.15,
+                      color: selected ? Colors.white : YColor.ink)),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -182,38 +348,6 @@ class _SellViewState extends State<SellView> {
               style: YFont.bodyStrong()
                   .copyWith(color: YColor.danger, fontSize: 13)),
         ]),
-      ),
-    );
-  }
-
-  Widget _chip({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: selected ? YColor.brand : YColor.surface2,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon,
-                size: 16, color: selected ? Colors.white : YColor.brandDeep),
-            const SizedBox(width: 7),
-            Text(label,
-                style: YFont.bodyStrong().copyWith(
-                  color: selected ? Colors.white : YColor.ink,
-                )),
-          ]),
-        ),
       ),
     );
   }
@@ -293,7 +427,9 @@ class _SellViewState extends State<SellView> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 220,
+        // Slightly smaller tiles so ~3 product columns still fit beside the
+        // sub-type rail; the grid flows to more columns when the rail is gone.
+        maxCrossAxisExtent: 186,
         mainAxisSpacing: 14,
         crossAxisSpacing: 14,
         childAspectRatio: 0.92,
@@ -332,22 +468,67 @@ class _SellViewState extends State<SellView> {
     );
   }
 
-  /// Category ordering for the chip row: Coffee first, Food second, then
-  /// everything else by the owner's declared sort_order (then name). Owner
-  /// asked for this priority because cafe staff almost always start with
-  /// a drink, then food, then misc add-ons / merch.
-  int _categoryRank(cat.Category a, cat.Category b) {
-    int weight(cat.Category c) {
-      final n = c.name.toLowerCase();
-      if (n.startsWith('coffee')) return 0;
-      if (n == 'food' || n.startsWith('food')) return 1;
-      return 2;
-    }
-    final wa = weight(a);
-    final wb = weight(b);
-    if (wa != wb) return wa.compareTo(wb);
-    final s = a.sortOrder.compareTo(b.sortOrder);
-    return s != 0 ? s : a.name.compareTo(b.name);
+}
+
+/// A Level-1 Product Type entry for the Sell header (real type or the
+/// synthetic "Other" catch-all).
+class _TypeEntry {
+  const _TypeEntry({
+    required this.id,
+    required this.name,
+    this.iconName,
+    this.isOther = false,
+  });
+  final String id;
+  final String name;
+  final String? iconName;
+  final bool isOther;
+}
+
+/// The Level-1 "box" — bigger than a sub-type chip. Icon over label, brand
+/// fill when selected. `onTap` null disables it (e.g. while searching).
+class _TypeBox extends StatelessWidget {
+  const _TypeBox({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 104,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.lg),
+            border: Border.all(
+                color: selected ? YColor.brand : YColor.hairline),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon,
+                size: 26, color: selected ? Colors.white : YColor.brandDeep),
+            const SizedBox(height: 8),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.bodyStrong().copyWith(
+                    fontSize: 13,
+                    color: selected ? Colors.white : YColor.ink)),
+          ]),
+        ),
+      ),
+    );
   }
 }
 

@@ -75,7 +75,7 @@ class MaintenanceView extends StatelessWidget {
                       const Tab(
                         icon: Icon(Icons.category_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
-                        text: 'Categories',
+                        text: 'Sub-types',
                       ),
                       const Tab(
                         icon: Icon(Icons.inventory_2_outlined, size: 18),
@@ -1137,12 +1137,12 @@ class _CategoriesTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Categories',
+                      Text('Sub-types',
                           style: YFont.titleMD().copyWith(fontSize: 20)),
                       const SizedBox(height: 2),
                       Text(
-                        'Your menu sections. Add, rename, reorder, or remove — '
-                        'everything saves to your store.',
+                        'Menu sub-groups under each Product Type (e.g. Coffee '
+                        'under Drinks). Add, rename, reorder, or remove.',
                         style: YFont.caption(),
                       ),
                     ],
@@ -1152,7 +1152,7 @@ class _CategoriesTab extends StatelessWidget {
                 ElevatedButton.icon(
                   onPressed: () => _openForm(context, state, null),
                   icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add category'),
+                  label: const Text('Add sub-type'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: YColor.brand,
                     foregroundColor: Colors.white,
@@ -1168,10 +1168,10 @@ class _CategoriesTab extends StatelessWidget {
               if (cats.isEmpty)
                 _emptyCard(
                   icon: Icons.category_outlined,
-                  title: 'No categories yet',
+                  title: 'No sub-types yet',
                   subtitle:
-                      'Tap "Add category" to create your first one — e.g. '
-                      '"Cold Brews", "Specialty Drinks", or "Pastries".',
+                      'Tap "Add sub-type" to create your first one — e.g. '
+                      '"Cold Brews" under Drinks, or "Rice Meals" under Foods.',
                 )
               else
                 LayoutBuilder(builder: (ctx, c) {
@@ -1198,7 +1198,7 @@ class _CategoriesTab extends StatelessWidget {
                           iconName: c.iconName,
                         ),
                         label: c.name,
-                        subtitle: 'Order ${c.sortOrder}',
+                        subtitle: state.productTypeById(c.typeId)?.name ?? 'Other',
                         badge: c.isSystem ? 'BUILT-IN' : null,
                         onTap: () => _openForm(context, state, c),
                         onRemove: () =>
@@ -1228,6 +1228,7 @@ class _CategoriesTab extends StatelessWidget {
             emoji: saved.emoji,
             iconName: saved.iconName,
             sortOrder: saved.sortOrder,
+            typeId: saved.typeId,
           )
         : await state.updateCategory(saved);
     if (!context.mounted) return;
@@ -1239,7 +1240,7 @@ class _CategoriesTab extends StatelessWidget {
       return;
     }
     PushToast.show(context,
-        title: existing == null ? 'Category added' : 'Category updated',
+        title: existing == null ? 'Sub-type added' : 'Sub-type updated',
         subtitle: saved.name,
         leadingEmoji: saved.emoji.isEmpty ? '🏷' : saved.emoji);
   }
@@ -1251,7 +1252,7 @@ class _CategoriesTab extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: Text('Remove "${category.name}"?'),
         content: const Text(
-            'If any products are still in this category, you\'ll need to move them first.'),
+            'If any products are still in this sub-type, you\'ll need to move them first.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1275,7 +1276,7 @@ class _CategoriesTab extends StatelessWidget {
       return;
     }
     PushToast.show(context,
-        title: 'Category removed',
+        title: 'Sub-type removed',
         subtitle: category.name,
         leadingIcon: Icons.delete_outline);
   }
@@ -1638,6 +1639,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   late final TextEditingController _name;
   late final TextEditingController _sortOrder;
   String? _iconName;
+  String? _typeId;
   late String _emoji;
 
   @override
@@ -1654,6 +1656,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
         : '🏷';
     _sortOrder = TextEditingController(
         text: (widget.initial?.sortOrder ?? 100).toString());
+    _typeId = widget.initial?.typeId;
   }
 
   @override
@@ -1682,8 +1685,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
             child: Row(children: [
               Text(
                 widget.initial == null
-                    ? 'Add category'
-                    : 'Edit category',
+                    ? 'Add sub-type'
+                    : 'Edit sub-type',
                 style: YFont.titleLG().copyWith(fontSize: 22),
               ),
               const Spacer(),
@@ -1697,61 +1700,68 @@ class _CategoryDialogState extends State<_CategoryDialog> {
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                    SizedBox(
-                      width: 84,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ICON',
-                              style: YFont.caption().copyWith(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.0,
-                                color: YColor.brandDeep,
-                              )),
-                          const SizedBox(height: 6),
-                          IconPickerField(
-                            value: _iconName,
-                            fallbackName: _name.text,
-                            onChanged: (key) =>
-                                setState(() => _iconName = key),
-                          ),
-                        ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 84,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ICON',
+                                style: YFont.caption().copyWith(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.0,
+                                  color: YColor.brandDeep,
+                                )),
+                            const SizedBox(height: 6),
+                            IconPickerField(
+                              value: _iconName,
+                              fallbackName: _name.text,
+                              onChanged: (key) =>
+                                  setState(() => _iconName = key),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: KeyboardAccessoryField(
-                        controller: _name,
-                        label: 'Name',
-                        accessoryLabel: 'NAME',
-                        hint: 'e.g., Smoothies, Brunch, Books',
-                        fillColor: YColor.surface2,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        onChanged: (_) => setState(() {}),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: KeyboardAccessoryField(
+                          controller: _name,
+                          label: 'Name',
+                          accessoryLabel: 'NAME',
+                          hint: 'e.g., Smoothies, Brunch, Books',
+                          fillColor: YColor.surface2,
+                          borderColor: YColor.hairline,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 120,
-                      child: KeyboardAccessoryField(
-                        controller: _sortOrder,
-                        label: 'Order',
-                        accessoryLabel: 'ORDER',
-                        hint: '100',
-                        keyboardType: TextInputType.number,
-                        fillColor: YColor.surface2,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 12),
-                        onChanged: (_) => setState(() {}),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 120,
+                        child: KeyboardAccessoryField(
+                          controller: _sortOrder,
+                          label: 'Order',
+                          accessoryLabel: 'ORDER',
+                          hint: '100',
+                          keyboardType: TextInputType.number,
+                          fillColor: YColor.surface2,
+                          borderColor: YColor.hairline,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 12),
+                          onChanged: (_) => setState(() {}),
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _typePicker(context),
                 ],
               ),
             ),
@@ -1781,6 +1791,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                             iconName: _iconName,
                             sortOrder:
                                 int.tryParse(_sortOrder.text) ?? 100,
+                            typeId: _typeId,
                           ),
                         )
                     : null,
@@ -1797,6 +1808,66 @@ class _CategoryDialogState extends State<_CategoryDialog> {
               ),
             ]),
           ),
+        ]),
+      ),
+    );
+  }
+
+  /// Picks which Product Type this sub-type belongs to. Optional — tapping the
+  /// selected chip again clears it (the sub-type then lives under "Other" on
+  /// the Sell page). Reads the live product-type list from AppState.
+  Widget _typePicker(BuildContext context) {
+    final types = context.watch<AppState>().productTypes;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('PRODUCT TYPE',
+            style: YFont.caption().copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: YColor.brandDeep,
+            )),
+        const SizedBox(height: 4),
+        Text(
+          'The top-level group this sub-type sits under on the Sell page. '
+          'Optional — leave it off to keep it under "Other".',
+          style: YFont.caption().copyWith(color: YColor.inkMuted),
+        ),
+        const SizedBox(height: 10),
+        if (types.isEmpty)
+          Text('No product types yet — add one in the Product types tab.',
+              style: YFont.caption().copyWith(color: YColor.inkMuted))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [for (final t in types) _typeChip(t.id, t.name, t.iconName)],
+          ),
+      ],
+    );
+  }
+
+  Widget _typeChip(String id, String name, String? iconName) {
+    final selected = _typeId == id;
+    final icon = resolveIcon(iconName: iconName, name: name);
+    return GestureDetector(
+      onTap: () => setState(() => _typeId = selected ? null : id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? YColor.brand : YColor.surface2,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? YColor.brand : YColor.hairline),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon,
+              size: 14, color: selected ? Colors.white : YColor.brandDeep),
+          const SizedBox(width: 6),
+          Text(name,
+              style: YFont.bodyStrong().copyWith(
+                  fontSize: 13, color: selected ? Colors.white : YColor.ink)),
         ]),
       ),
     );

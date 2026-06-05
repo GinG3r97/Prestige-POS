@@ -243,7 +243,7 @@ class AppState extends ChangeNotifier {
         () async {
           final categoriesRes = await supabase
               .from('categories')
-              .select('id, name, emoji, icon_name, sort_order, is_system')
+              .select('id, name, emoji, icon_name, sort_order, type_id, is_system')
               .eq('tenant_id', tid)
               .order('sort_order');
           _categories = (categoriesRes as List)
@@ -638,6 +638,29 @@ class AppState extends ChangeNotifier {
   List<cat.Category> _categories = [];
   List<cat.Category> get categories => List.unmodifiable(_categories);
 
+  /// Find a category (sub-type) by id. Null-safe — returns null for a missing
+  /// or null id (e.g. a product whose category was deleted).
+  cat.Category? categoryById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final c in _categories) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  /// Sub-types (categories) under a given product type, sorted by sort order.
+  /// Pass null to get unassigned sub-types (the "Other" bucket).
+  List<cat.Category> categoriesForType(String? typeId) =>
+      (_categories.where((c) => c.typeId == typeId).toList())
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+  /// The product type a product effectively belongs to for the two-level Sell
+  /// browser. Prefers the product's own `typeId`; falls back to its category's
+  /// `typeId`; null means "Other" (no resolvable type). One shared rule so the
+  /// Sell bucketing is deterministic.
+  String? effectiveTypeId(CafeItem p) =>
+      p.typeId ?? categoryById(p.categoryId)?.typeId;
+
   /// Per-tenant feature flags from `public.tenant_features`. Drives which
   /// nav tabs (Bookings, Sessions, Members) are visible.
   cat.TenantFeatures _features = cat.TenantFeatures();
@@ -889,6 +912,11 @@ class AppState extends ChangeNotifier {
           .single();
       branchDbId = branchRow['id'] as String;
 
+      // Seed the default product types FIRST so each seeded category (sub-type)
+      // can be linked to its parent type as we build the payload below.
+      // Idempotent — unique(tenant_id, name) keeps re-runs safe.
+      final typeIds = await _seedDefaultProductTypes(tenantDbId);
+
       // Every café gets these baseline categories — universal staples.
       // Owners can rename or remove them from Maintenance any time. The
       // pack-specific seeds layer on top, de-duped by name (the
@@ -914,6 +942,7 @@ class AppState extends ChangeNotifier {
             // pack row in the same batch carries is_system. Keep keys uniform.
             'icon_name': null,
             'sort_order': c.sortOrder,
+            'type_id': _seedTypeIdForCategory(c.name, typeIds),
             'is_system': false,
           });
         }
@@ -927,6 +956,7 @@ class AppState extends ChangeNotifier {
               'emoji': c.emoji,
               'icon_name': c.iconName,
               'sort_order': c.sortOrder,
+              'type_id': _seedTypeIdForCategory(c.name, typeIds),
               'is_system': true,
             });
           }
@@ -936,7 +966,7 @@ class AppState extends ChangeNotifier {
         final inserted = await supabase
             .from('categories')
             .insert(categoryPayload)
-            .select('id, name, emoji, icon_name, sort_order, is_system');
+            .select('id, name, emoji, icon_name, sort_order, type_id, is_system');
         fetchedCategories.addAll((inserted as List)
             .map((r) => cat.Category.fromRow(r as Map<String, dynamic>)));
       }
@@ -974,10 +1004,7 @@ class AppState extends ChangeNotifier {
       // relies on unique constraints to no-op if already present.
       await _seedDefaultPayrollSurface(tenantDbId);
 
-      // Seed default product types (Drink, Food, Pastry, Book, Retail,
-      // Service) so the Products page has something to pick from on day
-      // one. Idempotent — unique(tenant_id, name) keeps re-runs safe.
-      await _seedDefaultProductTypes(tenantDbId);
+      // (Product types were seeded earlier so categories could link to them.)
     } on sb.PostgrestException catch (e) {
       return 'Could not save your business: ${e.message}';
     } catch (_) {
@@ -1542,6 +1569,7 @@ class AppState extends ChangeNotifier {
     required String emoji,
     String? iconName,
     int sortOrder = 0,
+    String? typeId,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return 'No store selected.';
@@ -1555,8 +1583,9 @@ class AppState extends ChangeNotifier {
             'emoji': emoji.trim(),
             'icon_name': iconName,
             'sort_order': sortOrder,
+            'type_id': typeId,
           })
-          .select('id, name, emoji, icon_name, sort_order, is_system')
+          .select('id, name, emoji, icon_name, sort_order, type_id, is_system')
           .single();
       _categories.add(cat.Category.fromRow(inserted));
       _categories.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -1582,6 +1611,7 @@ class AppState extends ChangeNotifier {
         'emoji': updated.emoji.trim(),
         'icon_name': updated.iconName,
         'sort_order': updated.sortOrder,
+        'type_id': updated.typeId,
       }).eq('id', updated.id);
       final i = _categories.indexWhere((c) => c.id == updated.id);
       if (i >= 0) {
@@ -2753,6 +2783,12 @@ class AppState extends ChangeNotifier {
           p.typeId = null;
           p.typeName = '';
         }
+      }
+      // Sub-types (categories) under this type also lose their link (DB SET
+      // NULL) — mirror it in memory so the Sell tree doesn't point at a dead
+      // type until the next reload. They fall into the "Other" bucket.
+      for (final c in _categories) {
+        if (c.typeId == id) c.typeId = null;
       }
       notifyListeners();
       return null;
@@ -3973,47 +4009,97 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Seeds the six default product types for a freshly created tenant.
-  /// Same shape the SQL backfill uses. Idempotent via unique(tenant_id, name).
-  Future<void> _seedDefaultProductTypes(String tenantId) async {
+  /// Seeds the default product types for a freshly created tenant and returns
+  /// a lowercased name -> id map so onboarding can link the seeded categories
+  /// (sub-types) to their parent type. Idempotent via unique(tenant_id, name):
+  /// on a duplicate re-run it re-selects the existing rows so the map is always
+  /// populated. Returns an empty map on hard failure (callers must tolerate it
+  /// — categories simply seed with a null type_id → "Other").
+  Future<Map<String, String>> _seedDefaultProductTypes(String tenantId) async {
+    // Three behavior buckets is all that's needed — types only control
+    // whether an item has size/temp options and whether it deducts stock.
+    // Menu grouping (Coffee, Tea, Books, Food…) is handled by sub-types.
+    final rows = [
+      {
+        'tenant_id': tenantId,
+        'name': 'Drink',
+        'icon_name': 'local_cafe_outlined',
+        'supports_modifiers': true,
+        'deducts_stock': true,
+        'is_system': true,
+        'sort_order': 10,
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'Item',
+        'icon_name': 'sell_outlined',
+        'supports_modifiers': false,
+        'deducts_stock': true,
+        'is_system': true,
+        'sort_order': 20,
+      },
+      {
+        'tenant_id': tenantId,
+        'name': 'Service',
+        'icon_name': 'handshake_outlined',
+        'supports_modifiers': false,
+        'deducts_stock': false,
+        'is_system': true,
+        'sort_order': 30,
+      },
+    ];
     try {
-      // Three behavior buckets is all that's needed — types only control
-      // whether an item has size/temp options and whether it deducts stock.
-      // Menu grouping (Coffee, Tea, Books, Food…) is handled by Categories.
-      await supabase.from('product_types').insert([
-        {
-          'tenant_id': tenantId,
-          'name': 'Drink',
-          'icon_name': 'local_cafe_outlined',
-          'supports_modifiers': true,
-          'deducts_stock': true,
-          'is_system': true,
-          'sort_order': 10,
-        },
-        {
-          'tenant_id': tenantId,
-          'name': 'Item',
-          'icon_name': 'sell_outlined',
-          'supports_modifiers': false,
-          'deducts_stock': true,
-          'is_system': true,
-          'sort_order': 20,
-        },
-        {
-          'tenant_id': tenantId,
-          'name': 'Service',
-          'icon_name': 'handshake_outlined',
-          'supports_modifiers': false,
-          'deducts_stock': false,
-          'is_system': true,
-          'sort_order': 30,
-        },
-      ]);
+      final inserted = await supabase
+          .from('product_types')
+          .insert(rows)
+          .select('id, name');
+      return _typeIdMap(inserted);
     } on sb.PostgrestException catch (e) {
-      if (e.code != '23505' && kDebugMode) {
+      if (e.code == '23505') {
+        // Already seeded — re-fetch the existing rows so the map is populated.
+        try {
+          final existing = await supabase
+              .from('product_types')
+              .select('id, name')
+              .eq('tenant_id', tenantId);
+          return _typeIdMap(existing);
+        } catch (_) {
+          return {};
+        }
+      }
+      if (kDebugMode) {
         debugPrint('Seed default product types failed: ${e.message}');
       }
+      return {};
+    } catch (_) {
+      return {};
     }
+  }
+
+  /// Builds a lowercased product-type name -> id map from PostgREST rows.
+  Map<String, String> _typeIdMap(dynamic rows) {
+    final map = <String, String>{};
+    for (final r in (rows as List)) {
+      final m = r as Map<String, dynamic>;
+      final name = (m['name'] as String?)?.toLowerCase();
+      final id = m['id'] as String?;
+      if (name != null && id != null) map[name] = id;
+    }
+    return map;
+  }
+
+  /// Maps a seeded category name to its parent product-type id, using the same
+  /// drink-keyword rule as the SQL backfill. Drink-y names -> Drink type,
+  /// everything else -> Item (the default non-drink bucket). Returns null if
+  /// the matching type wasn't seeded (category falls into "Other").
+  static final RegExp _drinkNameRe = RegExp(
+      r'(coffee|tea|espresso|latte|frappe|smoothie|shake|juice|soda|milk\s*tea|refresher|matcha|drink)');
+  String? _seedTypeIdForCategory(String name, Map<String, String> typeIds) {
+    final n = name.toLowerCase();
+    if (_drinkNameRe.hasMatch(n)) {
+      return typeIds['drink'] ?? typeIds['item'];
+    }
+    return typeIds['item'];
   }
 
   Future<String?> addEmployeeRole(EmployeeRole r) async {
