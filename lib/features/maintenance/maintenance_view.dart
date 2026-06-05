@@ -1627,9 +1627,76 @@ class _InventoryCategoryDialogState extends State<_InventoryCategoryDialog> {
   }
 }
 
+/// Opens the Product Type editor — add when [initial] is null, else edit — and
+/// persists via AppState (the same path Maintenance uses, so edits stay in sync
+/// everywhere). Reusable from the Sell "arrange mode".
+Future<void> showProductTypeEditor(BuildContext context,
+    {ProductType? initial}) async {
+  final state = context.read<AppState>();
+  final saved = await showDialog<ProductType>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _ProductTypeDialog(initial: initial),
+  );
+  if (saved == null || !context.mounted) return;
+  final err = initial == null
+      ? await state.addProductType(saved)
+      : await state.updateProductType(saved);
+  if (!context.mounted) return;
+  if (err != null) {
+    PushToast.show(context,
+        title: 'Could not save',
+        subtitle: err,
+        leadingIcon: Icons.error_outline);
+    return;
+  }
+  PushToast.show(context,
+      title: initial == null ? 'Type added' : 'Type updated',
+      subtitle: saved.name,
+      leadingIcon: Icons.label_outline);
+}
+
+/// Opens the Sub-type editor — add when [initial] is null (defaulting its
+/// Product Type to [presetTypeId]), else edit. Persists via AppState. Reusable
+/// from the Sell "arrange mode".
+Future<void> showSubTypeEditor(BuildContext context,
+    {cat.Category? initial, String? presetTypeId}) async {
+  final state = context.read<AppState>();
+  final saved = await showDialog<cat.Category>(
+    context: context,
+    builder: (_) =>
+        _CategoryDialog(initial: initial, presetTypeId: presetTypeId),
+  );
+  if (saved == null || !context.mounted) return;
+  final err = initial == null
+      ? await state.addCategory(
+          name: saved.name,
+          emoji: saved.emoji,
+          iconName: saved.iconName,
+          sortOrder: saved.sortOrder,
+          typeId: saved.typeId,
+        )
+      : await state.updateCategory(saved);
+  if (!context.mounted) return;
+  if (err != null) {
+    PushToast.show(context,
+        title: 'Could not save',
+        subtitle: err,
+        leadingIcon: Icons.error_outline);
+    return;
+  }
+  PushToast.show(context,
+      title: initial == null ? 'Sub-type added' : 'Sub-type updated',
+      subtitle: saved.name,
+      leadingEmoji: saved.emoji.isEmpty ? '🏷' : saved.emoji);
+}
+
 class _CategoryDialog extends StatefulWidget {
-  const _CategoryDialog({this.initial});
+  const _CategoryDialog({this.initial, this.presetTypeId});
   final cat.Category? initial;
+  /// For a NEW sub-type, pre-selects this Product Type (used by Sell's
+  /// "arrange mode" + box, which knows the current type).
+  final String? presetTypeId;
 
   @override
   State<_CategoryDialog> createState() => _CategoryDialogState();
@@ -1656,7 +1723,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
         : '🏷';
     _sortOrder = TextEditingController(
         text: (widget.initial?.sortOrder ?? 100).toString());
-    _typeId = widget.initial?.typeId;
+    _typeId = widget.initial?.typeId ?? widget.presetTypeId;
   }
 
   @override

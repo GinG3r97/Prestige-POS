@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
@@ -9,6 +8,7 @@ import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import 'otp_numpad.dart';
 
 /// OTP verification screen. Single hidden text field drives a row of visual
 /// chip boxes — gives us paste support + system password autofill without the
@@ -32,8 +32,6 @@ class _OtpEntryViewState extends State<OtpEntryView> {
 
   int get _digits => SupabaseBootstrap.otpLength;
 
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
   String _code = '';
   String? _error;
   bool _busy = false;
@@ -44,16 +42,30 @@ class _OtpEntryViewState extends State<OtpEntryView> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
     _startResendTimer();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
-    _focus.dispose();
     _resendTimer?.cancel();
     super.dispose();
+  }
+
+  void _onDigit(String d) {
+    if (_busy || _code.length >= _digits) return;
+    setState(() {
+      _code += d;
+      _error = null;
+    });
+    if (_code.length == _digits) _verify();
+  }
+
+  void _onBackspace() {
+    if (_busy || _code.isEmpty) return;
+    setState(() {
+      _code = _code.substring(0, _code.length - 1);
+      _error = null;
+    });
   }
 
   void _startResendTimer() {
@@ -85,9 +97,7 @@ class _OtpEntryViewState extends State<OtpEntryView> {
         _busy = false;
         _error = err;
         _code = '';
-        _controller.clear();
       });
-      _focus.requestFocus();
       return;
     }
     // Success — pop back to the root so the Consumer<AppState> in main.dart
@@ -124,164 +134,125 @@ class _OtpEntryViewState extends State<OtpEntryView> {
   Widget build(BuildContext context) {
     final email = context.watch<AppState>().pendingOtpEmail ?? '';
 
+    final info = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: _busy ? null : _cancel,
+          icon: const Icon(Icons.arrow_back, size: 16),
+          label: const Text('Back'),
+          style: TextButton.styleFrom(foregroundColor: YColor.inkMuted),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: 56,
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.mark_email_read_outlined,
+              color: YColor.brandDeep, size: 28),
+        ),
+        const SizedBox(height: 16),
+        Text('Check your email', style: YFont.titleLG().copyWith(fontSize: 26)),
+        const SizedBox(height: 6),
+        RichText(
+          text: TextSpan(
+            style: YFont.body()
+                .copyWith(color: YColor.inkMuted, fontSize: 14, height: 1.4),
+            children: [
+              TextSpan(text: 'We sent a $_digits-digit code to '),
+              TextSpan(
+                text: email,
+                style: const TextStyle(
+                    color: YColor.ink, fontWeight: FontWeight.w600),
+              ),
+              const TextSpan(text: '. Tap it in with the keypad.'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        _OtpBoxes(code: _code, digits: _digits, hasError: _error != null),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            const Icon(Icons.error_outline, size: 16, color: YColor.danger),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(_error!,
+                  style: YFont.caption().copyWith(color: YColor.danger)),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 16),
+        _resendIn > 0
+            ? Text("Didn't get the code? Resend in ${_resendIn}s",
+                style: YFont.caption())
+            : TextButton(
+                onPressed: _busy ? null : _resend,
+                style: TextButton.styleFrom(
+                  foregroundColor: YColor.brand,
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Resend code'),
+              ),
+        const SizedBox(height: 6),
+        Text("Check spam if you don't see it within a minute.",
+            style:
+                YFont.caption().copyWith(color: YColor.inkSubtle, fontSize: 11)),
+      ],
+    );
+
+    final pad = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OtpNumpad(
+            onDigit: _onDigit, onBackspace: _onBackspace, enabled: !_busy),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: 264,
+          child: ElevatedButton(
+            onPressed: (_busy || _code.length != _digits) ? null : _verify,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: YColor.brand,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: YColor.brand.withValues(alpha: 0.4),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
+            ),
+            child: _busy
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text('Verify',
+                    style: YFont.bodyStrong()
+                        .copyWith(color: Colors.white, fontSize: 15)),
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
       backgroundColor: YColor.surface1,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
+            constraints: const BoxConstraints(maxWidth: 760),
             child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
+              padding: const EdgeInsets.all(28),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _busy ? null : _cancel,
-                      icon: const Icon(Icons.arrow_back, size: 16),
-                      label: const Text('Back'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: YColor.inkMuted,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: 56,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: YColor.brandTint,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(Icons.mark_email_read_outlined,
-                        color: YColor.brandDeep, size: 28),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Check your email',
-                    style: YFont.titleLG().copyWith(fontSize: 26),
-                  ),
-                  const SizedBox(height: 6),
-                  RichText(
-                    text: TextSpan(
-                      style: YFont.body().copyWith(
-                          color: YColor.inkMuted, fontSize: 14, height: 1.4),
-                      children: [
-                        TextSpan(
-                            text: 'We sent a $_digits-digit verification code to '),
-                        TextSpan(
-                          text: email,
-                          style: const TextStyle(
-                              color: YColor.ink,
-                              fontWeight: FontWeight.w600),
-                        ),
-                        const TextSpan(text: '. The code expires shortly.'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _OtpBoxes(
-                    code: _code,
-                    digits: _digits,
-                    hasError: _error != null,
-                  ),
-                  // Hidden TextField under the visual boxes captures input.
-                  SizedBox(
-                    height: 0,
-                    child: Opacity(
-                      opacity: 0,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focus,
-                        autofocus: true,
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.done,
-                        maxLength: _digits,
-                        autofillHints: const [AutofillHints.oneTimeCode],
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(_digits),
-                        ],
-                        onChanged: (v) {
-                          setState(() {
-                            _code = v;
-                            _error = null;
-                          });
-                          if (v.length == _digits) _verify();
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (_error != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: YColor.dangerSoft,
-                        borderRadius: BorderRadius.circular(YRadius.md),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.error_outline,
-                            size: 16, color: YColor.danger),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _error!,
-                            style: YFont.caption()
-                                .copyWith(color: YColor.danger),
-                          ),
-                        ),
-                      ]),
-                    ),
-                  const SizedBox(height: 18),
-                  ElevatedButton(
-                    onPressed: (_busy || _code.length != _digits) ? null : _verify,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: YColor.brand,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor:
-                          YColor.brand.withValues(alpha: 0.4),
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(YRadius.md)),
-                    ),
-                    child: _busy
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text('Verify',
-                            style: YFont.bodyStrong()
-                                .copyWith(color: Colors.white, fontSize: 15)),
-                  ),
-                  const SizedBox(height: 18),
-                  Center(
-                    child: _resendIn > 0
-                        ? Text(
-                            "Didn't get the code? Resend in ${_resendIn}s",
-                            style: YFont.caption(),
-                          )
-                        : TextButton(
-                            onPressed: _busy ? null : _resend,
-                            style: TextButton.styleFrom(
-                              foregroundColor: YColor.brand,
-                            ),
-                            child: const Text('Resend code'),
-                          ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Text(
-                      'Check spam if you don\'t see it within a minute.',
-                      style: YFont.caption()
-                          .copyWith(color: YColor.inkSubtle, fontSize: 11),
-                    ),
-                  ),
+                  Expanded(child: info),
+                  const SizedBox(width: 36),
+                  pad,
                 ],
               ),
             ),

@@ -151,8 +151,11 @@ class YosefPOSApp extends StatelessWidget {
         title: 'Prestige POS',
         debugShowCheckedModeBanner: false,
         theme: theme,
-        // Scales the whole app to fit any tablet so the UI looks the same
-        // proportionally on an iPad, a Lenovo, or a budget Android tablet.
+        // Scales the whole app down to fit smaller/low-res tablets (e.g. the
+        // Techlife) so the UI isn't oversized. NOTE: this transforms the tree,
+        // so overlay-based drag (the 3rd-party product grid) can float off the
+        // finger — types/sub-types use Flutter's built-in drag which is
+        // scale-correct.
         builder: (context, child) => ResponsiveScaler(child: child!),
         home: Consumer<AppState>(
           builder: (_, state, _) {

@@ -30,12 +30,20 @@ class ResponsiveScaler extends StatelessWidget {
   final double maxScale;
 
   @override
+  /// The scale currently applied to the whole app (real width ÷ design width,
+  /// clamped). Published so overlay-based widgets (e.g. drag proxies, which the
+  /// framework renders OUTSIDE this FittedBox at 1.0) can match the on-screen
+  /// size. 1.0 means no scaling.
+  static double currentScale = 1.0;
+
+  @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final size = mq.size;
     if (size.width <= 0) return child;
 
     final scale = (size.width / designWidth).clamp(minScale, maxScale);
+    currentScale = scale.toDouble();
 
     // On a baseline-width device there's nothing to do — render untouched so
     // the iPad experience is byte-for-byte unchanged.

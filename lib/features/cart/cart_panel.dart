@@ -13,6 +13,11 @@ class CartPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // While the owner is arranging the menu, this panel becomes a mini tutorial
+    // + a "Done editing" button instead of the order.
+    if (context.watch<AppState>().arrangeMode) {
+      return _arrangeHelp(context);
+    }
     // Watch the cart only — cart edits repaint just this panel, not the
     // whole app (AppState no longer re-broadcasts cart changes).
     final cart = context.watch<CartStore>();
@@ -58,6 +63,106 @@ class CartPanel extends StatelessWidget {
           if (cart.lines.isNotEmpty) _totals(context, cart),
         ],
       ),
+    );
+  }
+
+  /// Replaces the order while the menu is being arranged: what you can do +
+  /// the button to finish.
+  Widget _arrangeHelp(BuildContext context) {
+    return Container(
+      color: YColor.surface1,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: YColor.hairline, width: 0.5)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.tune, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Arranging menu', style: YFont.titleMD()),
+                    Text('Order is paused while you edit',
+                        style: YFont.caption()),
+                  ],
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _tip(Icons.open_with, 'Hold & drag to reorder',
+                    'Press and hold any box or product, then drag. Drag to an edge to auto-scroll to the start/end.'),
+                _tip(Icons.touch_app_outlined, 'Tap to open',
+                    'Tap a Type or Sub-type to view what\'s inside it.'),
+                _tip(Icons.edit_outlined, 'Pencil to rename',
+                    'Tap the ✎ on a Type/Sub-type to rename it. Tap a product to edit its name and price.'),
+                _tip(Icons.add_box_outlined, 'Dashed + to add',
+                    'Use the dashed + box to add a new Type, Sub-type, or Product.'),
+                _tip(Icons.visibility_off_outlined, 'Faded = empty',
+                    'Dimmed boxes have no products yet and sit at the end.'),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    context.read<AppState>().setArrangeMode(false),
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Done editing'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tip(IconData icon, String title, String body) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: YColor.brandDeep),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: YFont.bodyStrong()),
+              const SizedBox(height: 2),
+              Text(body,
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+            ],
+          ),
+        ),
+      ]),
     );
   }
 

@@ -661,6 +661,16 @@ class AppState extends ChangeNotifier {
   String? effectiveTypeId(CafeItem p) =>
       p.typeId ?? categoryById(p.categoryId)?.typeId;
 
+  /// Sell "arrange mode" — shared so the cart/order panel can swap to a mini
+  /// tutorial + "Done editing" button while the owner rearranges the menu.
+  bool _arrangeMode = false;
+  bool get arrangeMode => _arrangeMode;
+  void setArrangeMode(bool v) {
+    if (_arrangeMode == v) return;
+    _arrangeMode = v;
+    notifyListeners();
+  }
+
   /// Per-tenant feature flags from `public.tenant_features`. Drives which
   /// nav tabs (Bookings, Sessions, Members) are visible.
   cat.TenantFeatures _features = cat.TenantFeatures();
@@ -2756,6 +2766,9 @@ class AppState extends ChangeNotifier {
       }).eq('id', updated.id);
       final i = _productTypes.indexWhere((t) => t.id == updated.id);
       if (i >= 0) _productTypes[i] = updated;
+      // Keep the list ordered by sort_order (matches updateCategory) so a
+      // re-icon/rename that changes order reflects immediately.
+      _productTypes.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       // Refresh denormalized typeName on any products using this type.
       for (final p in _products) {
         if (p.typeId == updated.id) p.typeName = updated.name.trim();
@@ -2770,6 +2783,64 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return 'Could not reach the server. Please try again.';
     }
+  }
+
+  // ───── Drag-to-reorder (Sell "arrange mode") ──────────────────────────
+  // Each reassigns sort_order to (index+1)*10 over the given ordering. Memory
+  // updates + notifyListeners happen SYNCHRONOUSLY (so the dropped item doesn't
+  // snap back), then the rows are written to Supabase. Spacing stays in tens so
+  // single inserts elsewhere don't force a renumber.
+
+  /// Persist a new ordering of the product types. Returns null on success or a
+  /// user-safe error string if the DB write failed.
+  Future<String?> reorderProductTypes(List<ProductType> ordered) async {
+    for (var i = 0; i < ordered.length; i++) {
+      ordered[i].sortOrder = (i + 1) * 10;
+    }
+    _productTypes.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    notifyListeners();
+    return _writeSortOrders(
+        'product_types', ordered, (t) => t.id, (t) => t.sortOrder);
+  }
+
+  /// Persist a new ordering of the sub-types within a single product type.
+  Future<String?> reorderCategories(List<cat.Category> ordered) async {
+    for (var i = 0; i < ordered.length; i++) {
+      ordered[i].sortOrder = (i + 1) * 10;
+    }
+    _categories.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    notifyListeners();
+    return _writeSortOrders(
+        'categories', ordered, (c) => c.id, (c) => c.sortOrder);
+  }
+
+  /// Persist a new ordering of the products in the currently-shown subset.
+  Future<String?> reorderProducts(List<CafeItem> ordered) async {
+    for (var i = 0; i < ordered.length; i++) {
+      ordered[i].sortOrder = (i + 1) * 10;
+    }
+    _products.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    notifyListeners();
+    return _writeSortOrders('products', ordered, (p) => p.id, (p) => p.sortOrder);
+  }
+
+  /// Writes each row's sort_order. Returns null on success, or the first
+  /// error encountered (and how many rows it managed to save).
+  Future<String?> _writeSortOrders<T>(String table, List<T> ordered,
+      String Function(T) idOf, int Function(T) sortOf) async {
+    var saved = 0;
+    for (final item in ordered) {
+      try {
+        await supabase
+            .from(table)
+            .update({'sort_order': sortOf(item)}).eq('id', idOf(item));
+        saved++;
+      } catch (e) {
+        if (kDebugMode) debugPrint('Reorder ($table) row failed: $e');
+        return 'Saved $saved of ${ordered.length}. $e';
+      }
+    }
+    return null;
   }
 
   Future<String?> removeProductType(String id) async {

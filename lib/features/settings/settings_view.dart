@@ -8,6 +8,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/image_util.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../auth/otp_numpad.dart';
 import '../pin/set_pin_view.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
@@ -1161,31 +1162,42 @@ class _OtpDialog extends StatefulWidget {
 }
 
 class _OtpDialogState extends State<_OtpDialog> {
-  final _code = TextEditingController();
+  String _code = '';
   bool _busy = false;
   String? _error;
 
   int get _digits => SupabaseBootstrap.otpLength;
 
-  @override
-  void dispose() {
-    _code.dispose();
-    super.dispose();
+  void _onDigit(String d) {
+    if (_busy || _code.length >= _digits) return;
+    setState(() {
+      _code += d;
+      _error = null;
+    });
+    if (_code.length == _digits) _verify();
+  }
+
+  void _onBackspace() {
+    if (_busy || _code.isEmpty) return;
+    setState(() {
+      _code = _code.substring(0, _code.length - 1);
+      _error = null;
+    });
   }
 
   Future<void> _verify() async {
-    if (_busy) return;
+    if (_busy || _code.length != _digits) return;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final err = await widget.onVerify(_code.text);
+    final err = await widget.onVerify(_code);
     if (!mounted) return;
     if (err != null) {
       setState(() {
         _busy = false;
         _error = err;
-        _code.clear();
+        _code = '';
       });
       return;
     }
@@ -1233,34 +1245,18 @@ class _OtpDialogState extends State<_OtpDialog> {
                 'Enter it below ${widget.purpose}.',
                 style: YFont.body().copyWith(color: YColor.inkMuted),
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _code,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                maxLength: _digits,
-                style: YFont.titleLG().copyWith(
-                    fontSize: 28, letterSpacing: 10, fontWeight: FontWeight.w700),
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: '••••••'.substring(0, _digits),
-                  filled: true,
-                  fillColor: YColor.surface2,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md),
-                    borderSide: const BorderSide(color: YColor.hairline),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md),
-                    borderSide: const BorderSide(color: YColor.brand, width: 1.5),
-                  ),
+              const SizedBox(height: 18),
+              OtpCells(
+                  code: _code, length: _digits, hasError: _error != null),
+              const SizedBox(height: 14),
+              Center(
+                child: OtpNumpad(
+                  onDigit: _onDigit,
+                  onBackspace: _onBackspace,
+                  enabled: !_busy,
+                  keyWidth: 62,
+                  keyHeight: 46,
                 ),
-                onChanged: (v) {
-                  if (_error != null) setState(() => _error = null);
-                  if (v.length == _digits) _verify();
-                },
-                onSubmitted: (_) => _verify(),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
@@ -1271,7 +1267,7 @@ class _OtpDialogState extends State<_OtpDialog> {
               const SizedBox(height: 18),
               ElevatedButton(
                 onPressed:
-                    (_busy || _code.text.length != _digits) ? null : _verify,
+                    (_busy || _code.length != _digits) ? null : _verify,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: YColor.brand,
                   foregroundColor: Colors.white,

@@ -1011,14 +1011,209 @@ class _ModeToggle extends StatelessWidget {
 
 // ───── Form dialog ─────
 
+/// Opens the full Product editor to ADD a product, pre-selecting
+/// [presetTypeId] / [presetCategoryId]. Persists via addProduct. Reusable from
+/// the Sell "arrange mode" + box.
+Future<void> showProductEditor(BuildContext context,
+    {String? presetTypeId, String? presetCategoryId}) async {
+  final state = context.read<AppState>();
+  final saved = await showDialog<CafeItem>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => ProductFormDialog(
+      inventory: state.inventory,
+      presetTypeId: presetTypeId,
+      presetCategoryId: presetCategoryId,
+    ),
+  );
+  if (saved == null || !context.mounted) return;
+  final err = await state.addProduct(saved);
+  if (!context.mounted) return;
+  PushToast.show(context,
+      title: err == null ? 'Product added' : 'Could not save',
+      subtitle: err ?? saved.name,
+      leadingIcon:
+          err == null ? Icons.check_circle_outline : Icons.error_outline);
+}
+
+/// Quick-edit a product's NAME and PRICE only (image locked) — for Sell's
+/// "arrange mode". Mutates just those two fields and saves via updateProduct,
+/// preserving recipe/modifiers/type/category, so the full Products editor and
+/// the DB stay perfectly consistent.
+Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
+  final result = await showDialog<({String name, int priceCents})>(
+    context: context,
+    builder: (_) => _ProductQuickEditDialog(item: item),
+  );
+  if (result == null || !context.mounted) return;
+  final state = context.read<AppState>();
+  item.name = result.name;
+  item.basePrice = Money(result.priceCents);
+  final err = await state.updateProduct(item);
+  if (!context.mounted) return;
+  PushToast.show(context,
+      title: err == null ? 'Product updated' : 'Could not save',
+      subtitle: err ?? item.name,
+      leadingIcon:
+          err == null ? Icons.check_circle_outline : Icons.error_outline);
+}
+
+class _ProductQuickEditDialog extends StatefulWidget {
+  const _ProductQuickEditDialog({required this.item});
+  final CafeItem item;
+  @override
+  State<_ProductQuickEditDialog> createState() =>
+      _ProductQuickEditDialogState();
+}
+
+class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _price;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.item.name);
+    _price = TextEditingController(
+        text: (widget.item.basePrice.centavos / 100).toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _price.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _dec(String hint, {String? prefix}) => InputDecoration(
+        hintText: hint,
+        prefixText: prefix,
+        filled: true,
+        fillColor: YColor.surface2,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          borderSide: BorderSide.none,
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImg =
+        widget.item.imageUrl != null && widget.item.imageUrl!.isNotEmpty;
+    return AlertDialog(
+      backgroundColor: YColor.surface1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Quick edit', style: YFont.titleMD()),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Locked image preview — full photo editing stays on the Products
+            // page for now.
+            Row(children: [
+              Container(
+                width: 48,
+                height: 48,
+                clipBehavior: Clip.antiAlias,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: YColor.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: YColor.hairline),
+                ),
+                child: hasImg
+                    ? Image.network(widget.item.imageUrl!,
+                        fit: BoxFit.cover,
+                        width: 48,
+                        height: 48,
+                        errorBuilder: (_, __, ___) => NameIconOrEmoji(
+                            name: widget.item.name,
+                            iconName: widget.item.iconName))
+                    : NameIconOrEmoji(
+                        name: widget.item.name,
+                        iconName: widget.item.iconName),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(children: [
+                  const Icon(Icons.lock_outline,
+                      size: 13, color: YColor.inkMuted),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text('Photo editing is on the Products page for now.',
+                        style:
+                            YFont.caption().copyWith(color: YColor.inkMuted)),
+                  ),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            Text('NAME', style: YFont.caption()),
+            const SizedBox(height: 6),
+            TextField(
+                controller: _name,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: _dec('Product name')),
+            const SizedBox(height: 12),
+            Text('PRICE', style: YFont.caption()),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _price,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: moneyInputFormatters,
+              decoration: _dec('0.00', prefix: '₱ '),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cancel',
+              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+        ),
+        ElevatedButton(
+          onPressed: _name.text.trim().isEmpty
+              ? null
+              : () {
+                  final pesos = double.tryParse(_price.text.trim()) ?? 0;
+                  Navigator.of(context).pop((
+                    name: _name.text.trim(),
+                    priceCents: Money.pesos(pesos).centavos,
+                  ));
+                },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: YColor.brand,
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 class ProductFormDialog extends StatefulWidget {
   const ProductFormDialog({
     super.key,
     this.initial,
     required this.inventory,
+    this.presetTypeId,
+    this.presetCategoryId,
   });
   final CafeItem? initial;
   final List<InventoryItem> inventory;
+  /// For a NEW product, pre-select these (used by Sell "arrange mode" + box).
+  final String? presetTypeId;
+  final String? presetCategoryId;
 
   @override
   State<ProductFormDialog> createState() => _ProductFormDialogState();
@@ -1068,8 +1263,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         text: p == null ? '' : (p.basePrice.centavos / 100).toStringAsFixed(0));
     _category = p?.category ?? CafeCategory.coffee;
     _itemType = p?.itemType ?? ItemType.drink;
-    _typeId = p?.typeId;
-    _categoryId = p?.categoryId;
+    _typeId = p?.typeId ?? widget.presetTypeId;
+    _categoryId = p?.categoryId ?? widget.presetCategoryId;
     _available = p?.available ?? true;
     _imageUrl = p?.imageUrl;
     _emojiFallback = (p?.emoji.isNotEmpty ?? false) ? p!.emoji : '☕';
