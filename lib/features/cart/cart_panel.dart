@@ -41,11 +41,18 @@ class CartPanel extends StatelessWidget {
                 ],
               ),
               const Spacer(),
-              if (cart.lines.isNotEmpty)
+              if (cart.lines.isNotEmpty) ...[
                 IconButton(
+                  tooltip: 'Repeat order (read back)',
+                  onPressed: () => _showRepeat(context, cart),
+                  icon: const Icon(Icons.zoom_out_map, color: YColor.brandDeep),
+                ),
+                IconButton(
+                  tooltip: 'Clear order',
                   onPressed: () => cart.clear(),
                   icon: const Icon(Icons.delete_outline, color: YColor.danger),
                 ),
+              ],
             ]),
           ),
           // Body
@@ -293,4 +300,243 @@ class CartPanel extends StatelessWidget {
       ]),
     );
   }
+
+  void _showRepeat(BuildContext context, CartStore cart) {
+    showGeneralDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      barrierDismissible: true,
+      barrierLabel: 'Repeat order',
+      pageBuilder: (_, __, ___) => const _RepeatOrderView(),
+    );
+  }
+}
+
+/// A read-only blow-up of the current order for reading it back to the
+/// customer. Each item is a uniform single-line dashed (brown) box —
+/// "1.  ×2  Fries  ₱125" — and the boxes flow into a grid (up to 3 columns)
+/// that fits on one screen, filled column-by-column.
+class _RepeatOrderView extends StatelessWidget {
+  const _RepeatOrderView();
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartStore>();
+    final n = cart.lines.length;
+    const spacing = 8.0;
+
+    return SafeArea(
+      child: Center(
+        child: LayoutBuilder(builder: (context, screen) {
+          final maxW = screen.maxWidth;
+          final maxH = screen.maxHeight;
+
+          const headerH = 56.0;
+          const totalH = 58.0;
+          // Must match the list's vertical padding (16 + 16) so the modal
+          // height fully contains every row — including the last one.
+          const pad = 32.0;
+
+          // Bias toward going wide (up to 3 columns) so the modal stays short.
+          final colByWidth = ((maxW - 80) / 230).floor().clamp(1, 3);
+          var cols = n == 0 ? 1 : (n / 8).ceil();
+          if (cols < 1) cols = 1;
+          if (cols > colByWidth) cols = colByWidth;
+          final rows = n == 0 ? 1 : (n / cols).ceil();
+
+          final listMaxH =
+              (maxH - 24 - headerH - totalH - pad).clamp(120.0, 100000.0);
+          // Taller boxes so a long name can wrap to 2 lines (never truncated).
+          final boxH =
+              ((listMaxH - spacing * (rows - 1)) / rows).clamp(50.0, 74.0);
+          final gridH = rows * boxH + spacing * (rows - 1);
+          final fs = (boxH * 0.28).clamp(14.0, 18.0);
+
+          // Wide boxes so most names fit on one line; the 2-line allowance
+          // catches the longest. Uses most of the screen width.
+          final cardW = (cols * 380.0 + 48).clamp(460.0, maxW - 36);
+          final cardH = (headerH + totalH + gridH.clamp(0.0, listMaxH) + pad)
+              .clamp(200.0, maxH - 12);
+
+          Widget box(int idx) {
+            final l = cart.lines[idx];
+            return CustomPaint(
+              foregroundPainter: _DashedBoxPainter(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(children: [
+                  // Number + name + qty fill the left; the Expanded pushes the
+                  // price to the far right.
+                  Expanded(
+                    child: Row(children: [
+                      Text('${idx + 1}.',
+                          style: YFont.bodyStrong().copyWith(
+                              fontSize: fs * 0.9, color: YColor.inkMuted)),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(l.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.bodyStrong().copyWith(
+                                fontSize: fs,
+                                color: YColor.ink,
+                                height: 1.12)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('x${l.quantity}',
+                          style: YFont.bodyStrong().copyWith(
+                              fontSize: fs,
+                              color: YColor.brand,
+                              fontWeight: FontWeight.w800)),
+                    ]),
+                  ),
+                  const SizedBox(width: 12),
+                  // Fixed right-aligned price column so they all line up.
+                  SizedBox(
+                    width: 96,
+                    child: Text(l.lineTotal.formatted,
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        style: YFont.bodyStrong().copyWith(
+                            fontSize: fs, color: YColor.brandDeep)),
+                  ),
+                ]),
+              ),
+            );
+          }
+
+          return Material(
+            color: YColor.surface1,
+            borderRadius: BorderRadius.circular(20),
+            clipBehavior: Clip.antiAlias,
+            child: SizedBox(
+              width: cardW,
+              height: cardH,
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: headerH,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 12, 0),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(color: YColor.hairline)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.receipt_long,
+                            color: YColor.brandDeep, size: 22),
+                        const SizedBox(width: 10),
+                        Text('Order summary',
+                            style: YFont.titleMD().copyWith(fontSize: 19)),
+                        const Spacer(),
+                        Text(
+                            '${cart.itemCount} item'
+                            '${cart.itemCount == 1 ? '' : 's'}',
+                            style: YFont.caption()),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, size: 24),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  Expanded(
+                    child: n == 0
+                        ? Center(
+                            child: Text('Order is empty',
+                                style: YFont.titleMD()
+                                    .copyWith(color: YColor.inkMuted)))
+                        : Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (int r = 0; r < rows; r++)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                          bottom: r < rows - 1 ? spacing : 0),
+                                      child: SizedBox(
+                                        height: boxH,
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            for (int c = 0; c < cols; c++) ...[
+                                              if (c > 0)
+                                                const SizedBox(width: spacing),
+                                              Expanded(
+                                                child: (c * rows + r) < n
+                                                    ? box(c * rows + r)
+                                                    : const SizedBox(),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                  ),
+                  SizedBox(
+                    height: totalH,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      decoration: const BoxDecoration(
+                        color: YColor.surface2,
+                        border:
+                            Border(top: BorderSide(color: YColor.hairline)),
+                      ),
+                      child: Row(children: [
+                        Text('Total',
+                            style: YFont.titleMD().copyWith(fontSize: 20)),
+                        const Spacer(),
+                        Text(cart.total.formatted,
+                            style: YFont.titleMD().copyWith(
+                                fontSize: 24,
+                                color: YColor.brand,
+                                fontWeight: FontWeight.w800)),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// Dashed brown rounded-rect border for the read-back item boxes.
+class _DashedBoxPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Inset by 1px so the stroke stays fully inside the box and isn't clipped
+    // at the modal's top/bottom edges.
+    final rrect = RRect.fromRectAndRadius(
+        (Offset.zero & size).deflate(1), const Radius.circular(10));
+    final src = Path()..addRRect(rrect);
+    final dashed = Path();
+    for (final m in src.computeMetrics()) {
+      var d = 0.0;
+      while (d < m.length) {
+        dashed.addPath(m.extractPath(d, d + 5), Offset.zero);
+        d += 9;
+      }
+    }
+    canvas.drawPath(
+        dashed,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = YColor.brandDeep);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
