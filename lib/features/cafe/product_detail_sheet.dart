@@ -9,6 +9,7 @@ import '../../design_system/typography.dart';
 import '../../models/cart.dart';
 import '../../models/catalog.dart';
 import '../../models/money.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
 class ProductDetailSheet extends StatefulWidget {
@@ -24,6 +25,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   final Map<String, int> addOnQuantities = {};
   int quantity = 1;
   String notes = '';
+  final TextEditingController _notesC = TextEditingController();
 
   @override
   void initState() {
@@ -33,6 +35,12 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         selections[g.id] = g.options[g.defaultIndex].id;
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _notesC.dispose();
+    super.dispose();
   }
 
   /// Unit price using the tenant's global add-ons list. Walks two layers:
@@ -192,22 +200,13 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                             _addOnsSection(),
                             const SizedBox(height: 16),
                           ],
-                          Text('Notes', style: YFont.bodyStrong()),
-                          const SizedBox(height: 8),
-                          TextField(
+                          KeyboardAccessoryField(
+                            controller: _notesC,
+                            accessoryLabel: 'NOTES',
+                            label: 'Notes',
+                            hint: 'E.g., extra hot, light ice…',
                             maxLines: 2,
                             onChanged: (v) => notes = v,
-                            decoration: InputDecoration(
-                              hintText: 'E.g., extra hot, light ice…',
-                              hintStyle:
-                                  YFont.body().copyWith(color: YColor.inkSubtle),
-                              filled: true,
-                              fillColor: YColor.surface3,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(YRadius.md),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
                           ),
                         ],
                       ),
@@ -374,11 +373,17 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
             ),
           ]),
           const SizedBox(height: 10),
-          Column(
-            children: _visibleAddOns(context)
-                .map((a) => _addOnRow(a))
-                .toList(),
-          ),
+          LayoutBuilder(builder: (ctx, c) {
+            const gap = 10.0;
+            final w = (c.maxWidth - gap) / 2;
+            return Wrap(
+              spacing: gap,
+              runSpacing: 8,
+              children: _visibleAddOns(context)
+                  .map((a) => SizedBox(width: w, child: _addOnRow(a)))
+                  .toList(),
+            );
+          }),
         ],
       ),
     );
@@ -407,92 +412,88 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       });
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? YColor.brandTint.withValues(alpha: 0.55)
-              : YColor.surface3,
-          borderRadius: BorderRadius.circular(YRadius.md),
-          border: Border.all(
-            color: selected ? YColor.brand : Colors.transparent,
-            width: selected ? 1.4 : 0,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected
+            ? YColor.brandTint.withValues(alpha: 0.55)
+            : YColor.surface3,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(
+          color: selected ? YColor.brand : Colors.transparent,
+          width: selected ? 1.4 : 0,
+        ),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(addOn.name,
+                  style: YFont.bodyStrong(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              Text(
+                addOn.priceDelta.centavos > 0
+                    ? '+${addOn.priceDelta.formatted} each'
+                    : 'Free',
+                style: YFont.caption(),
+              ),
+            ],
           ),
         ),
-        child: Row(children: [
-          NameIconOrEmoji(
-            name: addOn.name,
-            iconName: addOn.iconName,
-            iconSize: 22,
-            color: selected ? YColor.brand : YColor.brandDeep,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(addOn.name, style: YFont.bodyStrong()),
-                Text(
-                  addOn.priceDelta.centavos > 0
-                      ? '+${addOn.priceDelta.formatted} each'
-                      : 'Free',
-                  style: YFont.caption(),
-                ),
-              ],
+        const SizedBox(width: 8),
+        if (!selected)
+          ElevatedButton(
+            onPressed: () => setQty(1),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: YColor.brand,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999)),
             ),
-          ),
-          if (!selected)
-            ElevatedButton(
-              onPressed: () => setQty(1),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
-                textStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999)),
-              ),
-              child: const Text('Add'),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                color: YColor.surface1,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: YColor.hairline),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                  iconSize: 16,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => setQty(qty - 1),
-                  icon: const Icon(Icons.remove),
-                ),
-                SizedBox(
-                  width: 18,
-                  child: Text(
-                    '$qty',
-                    textAlign: TextAlign.center,
-                    style: YFont.bodyStrong(),
-                  ),
-                ),
-                IconButton(
-                  iconSize: 16,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: canIncrement ? () => setQty(qty + 1) : null,
-                  icon: const Icon(Icons.add),
-                ),
-              ]),
+            child: const Text('+',
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700, height: 1)),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: YColor.surface1,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: YColor.hairline),
             ),
-        ]),
-      ),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: () => setQty(qty - 1),
+                icon: const Icon(Icons.remove),
+              ),
+              SizedBox(
+                width: 16,
+                child: Text(
+                  '$qty',
+                  textAlign: TextAlign.center,
+                  style: YFont.bodyStrong(),
+                ),
+              ),
+              IconButton(
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: canIncrement ? () => setQty(qty + 1) : null,
+                icon: const Icon(Icons.add),
+              ),
+            ]),
+          ),
+      ]),
     );
   }
 

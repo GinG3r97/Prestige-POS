@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
-import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/cart.dart';
@@ -135,16 +134,27 @@ class _TenderSheetState extends State<TenderSheet> {
     }
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => _applyScPwd(state),
-        icon: const Icon(Icons.badge_outlined, size: 18),
-        label: const Text('Senior / PWD discount'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: YColor.brandDeep,
-          side: const BorderSide(color: YColor.hairline),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(YRadius.md)),
+      child: GestureDetector(
+        onTap: () => _applyScPwd(state),
+        child: CustomPaint(
+          painter: _DashedRRectPainter(
+              color: YColor.brandDeep.withValues(alpha: 0.6),
+              radius: YRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.badge_outlined,
+                    size: 18, color: YColor.brandDeep),
+                const SizedBox(width: 8),
+                Text('Senior / PWD discount',
+                    style: YFont.bodyStrong()
+                        .copyWith(color: YColor.brandDeep, fontSize: 14)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -232,17 +242,7 @@ class _TenderSheetState extends State<TenderSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel',
-                        style: TextStyle(color: YColor.brand)),
-                  ),
-                  const Spacer(),
-                  Text('Payment', style: YFont.titleMD()),
-                  const Spacer(),
-                  const SizedBox(width: 80),
-                ]),
+                Text('Payment', style: YFont.titleMD()),
                 const SizedBox(height: 12),
                 Expanded(
                   child: ListView.separated(
@@ -250,34 +250,39 @@ class _TenderSheetState extends State<TenderSheet> {
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
                       final line = cart.lines[i];
-                      return Row(children: [
-                        ProductVisual(
-                          imageUrl: line.imageUrl,
-                          name: line.title,
-                          iconName: line.iconName,
-                          size: 40,
-                          iconSize: 20,
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: YColor.surface1,
+                          borderRadius: BorderRadius.circular(YRadius.md),
+                          border: Border.all(color: YColor.brand, width: 1),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(line.title, style: YFont.bodyStrong()),
+                                if (line.subtitle != null &&
+                                    line.subtitle!.trim().isNotEmpty)
+                                  Text(line.subtitle!,
+                                      style: YFont.caption()),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(line.title, style: YFont.bodyStrong()),
-                              if (line.subtitle != null)
-                                Text(line.subtitle!, style: YFont.caption()),
+                              Text(line.lineTotal.formatted,
+                                  style: YFont.bodyStrong()),
+                              Text('×${line.quantity}',
+                                  style: YFont.caption()),
                             ],
                           ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(line.lineTotal.formatted,
-                                style: YFont.bodyStrong()),
-                            Text('×${line.quantity}', style: YFont.caption()),
-                          ],
-                        ),
-                      ]);
+                        ]),
+                      );
                     },
                   ),
                 ),
@@ -369,25 +374,63 @@ class _TenderSheetState extends State<TenderSheet> {
             children: TenderMethod.values.map(_methodTile).toList(),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: YColor.brandTint.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(YRadius.md),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline,
-                    size: 16, color: YColor.brandDeep),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Tap a method to continue',
-                    style: YFont.caption().copyWith(color: YColor.brandDeep),
+          Row(
+            children: [
+              // Info (left)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: YColor.brandTint.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 16, color: YColor.brandDeep),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Tap a method to continue',
+                          style: YFont.caption()
+                              .copyWith(color: YColor.brandDeep),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              // Close payment (right) — same footprint as the info box.
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: YColor.danger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                      border: Border.all(
+                          color: YColor.danger.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.close_rounded,
+                            size: 16, color: YColor.danger),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Close payment',
+                          style: YFont.caption().copyWith(
+                              color: YColor.danger,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1493,4 +1536,41 @@ class _ScPwdDialogState extends State<_ScPwdDialog> {
       ),
     );
   }
+}
+
+/// Dashed rounded-rectangle border (used for the Senior/PWD discount button).
+class _DashedRRectPainter extends CustomPainter {
+  _DashedRRectPainter({
+    required this.color,
+    this.radius = 12,
+    this.dash = 5,
+    this.gap = 4,
+    this.strokeWidth = 1.4,
+  });
+  final Color color;
+  final double radius, dash, gap, strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    final rrect = RRect.fromRectAndRadius(
+        (Offset.zero & size).deflate(strokeWidth / 2),
+        Radius.circular(radius));
+    final dashed = Path();
+    for (final metric in (Path()..addRRect(rrect)).computeMetrics()) {
+      var dist = 0.0;
+      while (dist < metric.length) {
+        dashed.addPath(metric.extractPath(dist, dist + dash), Offset.zero);
+        dist += dash + gap;
+      }
+    }
+    canvas.drawPath(dashed, paint);
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter old) =>
+      old.color != color || old.radius != radius;
 }
