@@ -2214,8 +2214,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Best-effort background reconnect to the saved BLE printer. Retries a few
-  /// times because the Bluetooth adapter is often not ready right at launch.
+  bool _warmingUpPrinter = false;
+
+  /// Best-effort background reconnect to the saved BLE printer. The outer loop
+  /// only waits for the Bluetooth *adapter* to power on (often cold right at
+  /// launch) — once it's on we make a SINGLE [BtPrinter.connect] call, which
+  /// already retries internally. (Looping connect here too would multiply into
+  /// dozens of attempts and spam the log when the printer is offline.)
   void _warmUpPrinter() {
     final p = _printer;
     if (p == null ||
@@ -2223,13 +2228,23 @@ class AppState extends ChangeNotifier {
         (p.bluetoothId ?? '').isEmpty) {
       return;
     }
+    if (_warmingUpPrinter) return; // don't stack concurrent warm-ups
+    _warmingUpPrinter = true;
     unawaited(() async {
-      for (var attempt = 0; attempt < 5; attempt++) {
-        if (await BtPrinter.isConnected) return;
-        if (await BtPrinter.isEnabled()) {
-          if (await BtPrinter.connect(p.bluetoothId!)) return;
+      try {
+        for (var attempt = 0; attempt < 5; attempt++) {
+          if (await BtPrinter.isConnected) return; // already up
+          if (await BtPrinter.isEnabled()) {
+            // BT is on — one connect attempt (it retries internally), then
+            // stop whether it succeeds or the printer is simply offline.
+            await BtPrinter.connect(p.bluetoothId!);
+            return;
+          }
+          // BT still powering on — wait and re-check.
+          await Future.delayed(Duration(milliseconds: 800 + attempt * 600));
         }
-        await Future.delayed(Duration(milliseconds: 800 + attempt * 600));
+      } finally {
+        _warmingUpPrinter = false;
       }
     }());
   }

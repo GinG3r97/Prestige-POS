@@ -73,11 +73,10 @@ class BtPrinter {
     // crash via force-unwrap (uncatchable from Dart). Bail safely instead.
     if (!_isConnectableAddress(address)) return false;
     try {
-      // Always tear down first — `connectionStatus` can report a stale "true"
-      // for a socket that's actually dead, which then blocks a fresh connect.
-      try {
-        await PrintBluetoothThermal.disconnect;
-      } catch (_) {/* nothing to drop */}
+      // Tear down any prior connection first so a stale half-open socket can't
+      // block a fresh connect. Guarded: the native disconnect crashes if
+      // nothing is connected (see _safeDisconnect).
+      await _safeDisconnect();
       await Future.delayed(const Duration(milliseconds: 350));
 
       for (var attempt = 0; attempt < 4; attempt++) {
@@ -145,8 +144,20 @@ class BtPrinter {
   }
 
   static Future<void> disconnect() async {
+    await _safeDisconnect();
+  }
+
+  /// Disconnect ONLY when something is actually connected. The native iOS
+  /// `disconnect` passes `connectedPeripheral` (an implicitly-unwrapped
+  /// optional) straight to `cancelPeripheralConnection`; if nothing is
+  /// connected it's nil and the app dies with a Swift fatalError that Dart
+  /// try/catch cannot catch. `connectionStatus` is nil-safe, so gate on it —
+  /// a true result means `connectedPeripheral` is non-nil and safe to cancel.
+  static Future<void> _safeDisconnect() async {
     try {
-      await PrintBluetoothThermal.disconnect;
-    } catch (_) {/* already disconnected */}
+      if (await PrintBluetoothThermal.connectionStatus) {
+        await PrintBluetoothThermal.disconnect;
+      }
+    } catch (_) {/* best effort */}
   }
 }
