@@ -609,16 +609,11 @@ class _CartPanelState extends State<CartPanel> {
                         border: Border.all(
                             color: YColor.brandDeep.withValues(alpha: 0.3)),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.edit_outlined,
-                            size: 12, color: YColor.brandDeep),
-                        const SizedBox(width: 4),
-                        Text('Edit',
-                            style: YFont.caption().copyWith(
-                                color: YColor.brandDeep,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11)),
-                      ]),
+                      child: Text('Edit',
+                          style: YFont.caption().copyWith(
+                              color: YColor.brandDeep,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11)),
                     ),
                   ),
                 ],

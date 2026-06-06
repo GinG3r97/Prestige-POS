@@ -48,6 +48,10 @@ class TenderSheet extends StatefulWidget {
 class _TenderSheetState extends State<TenderSheet> {
   TenderMethod? method;
   String cashReceived = '';
+  // Cash tendered + change for the completed sale (null for non-cash) — shown
+  // on the success screen so the cashier can make change at the open drawer.
+  int? _paidTenderedCents;
+  int? _paidChangeCents;
   // Reference / transaction number for QR / e-wallet payments. Required
   // before a non-cash sale can be charged (used to reconcile against the
   // GCash / bank statement later).
@@ -1020,6 +1024,8 @@ class _TenderSheetState extends State<TenderSheet> {
     setState(() {
       _busy = false;
       _orderNumber = orderNumber;
+      _paidTenderedCents = tenderedCents;
+      _paidChangeCents = changeCents;
       completed = true;
     });
 
@@ -1093,23 +1099,39 @@ class _TenderSheetState extends State<TenderSheet> {
     return null;
   }
 
+  Widget _payRow(String label, String value, {bool big = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: (big ? YFont.bodyStrong() : YFont.body())
+                .copyWith(color: big ? YColor.brandDeep : YColor.inkMuted)),
+        Text(value,
+            style: (big ? YFont.titleMD() : YFont.bodyStrong()).copyWith(
+                color: big ? YColor.brand : YColor.ink,
+                fontWeight: FontWeight.w800)),
+      ],
+    );
+  }
+
   Widget _completed(AppState state) {
+    final pending = _printsPending(state);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: 60,
+            height: 60,
             decoration: const BoxDecoration(
               color: YColor.successSoft,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle,
-                size: 48, color: YColor.success),
+                size: 40, color: YColor.success),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text('Payment Complete', style: YFont.titleLG()),
           if (_orderNumber != null) ...[
             const SizedBox(height: 4),
@@ -1120,80 +1142,105 @@ class _TenderSheetState extends State<TenderSheet> {
                   letterSpacing: 0.6,
                 )),
           ],
-          const SizedBox(height: 6),
-          Text(_amountDue(state).formatted,
-              style: YFont.titleLG().copyWith(color: YColor.brand)),
-          const SizedBox(height: 22),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left — buzzer/table number + print actions + finish.
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 20),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // LEFT — buzzer / table number input above the number pad.
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('BUZZER / TABLE NO. (optional)',
-                        style: YFont.caption()),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('BUZZER / TABLE NO. (optional)',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: YColor.brandDeep)),
+                    ),
                     const SizedBox(height: 8),
-                    _buzzerDisplay(),
-                    const SizedBox(height: 6),
-                    Text('Printed big on the barista & kitchen tickets.',
-                        style: YFont.caption()
-                            .copyWith(color: YColor.inkMuted)),
-                    const SizedBox(height: 18),
-                    _printActions(state),
-                    Builder(builder: (_) {
-                      final pending = _printsPending(state);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ElevatedButton(
-                            onPressed: pending
-                                ? null
-                                : () {
-                                    state.cart.clear();
-                                    Navigator.of(context).pop();
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: YColor.brand,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: YColor.surface3,
-                              disabledForegroundColor: YColor.inkMuted,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(YRadius.md)),
-                            ),
-                            child: Text(
-                                pending ? 'Print to continue' : 'New Order'),
-                          ),
-                          if (pending) ...[
-                            const SizedBox(height: 6),
-                            TextButton(
-                              onPressed: () =>
-                                  setState(() => _skipPrinting = true),
-                              child: Text(
-                                  'Printer down? Finish without printing',
-                                  style: YFont.caption()
-                                      .copyWith(color: YColor.inkMuted)),
-                            ),
-                          ],
-                        ],
-                      );
-                    }),
+                    SizedBox(width: 190, child: _buzzerDisplay()),
+                    const SizedBox(height: 12),
+                    OtpNumpad(
+                      onDigit: _onBuzzerDigit,
+                      onBackspace: _onBuzzerBackspace,
+                      keyWidth: 58,
+                      keyHeight: 44,
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 26),
-              // Right — number pad to enter the buzzer / table number.
-              OtpNumpad(
-                onDigit: _onBuzzerDigit,
-                onBackspace: _onBuzzerBackspace,
-                keyWidth: 58,
-                keyHeight: 44,
-              ),
-            ],
+                const SizedBox(width: 28),
+                // RIGHT — totals + prints on top; finish + printer-down pinned
+                // to the bottom so the column matches the numpad's height.
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                        decoration: BoxDecoration(
+                          color: YColor.surface2,
+                          borderRadius: BorderRadius.circular(YRadius.md),
+                          border: Border.all(color: YColor.hairline),
+                        ),
+                        child: Column(
+                          children: [
+                            _payRow('Total', _amountDue(state).formatted),
+                            if (_paidTenderedCents != null) ...[
+                              const SizedBox(height: 10),
+                              _payRow('Amount received',
+                                  Money(_paidTenderedCents!).formatted),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: _DashLine(),
+                              ),
+                              _payRow('Change',
+                                  Money(_paidChangeCents ?? 0).formatted,
+                                  big: true),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _printActions(state),
+                      const Spacer(),
+                      ElevatedButton(
+                        onPressed: pending
+                            ? null
+                            : () {
+                                state.cart.clear();
+                                Navigator.of(context).pop();
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: YColor.brand,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: YColor.surface3,
+                          disabledForegroundColor: YColor.inkMuted,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
+                        ),
+                        child:
+                            Text(pending ? 'Print to continue' : 'New Order'),
+                      ),
+                      if (pending)
+                        Center(
+                          child: TextButton(
+                            onPressed: () =>
+                                setState(() => _skipPrinting = true),
+                            child: Text(
+                                'Printer down? Finish without printing',
+                                style: YFont.caption()
+                                    .copyWith(color: YColor.inkMuted)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1255,7 +1302,7 @@ class _TenderSheetState extends State<TenderSheet> {
         children: [
           if (tenant != null)
             _prepBtn(
-                _receiptPrinted ? 'Receipt printed' : 'Print receipt',
+                _receiptPrinted ? 'Reprint receipt' : 'Print receipt',
                 Icons.receipt_long_outlined,
                 () => _doPrint(
                       () => PrintJobs.receipt(
@@ -1263,9 +1310,11 @@ class _TenderSheetState extends State<TenderSheet> {
                       what: 'Receipt',
                     ),
                 done: _receiptPrinted),
-          if (drinks && tenant != null)
+          // Always shown; greyed out + non-tappable when the order has no
+          // drinks (barista) / no food (kitchen).
+          if (tenant != null)
             _prepBtn(
-                _baristaPrinted ? 'Barista printed' : 'Print barista',
+                _baristaPrinted ? 'Reprint barista' : 'Print barista',
                 Icons.local_cafe_outlined,
                 () => _doPrint(
                       () => PrintJobs.barista(
@@ -1275,10 +1324,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           number: _buzzer),
                       what: 'Barista ticket',
                     ),
-                done: _baristaPrinted),
-          if (food && tenant != null)
+                done: _baristaPrinted,
+                disabled: !drinks),
+          if (tenant != null)
             _prepBtn(
-                _kitchenPrinted ? 'Kitchen printed' : 'Print kitchen',
+                _kitchenPrinted ? 'Reprint kitchen' : 'Print kitchen',
                 Icons.restaurant_outlined,
                 () => _doPrint(
                       () => PrintJobs.kitchen(
@@ -1288,7 +1338,8 @@ class _TenderSheetState extends State<TenderSheet> {
                           number: _buzzer),
                       what: 'Kitchen ticket',
                     ),
-                done: _kitchenPrinted),
+                done: _kitchenPrinted,
+                disabled: !food),
         ],
       ),
       const SizedBox(height: 16),
@@ -1337,7 +1388,21 @@ class _TenderSheetState extends State<TenderSheet> {
   }
 
   Widget _prepBtn(String label, IconData icon, VoidCallback onTap,
-      {bool done = false}) {
+      {bool done = false, bool disabled = false}) {
+    if (disabled) {
+      return OutlinedButton.icon(
+        onPressed: null,
+        icon: Icon(icon, size: 16, color: YColor.inkSubtle),
+        label: Text(label, style: const TextStyle(color: YColor.inkSubtle)),
+        style: OutlinedButton.styleFrom(
+          disabledForegroundColor: YColor.inkSubtle,
+          side: BorderSide(color: YColor.hairline.withValues(alpha: 0.6)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(YRadius.md)),
+        ),
+      );
+    }
     final tone = done ? YColor.success : YColor.brandDeep;
     return OutlinedButton.icon(
       onPressed: onTap,
@@ -1536,6 +1601,35 @@ class _ScPwdDialogState extends State<_ScPwdDialog> {
       ),
     );
   }
+}
+
+/// Thin horizontal dashed line — the receipt-style separator above Change.
+class _DashLine extends StatelessWidget {
+  const _DashLine();
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+        height: 1,
+        width: double.infinity,
+        child: CustomPaint(painter: _DashLinePainter()),
+      );
+}
+
+class _DashLinePainter extends CustomPainter {
+  const _DashLinePainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = YColor.hairline
+      ..strokeWidth = 1;
+    var x = 0.0;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 4, 0), p);
+      x += 8;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashLinePainter old) => false;
 }
 
 /// Dashed rounded-rectangle border (used for the Senior/PWD discount button).

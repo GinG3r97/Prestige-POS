@@ -228,7 +228,7 @@ class _DashboardViewState extends State<DashboardView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$greeting, ${state.currentOwner?.displayName.split(' ').first ?? ''} 👋',
+                '$greeting, ${state.currentOwner?.displayName.split(' ').first ?? ''}',
                 style: YFont.titleLG().copyWith(
                   fontSize: 30,
                   letterSpacing: -0.5,
@@ -521,6 +521,13 @@ class _SalesChart extends StatelessWidget {
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -674,6 +681,13 @@ class _TopSellers extends StatelessWidget {
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -751,6 +765,13 @@ class _LowStockCard extends StatelessWidget {
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,6 +864,13 @@ class _RecentOrders extends StatelessWidget {
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
