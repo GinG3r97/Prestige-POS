@@ -45,13 +45,30 @@ class BtPrinter {
     }
   }
 
-  /// Connects to [address], dropping any prior connection first.
+  /// Connects to [address], dropping any prior (possibly stale) connection
+  /// first, then retrying a few times. The radio is often cold or the previous
+  /// socket half-open after the printer slept / went out of range, so a single
+  /// attempt frequently fails — these retries are what make reconnect reliable.
   static Future<bool> connect(String address) async {
     try {
-      if (await PrintBluetoothThermal.connectionStatus) {
+      // Always tear down first — `connectionStatus` can report a stale "true"
+      // for a socket that's actually dead, which then blocks a fresh connect.
+      try {
         await PrintBluetoothThermal.disconnect;
+      } catch (_) {/* nothing to drop */}
+      await Future.delayed(const Duration(milliseconds: 350));
+
+      for (var attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) {
+          await Future.delayed(Duration(milliseconds: 400 + attempt * 350));
+        }
+        try {
+          if (await PrintBluetoothThermal.connect(macPrinterAddress: address)) {
+            return true;
+          }
+        } catch (_) {/* retry */}
       }
-      return await PrintBluetoothThermal.connect(macPrinterAddress: address);
+      return false;
     } catch (_) {
       return false;
     }
@@ -81,19 +98,27 @@ class BtPrinter {
   }
 
   static Future<bool> _write(String address, List<int> bytes) async {
-    if (!await PrintBluetoothThermal.connectionStatus) {
-      // The first connection after launch / payment is often cold — retry a
-      // few times with a growing delay so the auto-receipt doesn't miss.
-      var ok = false;
-      for (var attempt = 0; attempt < 4 && !ok; attempt++) {
-        if (attempt > 0) {
-          await Future.delayed(Duration(milliseconds: 400 + attempt * 300));
-        }
-        ok = await PrintBluetoothThermal.connect(macPrinterAddress: address);
-      }
-      if (!ok) return false;
+    // Reuse a live connection if there is one; otherwise (re)connect with
+    // retries. `connect` already disconnects-then-retries for cold radios.
+    var connected = false;
+    try {
+      connected = await PrintBluetoothThermal.connectionStatus;
+    } catch (_) {/* treat as not connected */}
+    if (!connected && !await connect(address)) return false;
+
+    // First write attempt over the (possibly reused) connection.
+    try {
+      if (await PrintBluetoothThermal.writeBytes(bytes)) return true;
+    } catch (_) {/* connection was likely stale — fall through to reconnect */}
+
+    // The socket was dead despite a "connected" status — force a clean
+    // reconnect and write once more before giving up.
+    if (await connect(address)) {
+      try {
+        return await PrintBluetoothThermal.writeBytes(bytes);
+      } catch (_) {/* give up */}
     }
-    return await PrintBluetoothThermal.writeBytes(bytes);
+    return false;
   }
 
   static Future<void> disconnect() async {

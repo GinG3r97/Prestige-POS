@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../design_system/colors.dart';
+import '../../design_system/responsive_scaler.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 
@@ -134,8 +135,13 @@ class KeyboardAccessoryField extends StatefulWidget {
 }
 
 class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
+  // Plain text fields hand editing to a real field inside the accessory card
+  // (so the cursor, selection, copy/paste + multi-line scroll all work up
+  // there). Money/preview fields keep the read-only formatted preview instead.
+  final FocusNode _cardFocus = FocusNode();
+  bool get _cardEditable => widget.formatPreview == null && !widget.obscure;
   late final AnimationController _anim;
   OverlayEntry? _entry;
 
@@ -148,26 +154,50 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
       reverseDuration: const Duration(milliseconds: 220),
     );
     _focusNode.addListener(_onFocusChange);
+    _cardFocus.addListener(_onFocusChange);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.removeListener(_onFocusChange);
+    _cardFocus.removeListener(_onFocusChange);
     _focusNode.dispose();
+    _cardFocus.dispose();
     _entry?.remove();
     _entry = null;
     _anim.dispose();
     super.dispose();
   }
 
+  // The soft keyboard animates up over ~250ms; rebuild the overlay as its
+  // height changes so the card tracks it and lands with a consistent gap above
+  // it (instead of occasionally sitting right on the keyboard).
+  @override
+  void didChangeMetrics() => _entry?.markNeedsBuild();
+
   void _onFocusChange() {
-    if (_focusNode.hasFocus) {
+    if (_focusNode.hasFocus || _cardFocus.hasFocus) {
       _show();
+      // Hand editing to the card's field (above the keyboard) once shown.
+      if (_cardEditable && _focusNode.hasFocus && !_cardFocus.hasFocus) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _entry != null && _focusNode.hasFocus) {
+            _cardFocus.requestFocus();
+          }
+        });
+      }
     } else {
-      _hide();
-      // Notify the parent once focus is actually gone — this is the
-      // commit hook (e.g. push the typed hours to the DB).
-      widget.onFocusLost?.call();
+      // Defer — focus may just be transferring between the field and the card
+      // this frame. Only commit/hide once both are genuinely unfocused.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!_focusNode.hasFocus && !_cardFocus.hasFocus) {
+          _hide();
+          widget.onFocusLost?.call();
+        }
+      });
     }
   }
 
@@ -191,7 +221,15 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
       builder: (_, child) {
         final progress = _anim.value.clamp(0.0, 1.0);
         final t = Curves.easeOutBack.transform(progress);
-        final keyboardHeight = MediaQuery.viewInsetsOf(ctx).bottom;
+        // Read the REAL keyboard height from the platform view, not from
+        // MediaQuery — the app zeroes MediaQuery.viewInsets globally so nothing
+        // shrinks for the keyboard. The card renders inside the responsive
+        // scaler's transformed overlay, so convert the device-pixel height into
+        // that design space (÷ currentScale) to land exactly on the keyboard.
+        final view = View.of(ctx);
+        final keyboardHeight = view.viewInsets.bottom /
+            view.devicePixelRatio /
+            ResponsiveScaler.currentScale;
 
         return Stack(children: [
           Positioned.fill(
@@ -263,44 +301,122 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  widget.accessoryLabel.toUpperCase(),
-                  style: YFont.caption().copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.6,
-                    color: YColor.brandDeep,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: widget.controller,
-                  builder: (_, value, __) {
-                    final raw = value.text;
-                    final preview = widget.formatPreview?.call(raw) ??
-                        (widget.obscure
-                            ? (raw.isEmpty ? '—' : '•' * raw.length)
-                            : (raw.isEmpty ? '—' : raw));
-                    final size = preview.length > 28
-                        ? 20.0
-                        : preview.length > 18
-                            ? 26.0
-                            : 36.0;
-                    return Text(
-                      preview,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: YFont.titleLG().copyWith(
-                        fontSize: size,
-                        fontWeight: FontWeight.w700,
-                        color: raw.isEmpty ? YColor.inkSubtle : YColor.brand,
-                        letterSpacing: -0.6,
-                        height: 1.1,
+                // Label on the left, a Done button top-right — the natural,
+                // always-visible spot to dismiss/commit above the keyboard.
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.accessoryLabel.toUpperCase(),
+                        style: YFont.caption().copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.6,
+                          color: YColor.brandDeep,
+                        ),
                       ),
-                    );
-                  },
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        _cardFocus.unfocus();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: YColor.brand,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Done',
+                          style: YFont.bodyStrong().copyWith(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 10),
+                if (_cardEditable)
+                  // The live, editable field — cursor, tap-to-move-caret,
+                  // long-press select/copy/paste, and multi-line scroll all
+                  // work here, above the keyboard.
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: TextField(
+                      controller: widget.controller,
+                      focusNode: _cardFocus,
+                      autofocus: false,
+                      minLines: 1,
+                      maxLines: widget.maxLines == 1 ? 1 : widget.maxLines,
+                      keyboardType: widget.maxLines == 1
+                          ? widget.keyboardType
+                          : TextInputType.multiline,
+                      textInputAction: widget.maxLines == 1
+                          ? null
+                          : TextInputAction.newline,
+                      inputFormatters: widget.inputFormatters,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      cursorColor: YColor.brand,
+                      // Single-line cards stay centred for the big-value look;
+                      // multi-line follows the field's textAlign (so the receipt
+                      // header/footer match their centred/left setting).
+                      textAlign: widget.maxLines == 1
+                          ? TextAlign.center
+                          : widget.textAlign,
+                      onChanged: widget.onChanged,
+                      style: YFont.titleLG().copyWith(
+                        fontSize: widget.maxLines == 1 ? 30 : 19,
+                        fontWeight: FontWeight.w700,
+                        color: YColor.brand,
+                        height: 1.3,
+                        letterSpacing: -0.4,
+                      ),
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        border: InputBorder.none,
+                        hintText: widget.hint ?? '—',
+                        hintStyle: YFont.titleLG().copyWith(
+                          fontSize: widget.maxLines == 1 ? 30 : 19,
+                          fontWeight: FontWeight.w700,
+                          color: YColor.inkSubtle,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: widget.controller,
+                    builder: (_, value, __) {
+                      final raw = value.text;
+                      final preview = widget.formatPreview?.call(raw) ??
+                          (widget.obscure
+                              ? (raw.isEmpty ? '—' : '•' * raw.length)
+                              : (raw.isEmpty ? '—' : raw));
+                      final size = preview.length > 28
+                          ? 20.0
+                          : preview.length > 18
+                              ? 26.0
+                              : 36.0;
+                      return Text(
+                        preview,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: YFont.titleLG().copyWith(
+                          fontSize: size,
+                          fontWeight: FontWeight.w700,
+                          color: raw.isEmpty ? YColor.inkSubtle : YColor.brand,
+                          letterSpacing: -0.6,
+                          height: 1.1,
+                        ),
+                      );
+                    },
+                  ),
                 if (widget.quickActions != null &&
                     widget.quickActions!.isNotEmpty) ...[
                   const SizedBox(height: 14),

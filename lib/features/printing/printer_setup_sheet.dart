@@ -114,6 +114,17 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       _working = true;
       _status = 'Connecting…';
     });
+    // Permissions can be revoked after the initial scan — re-check so a denied
+    // BLUETOOTH_CONNECT doesn't show up as a silent "couldn't connect".
+    if (!await BtPermissions.ensure()) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _status = 'Bluetooth permission is needed. Enable it in Settings → '
+            'Apps → Prestige POS → Permissions, then try again.';
+      });
+      return;
+    }
     final state = context.read<AppState>();
     final tenant = state.tenant;
     if (tenant == null) {

@@ -70,14 +70,16 @@ flutter_launcher_icons:
   min_sdk_android: 21
 
 # Launch / splash screen — run: dart run flutter_native_splash:create
+# Transparent cream cup (no tile) on the brand brown so the logo isn't a
+# floating square. The android_12 variant is padded to fit the circular mask.
 flutter_native_splash:
-  color: "#6B432A"                  # background (your surface white)
-  image: "assets/brand/splash_logo.png"
+  color: "#6B432A"                  # brand brown background
+  image: "assets/brand/splash_cup.png"
   ios: true
   android: true
   android_12:
     color: "#6B432A"
-    image: "assets/brand/splash_logo.png"
+    image: "assets/brand/splash_cup_android12.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

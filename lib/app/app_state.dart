@@ -608,6 +608,17 @@ class AppState extends ChangeNotifier {
     return role?.permissions ?? <String>{};
   }
 
+  /// Whether the signed-in user may switch the active branch from the header.
+  /// Driven entirely by the role's 'switch_branch' capability — the Owner role
+  /// ships with it ticked by default, but the owner can untick it in
+  /// Maintenance → Roles and the header selector then disappears for them too.
+  /// (Falls back to the owner session only if no role can be resolved.)
+  bool get canSwitchBranch {
+    final role = roleById(currentStaff?.roleId);
+    if (role == null) return isOwnerSession;
+    return role.permissions.contains('switch_branch');
+  }
+
   /// True if the signed-in user can reach [route]. The "More" hub is treated
   /// as accessible whenever at least one of its child destinations is — so
   /// users with even one back-office permission see a way in, and users
@@ -2835,9 +2846,19 @@ class AppState extends ChangeNotifier {
     var saved = 0;
     for (final item in ordered) {
       try {
-        await supabase
+        // `.select()` forces the round-trip AND returns the affected rows, so a
+        // silent 0-row update (e.g. an RLS/permission block) surfaces as an
+        // error instead of looking like it saved and then reverting on reload.
+        final res = await supabase
             .from(table)
-            .update({'sort_order': sortOf(item)}).eq('id', idOf(item));
+            .update({'sort_order': sortOf(item)})
+            .eq('id', idOf(item))
+            .select('id');
+        if ((res as List).isEmpty) {
+          return 'Order not saved — the server rejected the update for "$table" '
+              '(saved $saved of ${ordered.length}). This is usually a '
+              'permissions issue.';
+        }
         saved++;
       } catch (e) {
         if (kDebugMode) debugPrint('Reorder ($table) row failed: $e');
@@ -3935,6 +3956,7 @@ class AppState extends ChangeNotifier {
           'dashboard', 'sell', 'bookings', 'sessions', 'members',
           'orders', 'reports', 'employees', 'payroll', 'products',
           'inventory', 'maintenance', 'settings', 'authorize_refunds',
+          'switch_branch',
         ],
         requiresPin: true,
         sortOrder: 10,

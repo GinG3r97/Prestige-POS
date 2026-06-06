@@ -1585,19 +1585,6 @@ class _ReceiptTextDialogState extends State<_ReceiptTextDialog> {
     );
   }
 
-  InputDecoration _dec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: YFont.caption().copyWith(color: YColor.inkSubtle),
-        filled: true,
-        fillColor: YColor.surface2,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(YRadius.md),
-          borderSide: BorderSide.none,
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1624,11 +1611,13 @@ class _ReceiptTextDialogState extends State<_ReceiptTextDialog> {
             Text('Prints under your business name (e.g. TIN, tagline).',
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
             const SizedBox(height: 6),
-            TextField(
+            KeyboardAccessoryField(
               controller: _header,
+              accessoryLabel: 'RECEIPT HEADER',
+              hint: 'VAT Reg TIN 000-000-000-000\nThe best coffee in town',
               maxLines: 3,
-              style: YFont.body(),
-              decoration: _dec('VAT Reg TIN 000-000-000-000\nThe best coffee in town'),
+              textAlign:
+                  _align == 'center' ? TextAlign.center : TextAlign.start,
             ),
             const SizedBox(height: 16),
             Text('FOOTER', style: YFont.caption()),
@@ -1636,11 +1625,13 @@ class _ReceiptTextDialogState extends State<_ReceiptTextDialog> {
             Text('Prints at the bottom (thank-you, promo, return policy).',
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
             const SizedBox(height: 6),
-            TextField(
+            KeyboardAccessoryField(
               controller: _footer,
+              accessoryLabel: 'RECEIPT FOOTER',
+              hint: 'Thank you for visiting!\nFollow us @prestigecafe',
               maxLines: 3,
-              style: YFont.body(),
-              decoration: _dec('Thank you for visiting!\nFollow us @prestigecafe'),
+              textAlign:
+                  _align == 'center' ? TextAlign.center : TextAlign.start,
             ),
             const SizedBox(height: 16),
             Text('ALIGNMENT', style: YFont.caption()),

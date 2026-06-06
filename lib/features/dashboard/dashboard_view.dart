@@ -126,7 +126,7 @@ class _DashboardViewState extends State<DashboardView> {
                   Row(children: [
                     Expanded(
                       child: _KpiTile(
-                        icon: Icons.payments,
+                        icon: Icons.payments_rounded,
                         label: "Today's revenue",
                         value: Money(todayRevenueCents).formatted,
                         delta: delta,
@@ -137,7 +137,7 @@ class _DashboardViewState extends State<DashboardView> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _KpiTile(
-                        icon: Icons.receipt_long,
+                        icon: Icons.receipt_long_rounded,
                         label: 'Orders',
                         value: todayOrders.length.toString(),
                         delta: yesterdayOrders.isEmpty
@@ -152,20 +152,20 @@ class _DashboardViewState extends State<DashboardView> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _KpiTile(
-                        icon: Icons.shopping_basket_outlined,
+                        icon: Icons.local_mall_rounded,
                         label: 'Items sold',
                         value: todayItemCount.toString(),
-                        tone: Colors.indigo,
+                        tone: YColor.brand,
                         loading: _loading,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _KpiTile(
-                        icon: Icons.trending_up,
+                        icon: Icons.local_cafe_rounded,
                         label: 'Avg ticket',
                         value: Money(avgTicketCents).formatted,
-                        tone: Colors.teal,
+                        tone: YColor.brandDeep,
                         loading: _loading,
                       ),
                     ),
@@ -278,12 +278,33 @@ class _DashboardViewState extends State<DashboardView> {
             ),
           ]),
         ),
-        const SizedBox(width: 6),
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: _loading ? null : _refresh,
-          icon: const Icon(Icons.refresh, size: 20),
-          color: YColor.inkMuted,
+        const SizedBox(width: 8),
+        // Refresh — styled as a pill to match the Live indicator beside it.
+        GestureDetector(
+          onTap: _loading ? null : _refresh,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: YColor.surface1,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: YColor.hairline),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.refresh_rounded,
+                  size: 14,
+                  color: _loading ? YColor.inkSubtle : YColor.inkMuted),
+              const SizedBox(width: 6),
+              Text(
+                'Refresh',
+                style: YFont.caption().copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: _loading ? YColor.inkSubtle : YColor.inkMuted,
+                ),
+              ),
+            ]),
+          ),
         ),
       ],
     );
@@ -633,13 +654,13 @@ class _TopSellers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final agg = <String, ({String emoji, int qty, int revenueCents})>{};
+    final agg = <String, ({int qty, int revenueCents})>{};
     for (final ord in orders) {
       for (final l in ord.lines) {
         final prev = agg[l.name];
         final qty = (prev?.qty ?? 0) + l.quantity;
         final rev = (prev?.revenueCents ?? 0) + l.lineTotalCents;
-        agg[l.name] = (emoji: l.emoji, qty: qty, revenueCents: rev);
+        agg[l.name] = (qty: qty, revenueCents: rev);
       }
     }
     final sorted = agg.entries.toList()
@@ -671,13 +692,6 @@ class _TopSellers extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(children: [
-                  SizedBox(
-                    width: 32,
-                    child: Text(
-                      e.value.emoji.isEmpty ? '🧾' : e.value.emoji,
-                      style: const TextStyle(fontSize: 22),
-                    ),
-                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

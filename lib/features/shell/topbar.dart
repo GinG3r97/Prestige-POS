@@ -69,33 +69,74 @@ class TopBar extends StatelessWidget {
           // float/sales/orders + Close on the Sell tab, a compact "still open"
           // reminder elsewhere. Expanded so the right-side controls stay right.
           const SizedBox(width: 16),
+          Container(width: 1, height: 28, color: YColor.hairline),
+          const SizedBox(width: 16),
           const Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: ShiftHeaderBar(),
             ),
           ),
-          // Branch picker (current store's branches)
-          PopupMenuButton<Branch>(
-            position: PopupMenuPosition.under,
-            onSelected: (b) => state.selectBranch(b),
-            itemBuilder: (_) =>
-                (state.tenant?.branches ?? MockData.branches)
-                    .map((b) => PopupMenuItem(value: b, child: Text(b.name)))
-                    .toList(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(color: YColor.surface3, borderRadius: BorderRadius.circular(999)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.location_city, size: 13),
-                const SizedBox(width: 8),
-                Text(state.selectedBranch.name, style: YFont.bodyStrong()),
-                const SizedBox(width: 6),
-                const Icon(Icons.expand_more, size: 14),
-              ]),
+          // Branch picker — only for the owner or roles granted the
+          // 'switch_branch' capability in Maintenance → Roles.
+          if (state.canSwitchBranch) ...[
+            PopupMenuButton<Branch>(
+              position: PopupMenuPosition.under,
+              offset: const Offset(0, 8),
+              color: YColor.surface1,
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: YColor.hairline),
+              ),
+              onSelected: (b) => state.selectBranch(b),
+              itemBuilder: (_) {
+                final branches = state.tenant?.branches ?? MockData.branches;
+                final current = state.selectedBranch.name;
+                return [
+                  for (final b in branches)
+                    PopupMenuItem(
+                      value: b,
+                      child: Row(children: [
+                        Icon(Icons.location_city,
+                            size: 16,
+                            color: b.name == current
+                                ? YColor.brand
+                                : YColor.inkMuted),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(b.name,
+                              style: YFont.bodyStrong().copyWith(
+                                color: b.name == current
+                                    ? YColor.brand
+                                    : YColor.ink,
+                              )),
+                        ),
+                        if (b.name == current) ...[
+                          const SizedBox(width: 12),
+                          const Icon(Icons.check, size: 16, color: YColor.brand),
+                        ],
+                      ]),
+                    ),
+                ];
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                    color: YColor.surface3,
+                    borderRadius: BorderRadius.circular(999)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.location_city, size: 13),
+                  const SizedBox(width: 8),
+                  Text(state.selectedBranch.name, style: YFont.bodyStrong()),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.expand_more, size: 14),
+                ]),
+              ),
             ),
-          ),
-          const SizedBox(width: YSpacing.sm),
+            const SizedBox(width: YSpacing.sm),
+          ],
           const _PrinterStatusChip(),
           const SizedBox(width: YSpacing.sm),
           // Lock button — tapping signs the current staff out so the next

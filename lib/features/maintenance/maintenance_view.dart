@@ -11,6 +11,7 @@ import '../../models/category.dart' as cat;
 import '../../models/employee.dart';
 import '../../models/money.dart';
 import '../../models/inventory.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'add_on_form_dialog.dart';
@@ -27,7 +28,7 @@ class MaintenanceView extends StatelessWidget {
     // at setup (same flag that drives the Bookings nav). Otherwise it's noise.
     final showBookable = state.features.reserveEnabled;
     return DefaultTabController(
-      length: showBookable ? 8 : 7,
+      length: showBookable ? 7 : 6,
       child: Container(
         color: YColor.surface2,
         child: Column(
@@ -73,11 +74,6 @@ class MaintenanceView extends StatelessWidget {
                         text: 'Add-ons',
                       ),
                       const Tab(
-                        icon: Icon(Icons.category_outlined, size: 18),
-                        iconMargin: EdgeInsets.only(bottom: 2),
-                        text: 'Sub-types',
-                      ),
-                      const Tab(
                         icon: Icon(Icons.inventory_2_outlined, size: 18),
                         iconMargin: EdgeInsets.only(bottom: 2),
                         text: 'Inventory',
@@ -115,9 +111,8 @@ class MaintenanceView extends StatelessWidget {
                 children: [
                   _ModifierGroupsTab(state: state),
                   _AddOnsTab(state: state),
-                  _CategoriesTab(state: state),
                   _InventoryCategoriesTab(state: state),
-                  _ProductTypesTab(state: state),
+                  _ProductAreaTab(state: state),
                   _RolesTab(state: state),
                   PayrollRulesTab(state: state),
                   if (showBookable) BookableResourcesTab(state: state),
@@ -128,6 +123,305 @@ class MaintenanceView extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ───── Product area: Types + Sub-types as a Sell-style two-pane ─────
+
+class _ProductAreaTab extends StatefulWidget {
+  const _ProductAreaTab({required this.state});
+  final AppState state;
+  @override
+  State<_ProductAreaTab> createState() => _ProductAreaTabState();
+}
+
+class _ProductAreaTabState extends State<_ProductAreaTab> {
+  String? _typeId;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final types = state.productTypes;
+    if (_typeId == null || !types.any((t) => t.id == _typeId)) {
+      _typeId = types.isNotEmpty ? types.first.id : null;
+    }
+    final selType = _typeId == null ? null : state.productTypeById(_typeId);
+    final subs = _typeId == null
+        ? const <cat.Category>[]
+        : state.categoriesForType(_typeId);
+
+    return Row(
+      children: [
+        // ── Left nav rail: Product Types + the selected type's Sub-types ──
+        Container(
+          width: 252,
+          decoration: const BoxDecoration(
+            color: YColor.surface1,
+            border: Border(right: BorderSide(color: YColor.hairline)),
+          ),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 28),
+            children: [
+              _railHeader('PRODUCT TYPES',
+                  () => showProductTypeEditor(context)),
+              const SizedBox(height: 8),
+              for (final t in types)
+                _navRow(
+                  label: t.name,
+                  iconName: t.iconName,
+                  fallback: Icons.label_outline,
+                  selected: t.id == _typeId,
+                  onTap: () => setState(() => _typeId = t.id),
+                ),
+              if (types.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text('No types yet',
+                      style:
+                          YFont.caption().copyWith(color: YColor.inkMuted)),
+                ),
+            ],
+          ),
+        ),
+        // ── Right detail pane ──
+        Expanded(
+          child: selType == null
+              ? Center(
+                  child: _emptyCard(
+                    icon: Icons.label_outline,
+                    title: 'No product types yet',
+                    subtitle:
+                        'Add a type like Drinks, Foods, or Service to start.',
+                  ),
+                )
+              : _detail(context, state, selType, subs),
+        ),
+      ],
+    );
+  }
+
+  Widget _railHeader(String title, VoidCallback onAdd) {
+    return Row(children: [
+      Expanded(
+        child: Text(title,
+            style: YFont.caption().copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: YColor.inkMuted)),
+      ),
+      GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.add, size: 16, color: YColor.brandDeep),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _navRow({
+    required String label,
+    String? iconName,
+    required IconData fallback,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.sm),
+            border:
+                Border.all(color: selected ? YColor.brand : YColor.hairline),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 17,
+              height: 17,
+              child: NameIconOrEmoji(
+                  name: label, iconName: iconName, fallbackIcon: fallback),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 12.5,
+                      color: selected ? Colors.white : YColor.ink)),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(BuildContext context, AppState state, ProductType type,
+      List<cat.Category> subs) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: NameIconOrEmoji(
+                  name: type.name,
+                  iconName: type.iconName,
+                  fallbackIcon: Icons.label_outline),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type.name,
+                      style: YFont.titleMD().copyWith(fontSize: 22)),
+                  const SizedBox(height: 2),
+                  Text(type.behaviorSummary, style: YFont.caption()),
+                ],
+              ),
+            ),
+            _ghostBtn(Icons.edit_outlined, 'Edit',
+                () => showProductTypeEditor(context, initial: type)),
+            if (!type.isSystem) ...[
+              const SizedBox(width: 8),
+              _ghostBtn(Icons.delete_outline, 'Remove',
+                  () => _removeType(context, state, type),
+                  danger: true),
+            ],
+          ]),
+          const SizedBox(height: 20),
+          const Divider(color: YColor.hairline),
+          const SizedBox(height: 16),
+          Row(children: [
+            Text('Sub-types in ${type.name}',
+                style: YFont.titleMD().copyWith(fontSize: 16)),
+            const Spacer(),
+            ElevatedButton.icon(
+              onPressed: () =>
+                  showSubTypeEditor(context, presetTypeId: type.id),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add sub-type'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          if (subs.isEmpty)
+            _emptyCard(
+              icon: Icons.category_outlined,
+              title: 'No sub-types yet',
+              subtitle:
+                  'Add a sub-type like "Coffee" under Drinks or "Rice Meals" under Foods.',
+            )
+          else
+            LayoutBuilder(builder: (ctx, c) {
+              final cols = c.maxWidth > 760
+                  ? 3
+                  : c.maxWidth > 500
+                      ? 2
+                      : 1;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: subs.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.9,
+                ),
+                itemBuilder: (_, i) {
+                  final cc = subs[i];
+                  return _MaintGridTile(
+                    icon:
+                        NameIconOrEmoji(name: cc.name, iconName: cc.iconName),
+                    label: cc.name,
+                    subtitle: type.name,
+                    badge: cc.isSystem ? 'BUILT-IN' : null,
+                    onTap: () => showSubTypeEditor(context, initial: cc),
+                    onRemove: () => _removeSub(context, state, cc),
+                  );
+                },
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _ghostBtn(IconData icon, String label, VoidCallback onTap,
+      {bool danger = false}) {
+    final c = danger ? YColor.danger : YColor.brandDeep;
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: c),
+      label: Text(label, style: TextStyle(color: c)),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: c.withValues(alpha: 0.4)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YRadius.md)),
+      ),
+    );
+  }
+
+  Future<void> _removeType(
+      BuildContext context, AppState state, ProductType t) async {
+    final ok = await showConfirm(context,
+        title: 'Remove ${t.name}?',
+        message:
+            'Products using this type become untyped — you\'ll need to reassign them.',
+        confirmLabel: 'Remove',
+        danger: true,
+        icon: Icons.delete_outline);
+    if (!ok || !context.mounted) return;
+    final err = await state.removeProductType(t.id);
+    if (!context.mounted) return;
+    PushToast.show(context,
+        title: err == null ? 'Type removed' : 'Could not remove',
+        subtitle: err ?? t.name,
+        leadingIcon:
+            err == null ? Icons.delete_outline : Icons.error_outline);
+  }
+
+  Future<void> _removeSub(
+      BuildContext context, AppState state, cat.Category c) async {
+    final ok = await showConfirm(context,
+        title: 'Remove ${c.name}?',
+        message:
+            'Products in this sub-type keep their Product Type but lose this grouping.',
+        confirmLabel: 'Remove',
+        danger: true,
+        icon: Icons.delete_outline);
+    if (!ok || !context.mounted) return;
+    final err = await state.removeCategory(c.id);
+    if (!context.mounted) return;
+    PushToast.show(context,
+        title: err == null ? 'Sub-type removed' : 'Could not remove',
+        subtitle: err ?? c.name,
+        leadingIcon:
+            err == null ? Icons.delete_outline : Icons.error_outline);
   }
 }
 
@@ -1997,6 +2291,9 @@ const List<_RoutePerm> _kRoutePerms = [
   _RoutePerm('reports', 'Reports', Icons.insights_outlined),
   _RoutePerm('maintenance', 'Maintenance', Icons.tune_outlined),
   _RoutePerm('settings', 'Settings', Icons.settings_outlined),
+  // Capability (not a route): lets the holder switch the active branch from
+  // the header. Owner always has it; off by default for every other role.
+  _RoutePerm('switch_branch', 'Switch branch', Icons.location_city_outlined),
 ];
 
 class _RolesTab extends StatelessWidget {

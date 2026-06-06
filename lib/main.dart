@@ -156,7 +156,20 @@ class YosefPOSApp extends StatelessWidget {
         // so overlay-based drag (the 3rd-party product grid) can float off the
         // finger — types/sub-types use Flutter's built-in drag which is
         // scale-correct.
-        builder: (context, child) => ResponsiveScaler(child: child!),
+        builder: (context, child) {
+          // Globally zero the keyboard inset so NO page/modal/sheet shrinks
+          // when the soft keyboard appears — every text field shows its value
+          // in the floating KeyboardAccessoryField card above the keyboard, so
+          // shrinking the layout is unnecessary (iOS + Android). The scaler
+          // sits below and propagates the zeroed inset.
+          final mq = MediaQuery.of(context);
+          return MediaQuery(
+            data: mq.copyWith(
+              viewInsets: mq.viewInsets.copyWith(bottom: 0),
+            ),
+            child: ResponsiveScaler(child: child!),
+          );
+        },
         home: Consumer<AppState>(
           builder: (_, state, _) {
             // Pick the right destination for the current session state.

@@ -10,6 +10,7 @@ import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../widgets/confirm_dialog.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
 class CartPanel extends StatefulWidget {
@@ -360,45 +361,77 @@ class _CartPanelState extends State<CartPanel> {
     final nameC = TextEditingController();
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         backgroundColor: YColor.surface1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Hold for'),
-        content: SizedBox(
-          width: 320,
-          child: TextField(
-            controller: nameC,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(
-              labelText: 'Customer name (optional)',
-              hintText: 'e.g. Maria · Table 4',
-              filled: true,
-              fillColor: YColor.surface2,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md),
-                  borderSide: BorderSide.none),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Hold order', style: YFont.titleMD()),
+                const SizedBox(height: 4),
+                Text('Name the order so you can find it later.',
+                    style: YFont.caption().copyWith(color: YColor.inkMuted)),
+                const SizedBox(height: 14),
+                KeyboardAccessoryField(
+                  controller: nameC,
+                  accessoryLabel: 'CUSTOMER NAME / TABLE #',
+                  hint: 'e.g. Maria · Table 4',
+                ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: YColor.ink,
+                        side: const BorderSide(color: YColor.hairline),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(YRadius.md)),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    // Required — Hold stays disabled until a name/table is typed.
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: nameC,
+                      builder: (_, val, __) {
+                        final ok = val.text.trim().isNotEmpty;
+                        return ElevatedButton(
+                          onPressed: ok
+                              ? () {
+                                  app.holdCurrentOrder(
+                                      label: nameC.text.trim());
+                                  Navigator.of(ctx).pop();
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: YColor.brand,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: YColor.surface3,
+                            disabledForegroundColor: YColor.inkMuted,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(YRadius.md)),
+                          ),
+                          child: const Text('Hold'),
+                        );
+                      },
+                    ),
+                  ),
+                ]),
+              ],
             ),
-            onSubmitted: (_) {
-              app.holdCurrentOrder(label: nameC.text);
-              Navigator.of(ctx).pop();
-            },
           ),
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              app.holdCurrentOrder(label: nameC.text);
-              Navigator.of(ctx).pop();
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand, foregroundColor: Colors.white),
-            child: const Text('Hold'),
-          ),
-        ],
       ),
     );
   }

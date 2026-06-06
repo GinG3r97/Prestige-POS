@@ -125,7 +125,10 @@ class _ShellViewState extends State<ShellView> {
                     child: Row(
                       children: [
                         Expanded(child: _content(state.selectedRoute)),
-                        if (_showsCart(state.selectedRoute)) ...[
+                        // Cart only makes sense once a cashier shift is open —
+                        // no shift, no taking orders, so hide the panel.
+                        if (_showsCart(state.selectedRoute) &&
+                            state.hasOpenShift) ...[
                           Container(width: 0.5, color: YColor.hairline),
                           SizedBox(
                             width: panelWidth(context,

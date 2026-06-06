@@ -221,7 +221,7 @@ class _ShiftHeaderBarState extends State<ShiftHeaderBar> {
     if (!open) {
       child = const SizedBox.shrink(key: ValueKey('shift-none'));
     } else if (onSell) {
-      child = _full(shift, key: const ValueKey('shift-full'));
+      child = _full(context, shift, key: const ValueKey('shift-full'));
     } else {
       child = _reminder(state, key: const ValueKey('shift-reminder'));
     }
@@ -252,10 +252,10 @@ class _ShiftHeaderBarState extends State<ShiftHeaderBar> {
     );
   }
 
-  Widget _full(CashierShift shift, {Key? key}) {
+  Widget _full(BuildContext context, CashierShift shift, {Key? key}) {
     // scaleDown guarantees the pill never overflows the header on a narrow
-    // tablet — it shrinks slightly instead of throwing. Close Cashier now
-    // lives beside the Sell search box, not here.
+    // tablet — it shrinks slightly instead of throwing. Float · Sales · Orders
+    // then a divider and Close Cashier, all in one header pill.
     return FittedBox(
       key: key,
       fit: BoxFit.scaleDown,
@@ -274,10 +274,31 @@ class _ShiftHeaderBarState extends State<ShiftHeaderBar> {
           _hstat('Sales', Money(_totals.totalSalesCents).formatted),
           _hdot(),
           _hstat('Orders', '${_totals.orderCount}'),
+          _hbar(),
+          GestureDetector(
+            onTap: () async {
+              await showCloseCashier(context);
+              if (mounted) _refresh();
+            },
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.lock_outline, size: 13, color: YColor.danger),
+              const SizedBox(width: 5),
+              Text('Close Cashier',
+                  style: YFont.bodyStrong()
+                      .copyWith(fontSize: 12.5, color: YColor.danger)),
+            ]),
+          ),
         ]),
       ),
     );
   }
+
+  Widget _hbar() => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12),
+        width: 1,
+        height: 16,
+        color: YColor.brandDeep.withValues(alpha: 0.3),
+      );
 
   Widget _reminder(AppState state, {Key? key}) {
     return InkWell(
