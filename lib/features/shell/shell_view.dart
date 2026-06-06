@@ -80,6 +80,10 @@ class _ShellViewState extends State<ShellView> {
     }
 
     final navCtrl = context.read<NavController>();
+    // While arranging the Sell menu (Customize mode), lock the header + nav so
+    // the owner can't wander off mid-arrange — only the Sell surface + the cart
+    // panel's "Done editing" stay live.
+    final arranging = state.arrangeMode;
 
     return Scaffold(
       // The on-screen keyboard would normally push the entire body
@@ -105,9 +109,16 @@ class _ShellViewState extends State<ShellView> {
               },
               child: Column(
                 children: [
-                  const SafeArea(
+                  SafeArea(
                     bottom: false,
-                    child: TopBar(),
+                    child: IgnorePointer(
+                      ignoring: arranging,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 200),
+                        opacity: arranging ? 0.45 : 1,
+                        child: const TopBar(),
+                      ),
+                    ),
                   ),
                   Container(height: 0.5, color: YColor.hairline),
                   Expanded(
@@ -129,12 +140,19 @@ class _ShellViewState extends State<ShellView> {
               ),
             ),
           ),
-          // Floating glass nav — anchored to bottom edge
-          const Positioned(
+          // Floating glass nav — anchored to bottom edge. Locked while arranging.
+          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: FloatingBottomNav(),
+            child: IgnorePointer(
+              ignoring: arranging,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: arranging ? 0.45 : 1,
+                child: const FloatingBottomNav(),
+              ),
+            ),
           ),
         ],
       ),

@@ -41,6 +41,7 @@ class _SellViewState extends State<SellView> {
   /// products here with no sub-type (or one that belongs to another type).
   String? _filterCategoryId;
   String _query = '';
+  final TextEditingController _searchCtrl = TextEditingController();
 
   /// "Arrange mode" — entered by a 3s long-press on a Type box. Shows dashed
   /// borders, drag-to-reorder, and dashed "+" add boxes across all 3 levels.
@@ -48,6 +49,12 @@ class _SellViewState extends State<SellView> {
 
   bool get _realTypeSelected =>
       _filterTypeId != null && _filterTypeId != _kOtherType;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,30 +210,51 @@ class _SellViewState extends State<SellView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    hintText: 'Search drinks, pastries, food…',
-                    hintStyle: YFont.body().copyWith(color: YColor.inkSubtle),
-                    filled: true,
-                    fillColor: YColor.surface2,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      borderSide: BorderSide.none,
+          // Search + Close Cashier — locked + dimmed while in Customize mode.
+          IgnorePointer(
+            ignoring: _editMode,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _editMode ? 0.4 : 1,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _query = v),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        suffixIcon: _query.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear',
+                                icon: const Icon(Icons.close, size: 18),
+                                splashRadius: 18,
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _query = '');
+                                },
+                              ),
+                        hintText: 'Search drinks, pastries, food…',
+                        hintStyle:
+                            YFont.body().copyWith(color: YColor.inkSubtle),
+                        filled: true,
+                        fillColor: YColor.surface2,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(999),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  _closeCashierButton(),
+                ],
               ),
-              const SizedBox(width: 12),
-              _closeCashierButton(),
-            ],
+            ),
           ),
           // LEVEL 1 — Product Type boxes (reorderable + add in arrange mode).
           const SizedBox(height: 12),
