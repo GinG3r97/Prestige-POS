@@ -740,6 +740,12 @@ class ReceiptBuilder {
       // Normal receipt-size text (was double-height — too big / wasteful).
       bytes.addAll(g.text(_san('$prefix${line.quantity}x ${line.name}'),
           styles: PosStyles(fontType: font, bold: true)));
+      // Sub-type under the name so the barista/kitchen can tell same-named
+      // items apart (e.g. a Rice-Meals Sisig vs a Good-for-Sharing Sisig).
+      if ((line.categoryName ?? '').trim().isNotEmpty) {
+        bytes.addAll(g.text(_san('   ${line.categoryName!.trim()}'),
+            styles: PosStyles(fontType: font)));
+      }
       final mods = line.modifiers;
       if (mods != null) {
         final opts = mods['options'];

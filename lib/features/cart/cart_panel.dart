@@ -75,7 +75,10 @@ class _CartPanelState extends State<CartPanel> {
     final heldCount = app.heldOrders.length;
     if (heldCount == 0 && _showHeld) _showHeld = false;
 
-    return Container(
+    return ClipRect(
+      // Keep the swipe-to-remove gesture (and anything else) inside the cart
+      // column so it never bleeds over the product grid on the left.
+      child: Container(
       color: YColor.surface1,
       child: Column(
         children: [
@@ -99,6 +102,7 @@ class _CartPanelState extends State<CartPanel> {
                 : _currentView(context, cart),
           ),
         ],
+      ),
       ),
     );
   }
@@ -186,40 +190,61 @@ class _CartPanelState extends State<CartPanel> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final h = held[i];
-        return Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          decoration: BoxDecoration(
-            color: YColor.surface2,
-            borderRadius: BorderRadius.circular(YRadius.md),
-            border: Border.all(color: YColor.hairline),
+        return Dismissible(
+          key: ValueKey(h.id),
+          direction: DismissDirection.endToStart, // swipe left to discard
+          onDismissed: (_) => app.discardHeldOrder(h),
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 22),
+            decoration: BoxDecoration(
+              color: YColor.danger,
+              borderRadius: BorderRadius.circular(YRadius.md),
+            ),
+            child:
+                const Icon(Icons.delete_rounded, color: Colors.white, size: 26),
           ),
-          child: Row(children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(h.label, style: YFont.bodyStrong(), maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text(
-                      '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
-                      '${Money(h.totalCents).formatted}',
-                      style: YFont.caption()),
-                ],
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            decoration: BoxDecoration(
+              color: YColor.surface2,
+              borderRadius: BorderRadius.circular(YRadius.md),
+              border: Border.all(color: YColor.hairline),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(h.label,
+                        style: YFont.bodyStrong(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
+                        '${Money(h.totalCents).formatted}',
+                        style: YFont.caption()),
+                  ],
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () => _resume(context, app, h),
-              style: TextButton.styleFrom(foregroundColor: YColor.brand),
-              child: const Text('Resume'),
-            ),
-            IconButton(
-              tooltip: 'Discard',
-              onPressed: () => app.discardHeldOrder(h),
-              icon: const Icon(Icons.delete_outline,
-                  color: YColor.danger, size: 20),
-            ),
-          ]),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                onPressed: () => _resume(context, app, h),
+                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                label: const Text('Resume'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+              ),
+            ]),
+          ),
         );
       },
     );
@@ -739,6 +764,9 @@ class _RepeatOrderView extends StatelessWidget {
 
           Widget box(int idx) {
             final l = cart.lines[idx];
+            final k = l.kind;
+            final sub = k is CartLineCafe ? k.item.categoryName : null;
+            final hasSub = sub != null && sub.trim().isNotEmpty;
             return CustomPaint(
               foregroundPainter: _DashedBoxPainter(),
               child: Padding(
@@ -753,31 +781,49 @@ class _RepeatOrderView extends StatelessWidget {
                               fontSize: fs * 0.9, color: YColor.inkMuted)),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Text(l.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: YFont.bodyStrong().copyWith(
-                                fontSize: fs,
-                                color: YColor.ink,
-                                height: 1.12)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(l.title,
+                                maxLines: hasSub ? 1 : 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: YFont.bodyStrong().copyWith(
+                                    fontSize: fs,
+                                    color: YColor.ink,
+                                    height: 1.12)),
+                            if (hasSub)
+                              Text(sub.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: YFont.caption().copyWith(
+                                      fontSize: fs * 0.74,
+                                      color: YColor.inkMuted)),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text('x${l.quantity}',
-                          style: YFont.bodyStrong().copyWith(
-                              fontSize: fs,
-                              color: YColor.brand,
-                              fontWeight: FontWeight.w800)),
                     ]),
                   ),
                   const SizedBox(width: 12),
-                  // Fixed right-aligned price column so they all line up.
-                  SizedBox(
-                    width: 96,
-                    child: Text(l.lineTotal.formatted,
-                        textAlign: TextAlign.right,
-                        maxLines: 1,
-                        style: YFont.bodyStrong().copyWith(
-                            fontSize: fs, color: YColor.brandDeep)),
+                  // Right column: price, then the multiplier beneath it (small
+                  // + muted, same size as the sub-type), both right-aligned.
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        width: 96,
+                        child: Text(l.lineTotal.formatted,
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            style: YFont.bodyStrong().copyWith(
+                                fontSize: fs, color: YColor.brandDeep)),
+                      ),
+                      Text('x${l.quantity}',
+                          textAlign: TextAlign.right,
+                          style: YFont.caption().copyWith(
+                              fontSize: fs * 0.74, color: YColor.inkMuted)),
+                    ],
                   ),
                 ]),
               ),
