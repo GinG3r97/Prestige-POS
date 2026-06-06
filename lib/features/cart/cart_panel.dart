@@ -9,6 +9,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../cafe/product_detail_sheet.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
@@ -588,9 +589,40 @@ class _CartPanelState extends State<CartPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(line.title,
-                  style: YFont.bodyStrong().copyWith(height: 1.1),
-                  overflow: TextOverflow.ellipsis),
+              Row(children: [
+                Expanded(
+                  child: Text(line.title,
+                      style: YFont.bodyStrong().copyWith(height: 1.1),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                // Edit — only for customizable cafe items.
+                if (line.kind is CartLineCafe) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _editLine(context, line),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: YColor.brandDeep.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(YRadius.sm),
+                        border: Border.all(
+                            color: YColor.brandDeep.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.edit_outlined,
+                            size: 12, color: YColor.brandDeep),
+                        const SizedBox(width: 4),
+                        Text('Edit',
+                            style: YFont.caption().copyWith(
+                                color: YColor.brandDeep,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11)),
+                      ]),
+                    ),
+                  ),
+                ],
+              ]),
               if (line.subtitle != null &&
                   line.subtitle!.trim().isNotEmpty) ...[
                 const SizedBox(height: 2),
@@ -616,6 +648,19 @@ class _CartPanelState extends State<CartPanel> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Re-open the product sheet to edit this line's choices (replaces it).
+  void _editLine(BuildContext context, CartLine line) {
+    final k = line.kind;
+    if (k is! CartLineCafe) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      builder: (_) => ProductDetailSheet(item: k.item, editLine: line),
     );
   }
 
@@ -770,45 +815,107 @@ class _RepeatOrderView extends StatelessWidget {
 
           const headerH = 56.0;
           const totalH = 58.0;
-          // Must match the list's vertical padding (16 + 16) so the modal
-          // height fully contains every row — including the last one.
-          const pad = 32.0;
+          const fs = 17.0;
+          const colW = 340.0;
+          // 4 items per column; add more columns to the right.
+          final cardH = (maxH - 24).clamp(240.0, maxH - 12);
 
-          // Bias toward going wide (up to 3 columns) so the modal stays short.
-          final colByWidth = ((maxW - 80) / 230).floor().clamp(1, 3);
-          var cols = n == 0 ? 1 : (n / 8).ceil();
-          if (cols < 1) cols = 1;
-          if (cols > colByWidth) cols = colByWidth;
-          final rows = n == 0 ? 1 : (n / cols).ceil();
+          // sub-type · modifiers + add-ons text for a line (shared by the box
+          // widget and the height estimate below).
+          (String, String?) infoFor(int idx) {
+            final k = cart.lines[idx].kind;
+            final cafe = k is CartLineCafe ? k : null;
+            final mods = <String>[];
+            final addons = <String>[];
+            if (cafe != null) {
+              for (final g in cafe.item.modifierGroups) {
+                final optId = cafe.selections[g.id];
+                if (optId == null) continue;
+                for (final o in g.options) {
+                  if (o.id == optId) {
+                    mods.add(o.name);
+                    break;
+                  }
+                }
+              }
+              for (final a in cafe.addOns) {
+                addons.add('${a.quantity}× ${a.addOn.name}');
+              }
+            }
+            final detail = [
+              if ((cafe?.item.categoryName ?? '').trim().isNotEmpty)
+                cafe!.item.categoryName!.trim(),
+              ...mods,
+            ].join(' · ');
+            return (
+              detail,
+              addons.isEmpty ? null : 'Add-ons: ${addons.join(', ')}'
+            );
+          }
 
-          final listMaxH =
-              (maxH - 24 - headerH - totalH - pad).clamp(120.0, 100000.0);
-          // Taller boxes so a long name can wrap to 2 lines (never truncated).
-          final boxH =
-              ((listMaxH - spacing * (rows - 1)) / rows).clamp(50.0, 74.0);
-          final gridH = rows * boxH + spacing * (rows - 1);
-          final fs = (boxH * 0.28).clamp(14.0, 18.0);
+          // Estimated rendered height of a box — its text wraps at ~180px
+          // beside the price column. Drives the auto-fit packing.
+          double textH(String t, double size, {int? maxLines}) {
+            final tp = TextPainter(
+              text: TextSpan(
+                  text: t, style: TextStyle(fontSize: size, height: 1.2)),
+              maxLines: maxLines,
+              textDirection: TextDirection.ltr,
+            )..layout(maxWidth: 180);
+            return tp.height;
+          }
 
-          // Wide boxes so most names fit on one line; the 2-line allowance
-          // catches the longest. Uses most of the screen width.
-          final cardW = (cols * 380.0 + 48).clamp(460.0, maxW - 36);
-          final cardH = (headerH + totalH + gridH.clamp(0.0, listMaxH) + pad)
-              .clamp(200.0, maxH - 12);
+          double estBoxH(int idx) {
+            final (detail, addOnsLine) = infoFor(idx);
+            var h = 12.0;
+            h += textH(cart.lines[idx].title, fs, maxLines: 2);
+            if (detail.isNotEmpty) h += textH(detail, fs * 0.74, maxLines: 2);
+            if (addOnsLine != null) h += textH(addOnsLine, fs * 0.74) + 2;
+            return h + 4;
+          }
+
+          // Pack boxes top-to-bottom; start a new column when the next box
+          // wouldn't fit the modal's height.
+          final availH = (cardH - headerH - totalH - 32).clamp(120.0, 100000.0);
+          final columns = <List<int>>[];
+          var cur = <int>[];
+          var runH = 0.0;
+          for (var i = 0; i < n; i++) {
+            final bh = estBoxH(i);
+            final next = cur.isEmpty ? bh : runH + spacing + bh;
+            if (cur.isNotEmpty && next > availH) {
+              columns.add(cur);
+              cur = [i];
+              runH = bh;
+            } else {
+              cur.add(i);
+              runH = next;
+            }
+          }
+          if (cur.isNotEmpty) columns.add(cur);
+          if (columns.isEmpty) columns.add(<int>[]);
+
+          final perShelf = ((maxW - 60) / (colW + spacing))
+              .floor()
+              .clamp(1, columns.length);
+          final cardW = (perShelf * colW + (perShelf - 1) * spacing + 40)
+              .clamp(360.0, maxW - 36);
 
           Widget box(int idx) {
             final l = cart.lines[idx];
-            final k = l.kind;
-            final sub = k is CartLineCafe ? k.item.categoryName : null;
-            final hasSub = sub != null && sub.trim().isNotEmpty;
+            final (detail, addOnsLine) = infoFor(idx);
             return CustomPaint(
               foregroundPainter: _DashedBoxPainter(),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(children: [
-                  // Number + name + qty fill the left; the Expanded pushes the
-                  // price to the far right.
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  // Number + name + add-ons fill the left; price on the right.
                   Expanded(
-                    child: Row(children: [
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Text('${idx + 1}.',
                           style: YFont.bodyStrong().copyWith(
                               fontSize: fs * 0.9, color: YColor.inkMuted)),
@@ -819,19 +926,29 @@ class _RepeatOrderView extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(l.title,
-                                maxLines: hasSub ? 1 : 2,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: YFont.bodyStrong().copyWith(
                                     fontSize: fs,
                                     color: YColor.ink,
                                     height: 1.12)),
-                            if (hasSub)
-                              Text(sub.trim(),
-                                  maxLines: 1,
+                            if (detail.isNotEmpty)
+                              Text(detail,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: YFont.caption().copyWith(
                                       fontSize: fs * 0.74,
                                       color: YColor.inkMuted)),
+                            // Add-ons wrap onto new lines (no ellipsis) — the
+                            // box grows to fit them.
+                            if (addOnsLine != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Text(addOnsLine,
+                                    style: YFont.caption().copyWith(
+                                        fontSize: fs * 0.74,
+                                        color: YColor.brandDeep)),
+                              ),
                           ],
                         ),
                       ),
@@ -904,38 +1021,32 @@ class _RepeatOrderView extends StatelessWidget {
                             child: Text('Order is empty',
                                 style: YFont.titleMD()
                                     .copyWith(color: YColor.inkMuted)))
-                        : Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (int r = 0; r < rows; r++)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                          bottom: r < rows - 1 ? spacing : 0),
-                                      child: SizedBox(
-                                        height: boxH,
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            for (int c = 0; c < cols; c++) ...[
-                                              if (c > 0)
-                                                const SizedBox(width: spacing),
-                                              Expanded(
-                                                child: (c * rows + r) < n
-                                                    ? box(c * rows + r)
-                                                    : const SizedBox(),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: [
+                                // Columns of up to 4 items; boxes size to their
+                                // content (add-ons wrap onto new lines).
+                                for (final col in columns)
+                                  SizedBox(
+                                    width: colW,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (var i = 0; i < col.length; i++)
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                                bottom: i < col.length - 1
+                                                    ? spacing
+                                                    : 0),
+                                            child: box(col[i]),
+                                          ),
+                                      ],
                                     ),
-                                ],
-                              ),
+                                  ),
+                              ],
                             ),
                           ),
                   ),

@@ -13,8 +13,12 @@ import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
 class ProductDetailSheet extends StatefulWidget {
-  const ProductDetailSheet({super.key, required this.item});
+  const ProductDetailSheet({super.key, required this.item, this.editLine});
   final CafeItem item;
+
+  /// When set, the sheet edits this existing cart line — it pre-fills the
+  /// line's choices and replaces it on save instead of adding a new line.
+  final CartLine? editLine;
 
   @override
   State<ProductDetailSheet> createState() => _ProductDetailSheetState();
@@ -34,6 +38,15 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       if (g.required && g.options.isNotEmpty) {
         selections[g.id] = g.options[g.defaultIndex].id;
       }
+    }
+    // Editing an existing line — restore its choices + quantity.
+    final edit = widget.editLine?.kind;
+    if (edit is CartLineCafe) {
+      selections
+        ..clear()
+        ..addAll(edit.selections);
+      addOnQuantities.addAll(edit.addOnQuantities);
+      quantity = widget.editLine!.quantity;
     }
   }
 
@@ -250,7 +263,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 8),
                                 child: Text(
-                                  'Add to Cart',
+                                  widget.editLine != null
+                                      ? 'Update Cart'
+                                      : 'Add to Cart',
                                   style: YFont.bodyStrong()
                                       .copyWith(color: Colors.white),
                                   overflow: TextOverflow.ellipsis,
@@ -558,6 +573,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       if (addOn == null) continue;
       addOnSnapshots.add(CartAddOn(addOn, entry.value));
     }
+    // Editing — drop the old line first so this replaces it.
+    if (widget.editLine != null) state.cart.remove(widget.editLine!);
     state.cart.addCafe(
       widget.item,
       Map.from(selections),
@@ -568,7 +585,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     // is deactivated and Overlay.of() can't find the root overlay anymore.
     PushToast.show(
       context,
-      title: 'Added to cart',
+      title: widget.editLine != null ? 'Updated' : 'Added to cart',
       subtitle: '$quantity × ${widget.item.name}',
       leadingImageUrl: widget.item.imageUrl,
       leadingIconName: widget.item.iconName,
