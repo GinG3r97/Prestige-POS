@@ -10,9 +10,9 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/money.dart';
 import '../../models/shift.dart';
+import '../auth/otp_numpad.dart';
 import '../orders/date_range_sheet.dart';
 import '../printing/print_jobs.dart';
-import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
 /// Opens the "Open cashier" dialog (start a shift with a float).
@@ -27,32 +27,26 @@ Future<void> showCloseCashier(BuildContext context) =>
 void showZReadingFor(BuildContext context, CashierShift shift) =>
     showDialog(context: context, builder: (_) => _ZReadingDialog(shift: shift));
 
-/// Plain peso input — the number keypad is enough, no floating accessory.
-Widget _moneyField(TextEditingController c,
-    {bool autofocus = false, VoidCallback? onChanged}) {
-  return TextField(
-    controller: c,
-    autofocus: autofocus,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-    inputFormatters: moneyInputFormatters,
-    style: YFont.titleMD().copyWith(color: YColor.brand),
-    onChanged: onChanged == null ? null : (_) => onChanged(),
-    decoration: InputDecoration(
-      prefixText: '₱ ',
-      prefixStyle: YFont.titleMD().copyWith(color: YColor.inkMuted),
-      hintText: '0.00',
-      filled: true,
-      fillColor: YColor.surface2,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(YRadius.md),
-        borderSide: const BorderSide(color: YColor.hairline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(YRadius.md),
-        borderSide: const BorderSide(color: YColor.brand, width: 1.4),
-      ),
+/// Big right-aligned amount display fed by the on-screen [OtpNumpad]. Digits
+/// accumulate as centavos (type 1·0·0·0·0·0 → ₱1,000.00) so no keyboard is
+/// raised — consistent with the OTP entry.
+Widget _amountDisplay(int cents, {bool error = false}) {
+  return Container(
+    height: 60,
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: YColor.surface2,
+      borderRadius: BorderRadius.circular(YRadius.md),
+      border:
+          Border.all(color: error ? YColor.danger : YColor.brand, width: 1.4),
+    ),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(Money(cents).formatted,
+          style: YFont.titleLG().copyWith(
+              fontSize: 30, color: YColor.brand, fontWeight: FontWeight.w800)),
     ),
   );
 }
@@ -339,24 +333,26 @@ class _OpenShiftDialog extends StatefulWidget {
 }
 
 class _OpenShiftDialogState extends State<_OpenShiftDialog> {
-  final _float = TextEditingController();
+  int _cents = 0;
   bool _busy = false;
   String? _error;
 
-  @override
-  void dispose() {
-    _float.dispose();
-    super.dispose();
+  void _onDigit(String d) {
+    final v = _cents * 10 + int.parse(d);
+    if (v <= 99999999) setState(() {
+      _cents = v;
+      _error = null;
+    });
   }
 
+  void _onBackspace() => setState(() => _cents = _cents ~/ 10);
+
   Future<void> _confirm() async {
-    final pesos = double.tryParse(_float.text.trim()) ?? 0;
-    final cents = Money.pesos(pesos).centavos;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final err = await context.read<AppState>().openShift(cents);
+    final err = await context.read<AppState>().openShift(_cents);
     if (!mounted) return;
     if (err != null) {
       setState(() {
@@ -368,62 +364,104 @@ class _OpenShiftDialogState extends State<_OpenShiftDialog> {
     Navigator.of(context).pop();
     PushToast.show(context,
         title: 'Cashier opened',
-        subtitle: 'Starting cash: ${Money(cents).formatted}',
+        subtitle: 'Starting cash: ${Money(_cents).formatted}',
         leadingIcon: Icons.lock_open_outlined);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
       backgroundColor: YColor.surface1,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('Open cashier', style: YFont.titleMD()),
-      content: SizedBox(
-        width: 340,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Count the cash in the drawer now and enter it as your '
-                'starting amount (beginning money).',
-                style: YFont.caption().copyWith(color: YColor.inkMuted)),
-            const SizedBox(height: 10),
-            Text('BEGINNING MONEY', style: YFont.caption()),
-            const SizedBox(height: 6),
-            _moneyField(_float, autofocus: true),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(_error!,
-                  style: YFont.caption().copyWith(color: YColor.danger)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 660),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Icon(Icons.lock_open_outlined, color: YColor.brandDeep),
+                const SizedBox(width: 10),
+                Text('Open cashier',
+                    style: YFont.titleLG().copyWith(fontSize: 22)),
+                const Spacer(),
+                IconButton(
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'Count the cash in the drawer now and enter it as '
+                            'your starting amount (beginning money).',
+                            style: YFont.body().copyWith(
+                                color: YColor.inkMuted, height: 1.4)),
+                        const SizedBox(height: 20),
+                        Text('BEGINNING MONEY', style: YFont.caption()),
+                        const SizedBox(height: 8),
+                        _amountDisplay(_cents, error: _error != null),
+                        if (_error != null) ...[
+                          const SizedBox(height: 10),
+                          Text(_error!,
+                              style: YFont.caption()
+                                  .copyWith(color: YColor.danger)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 28),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OtpNumpad(
+                        onDigit: _onDigit,
+                        onBackspace: _onBackspace,
+                        enabled: !_busy,
+                        keyWidth: 62,
+                        keyHeight: 46,
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: 250,
+                        child: ElevatedButton(
+                          onPressed: _busy ? null : _confirm,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: YColor.brand,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(YRadius.md)),
+                          ),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Open cashier'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
-          ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: Text('Cancel',
-              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
-        ),
-        ElevatedButton(
-          onPressed: _busy ? null : _confirm,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: YColor.brand,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : const Text('Open'),
-        ),
-      ],
     );
   }
 }
@@ -435,7 +473,7 @@ class _CloseShiftDialog extends StatefulWidget {
 }
 
 class _CloseShiftDialogState extends State<_CloseShiftDialog> {
-  final _counted = TextEditingController();
+  int _cents = 0;
   ShiftTotals? _totals;
   bool _busy = false;
 
@@ -450,17 +488,17 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
     if (mounted) setState(() => _totals = t);
   }
 
-  @override
-  void dispose() {
-    _counted.dispose();
-    super.dispose();
+  void _onDigit(String d) {
+    final v = _cents * 10 + int.parse(d);
+    if (v <= 99999999) setState(() => _cents = v);
   }
+
+  void _onBackspace() => setState(() => _cents = _cents ~/ 10);
 
   Future<void> _confirm() async {
     final state = context.read<AppState>();
-    final cents = Money.pesos(double.tryParse(_counted.text.trim()) ?? 0).centavos;
     setState(() => _busy = true);
-    final closed = await state.closeShift(cents);
+    final closed = await state.closeShift(_cents);
     if (!mounted) return;
     Navigator.of(context).pop();
     if (closed == null) {
@@ -470,7 +508,6 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
           leadingIcon: Icons.error_outline);
       return;
     }
-    // Show the Z-reading.
     showDialog(
       context: context,
       builder: (_) => _ZReadingDialog(shift: closed),
@@ -484,87 +521,130 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
     final totals = _totals;
     final floatC = shift?.openingFloatCents ?? 0;
     final expected = floatC + (totals?.cashSalesCents ?? 0);
-    final counted = Money.pesos(double.tryParse(_counted.text.trim()) ?? 0).centavos;
-    final overShort = counted - expected;
+    final overShort = _cents - expected;
 
-    return AlertDialog(
+    return Dialog(
       backgroundColor: YColor.surface1,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 50, vertical: 30),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('Close cashier (Z-reading)', style: YFont.titleMD()),
-      content: SizedBox(
-        width: 380,
-        child: totals == null
-            ? const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()))
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _row('Beginning money', Money(floatC).formatted),
-                  _row('Cash sales', Money(totals.cashSalesCents).formatted),
-                  const Divider(),
-                  _row('Expected cash in drawer', Money(expected).formatted,
-                      bold: true),
-                  const SizedBox(height: 12),
-                  Text('COUNT THE DRAWER NOW', style: YFont.caption()),
-                  const SizedBox(height: 6),
-                  _moneyField(_counted,
-                      autofocus: true, onChanged: () => setState(() {})),
-                  if (_counted.text.trim().isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    _row(
-                      overShort == 0
-                          ? 'Balanced'
-                          : overShort > 0
-                              ? 'Over'
-                              : 'Short',
-                      Money(overShort.abs()).formatted,
-                      tone: overShort == 0
-                          ? YColor.success
-                          : YColor.danger,
-                      bold: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 22, 28, 24),
+          child: totals == null
+              ? const Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(child: CircularProgressIndicator()))
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.lock_outline, color: YColor.brandDeep),
+                      const SizedBox(width: 10),
+                      Text('Close cashier (Z-reading)',
+                          style: YFont.titleLG().copyWith(fontSize: 21)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed:
+                            _busy ? null : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _row('Beginning money', Money(floatC).formatted),
+                              _row('Cash sales',
+                                  Money(totals.cashSalesCents).formatted),
+                              const Divider(),
+                              _row('Expected cash in drawer',
+                                  Money(expected).formatted,
+                                  bold: true),
+                              const SizedBox(height: 14),
+                              Text('COUNT THE DRAWER NOW',
+                                  style: YFont.caption()),
+                              const SizedBox(height: 8),
+                              _amountDisplay(_cents),
+                              if (_cents > 0) ...[
+                                const SizedBox(height: 10),
+                                _row(
+                                  overShort == 0
+                                      ? 'Balanced'
+                                      : overShort > 0
+                                          ? 'Over'
+                                          : 'Short',
+                                  Money(overShort.abs()).formatted,
+                                  tone: overShort == 0
+                                      ? YColor.success
+                                      : YColor.danger,
+                                  bold: true,
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              const Divider(),
+                              _row('Total sales (all methods)',
+                                  Money(totals.totalSalesCents).formatted),
+                              _row('Card',
+                                  Money(totals.cardSalesCents).formatted),
+                              _row('Other',
+                                  Money(totals.otherSalesCents).formatted),
+                              _row('Orders', '${totals.orderCount}'),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 28),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OtpNumpad(
+                              onDigit: _onDigit,
+                              onBackspace: _onBackspace,
+                              enabled: !_busy,
+                              keyWidth: 62,
+                              keyHeight: 46,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    // Close action anchored to the bottom of the modal.
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _busy ? null : _confirm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: YColor.danger,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Text('Close shift'),
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  _row('Total sales (all methods)',
-                      Money(totals.totalSalesCents).formatted),
-                  _row('Card', Money(totals.cardSalesCents).formatted),
-                  _row('Other', Money(totals.otherSalesCents).formatted),
-                  _row('Orders', '${totals.orderCount}'),
-                ],
-              ),
+                ),
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: Text('Cancel',
-              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
-        ),
-        ElevatedButton(
-          onPressed: _busy || totals == null ? null : _confirm,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: YColor.danger,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : const Text('Close shift'),
-        ),
-      ],
     );
   }
 
-  Widget _row(String k, String v,
-      {bool bold = false, Color? tone}) {
+  Widget _row(String k, String v, {bool bold = false, Color? tone}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [

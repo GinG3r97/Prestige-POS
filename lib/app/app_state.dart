@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import 'package:uuid/uuid.dart';
 
@@ -9,6 +10,7 @@ import '../data/supabase_client.dart';
 import '../models/booking.dart';
 import '../models/cart.dart';
 import '../models/catalog.dart';
+import '../models/held_order.dart';
 import '../models/category.dart' as cat;
 // `Member` (legacy gold-tier loyalty mock) is hidden so it doesn't
 // collide with our real Members-feature model in member.dart.
@@ -424,6 +426,8 @@ class AppState extends ChangeNotifier {
       await _loadPrinter();
       // Open cashier shift (Z-reading), if any.
       await _loadShift();
+      // Parked / held orders for this store (device-local).
+      await _loadHeldOrders();
 
       // Bookable resources (rooms, hot desks, event spaces). The actual
       // [Booking] rows are loaded per-day on demand from BookingsView.
@@ -5184,6 +5188,103 @@ class AppState extends ChangeNotifier {
       _isLocking = false;
       notifyListeners();
     });
+  }
+
+  // ───── Held / parked orders (device-local, per store) ────────────────────
+
+  final List<HeldOrder> _heldOrders = [];
+  List<HeldOrder> get heldOrders => List.unmodifiable(_heldOrders);
+
+  String get _heldKey => 'held_orders_v1_${_currentTenantDbId ?? 'none'}';
+
+  Future<void> _loadHeldOrders() async {
+    _heldOrders.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_heldKey);
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List;
+        _heldOrders.addAll(list
+            .map((e) => HeldOrder.fromJson(e as Map<String, dynamic>)));
+        _heldOrders.sort((a, b) => b.savedAtMs.compareTo(a.savedAtMs));
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Held orders load failed: $e');
+    }
+    notifyListeners();
+  }
+
+  Future<void> _persistHeldOrders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _heldKey, jsonEncode([for (final h in _heldOrders) h.toJson()]));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Held orders save failed: $e');
+    }
+  }
+
+  /// Park the current cart as a held order (optionally labelled) and clear the
+  /// cart for the next customer. No-op on an empty cart.
+  Future<void> holdCurrentOrder({String? label}) async {
+    if (cart.lines.isEmpty) return;
+    final lines = <HeldLine>[];
+    for (final line in cart.lines) {
+      final kind = line.kind;
+      if (kind is! CartLineCafe) continue;
+      lines.add(HeldLine(
+        itemId: kind.item.id,
+        quantity: line.quantity,
+        selections: Map<String, String>.from(kind.selections),
+        addOns: {for (final a in kind.addOns) a.addOn.id: a.quantity},
+      ));
+    }
+    if (lines.isEmpty) return;
+
+    final name = (label ?? '').trim();
+    _heldOrders.insert(
+      0,
+      HeldOrder(
+        label: name.isEmpty ? '#${_heldOrders.length + 1}' : name,
+        savedAtMs: DateTime.now().millisecondsSinceEpoch,
+        lines: lines,
+        itemCount: cart.itemCount,
+        totalCents: cart.total.centavos,
+      ),
+    );
+    cart.clear();
+    notifyListeners();
+    await _persistHeldOrders();
+  }
+
+  /// Rebuild [held] into the live cart (re-resolved from the catalog so prices
+  /// are current) and remove it from the held list. Items whose product was
+  /// since deleted are skipped.
+  Future<void> resumeHeldOrder(HeldOrder held) async {
+    for (final hl in held.lines) {
+      final item = productById(hl.itemId);
+      if (item == null) continue;
+      final addOns = <CartAddOn>[];
+      hl.addOns.forEach((addOnId, qty) {
+        for (final a in _addOns) {
+          if (a.id == addOnId) {
+            addOns.add(CartAddOn(a, qty));
+            break;
+          }
+        }
+      });
+      cart.addCafe(item, Map<String, String>.from(hl.selections),
+          quantity: hl.quantity, addOns: addOns);
+    }
+    _heldOrders.removeWhere((h) => h.id == held.id);
+    notifyListeners();
+    await _persistHeldOrders();
+  }
+
+  Future<void> discardHeldOrder(HeldOrder held) async {
+    _heldOrders.removeWhere((h) => h.id == held.id);
+    notifyListeners();
+    await _persistHeldOrders();
   }
 
   void openTender() {

@@ -3,71 +3,333 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../models/cart.dart';
+import '../../models/held_order.dart';
+import '../../models/money.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../widgets/confirm_dialog.dart';
+import '../widgets/push_toast.dart';
 
-class CartPanel extends StatelessWidget {
+class CartPanel extends StatefulWidget {
   const CartPanel({super.key});
 
   @override
+  State<CartPanel> createState() => _CartPanelState();
+}
+
+class _CartPanelState extends State<CartPanel> {
+  bool _showHeld = false;
+
+  @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
     // While the owner is arranging the menu, this panel becomes a mini tutorial
     // + a "Done editing" button instead of the order.
-    if (context.watch<AppState>().arrangeMode) {
-      return _arrangeHelp(context);
-    }
-    // Watch the cart only — cart edits repaint just this panel, not the
-    // whole app (AppState no longer re-broadcasts cart changes).
+    if (app.arrangeMode) return _arrangeHelp(context);
+
     final cart = context.watch<CartStore>();
+    final heldCount = app.heldOrders.length;
+    if (heldCount == 0 && _showHeld) _showHeld = false;
+
     return Container(
       color: YColor.surface1,
       child: Column(
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: YColor.hairline, width: 0.5)),
+          // Current | Held toggle — only once there's something parked.
+          if (heldCount > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Row(children: [
+                Expanded(
+                    child: _segBtn('Current', !_showHeld,
+                        () => setState(() => _showHeld = false))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: _segBtn('Held ($heldCount)', _showHeld,
+                        () => setState(() => _showHeld = true))),
+              ]),
             ),
-            child: Row(children: [
-              Column(
+          Expanded(
+            child: _showHeld
+                ? _heldList(context, app)
+                : _currentView(context, cart),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segBtn(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? YColor.brand : YColor.surface2,
+          borderRadius: BorderRadius.circular(YRadius.sm),
+          border: Border.all(color: active ? YColor.brand : YColor.hairline),
+        ),
+        child: Text(label,
+            style: YFont.bodyStrong().copyWith(
+                fontSize: 12.5, color: active ? Colors.white : YColor.ink)),
+      ),
+    );
+  }
+
+  Widget _currentView(BuildContext context, CartStore cart) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            border:
+                Border(bottom: BorderSide(color: YColor.hairline, width: 0.5)),
+          ),
+          child: Row(children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Current Order', style: YFont.titleMD()),
+                Text('${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}',
+                    style: YFont.caption()),
+              ],
+            ),
+            const Spacer(),
+            if (cart.lines.isNotEmpty) ...[
+              IconButton(
+                tooltip: 'Repeat order (read back)',
+                onPressed: () => _showRepeat(context, cart),
+                icon: const Icon(Icons.zoom_out_map, color: YColor.brandDeep),
+              ),
+              IconButton(
+                tooltip: 'Hold or clear order',
+                onPressed: () => _showOrderActions(context, cart),
+                icon: const Icon(Icons.delete_rounded, color: YColor.danger),
+              ),
+            ],
+          ]),
+        ),
+        Expanded(
+          child: cart.lines.isEmpty
+              ? _empty()
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: cart.lines.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) => _line(cart.lines[i], cart),
+                ),
+        ),
+        if (cart.lines.isNotEmpty) _totals(context, cart),
+      ],
+    );
+  }
+
+  // ── Held orders ────────────────────────────────────────────────────────
+
+  Widget _heldList(BuildContext context, AppState app) {
+    final held = app.heldOrders;
+    if (held.isEmpty) {
+      return Center(
+        child: Text('No held orders',
+            style: YFont.body().copyWith(color: YColor.inkMuted)),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: held.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final h = held[i];
+        return Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          decoration: BoxDecoration(
+            color: YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: YColor.hairline),
+          ),
+          child: Row(children: [
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Current Order', style: YFont.titleMD()),
-                  Text('${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}',
+                  Text(h.label, style: YFont.bodyStrong(), maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(
+                      '${h.itemCount} item${h.itemCount == 1 ? '' : 's'} · '
+                      '${Money(h.totalCents).formatted}',
                       style: YFont.caption()),
                 ],
               ),
-              const Spacer(),
-              if (cart.lines.isNotEmpty) ...[
-                IconButton(
-                  tooltip: 'Repeat order (read back)',
-                  onPressed: () => _showRepeat(context, cart),
-                  icon: const Icon(Icons.zoom_out_map, color: YColor.brandDeep),
-                ),
-                IconButton(
-                  tooltip: 'Clear order',
-                  onPressed: () => cart.clear(),
-                  icon: const Icon(Icons.delete_outline, color: YColor.danger),
-                ),
-              ],
-            ]),
-          ),
-          // Body
-          Expanded(
-            child: cart.lines.isEmpty
-                ? _empty()
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: cart.lines.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _line(cart.lines[i], cart),
+            ),
+            TextButton(
+              onPressed: () => _resume(context, app, h),
+              style: TextButton.styleFrom(foregroundColor: YColor.brand),
+              child: const Text('Resume'),
+            ),
+            IconButton(
+              tooltip: 'Discard',
+              onPressed: () => app.discardHeldOrder(h),
+              icon: const Icon(Icons.delete_outline,
+                  color: YColor.danger, size: 20),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+
+  void _resume(BuildContext context, AppState app, HeldOrder h) {
+    if (app.cart.lines.isNotEmpty) {
+      PushToast.show(context,
+          title: 'Finish the current order first',
+          subtitle: 'Charge or hold the current order, then resume this one.',
+          leadingIcon: Icons.info_outline);
+      return;
+    }
+    app.resumeHeldOrder(h);
+    setState(() => _showHeld = false);
+  }
+
+  /// Tapping the order menu → choose what to do with this order: hold it for a
+  /// customer, or clear it. Two big tappable cards.
+  void _showOrderActions(BuildContext context, CartStore cart) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 16, 22, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Text('Order', style: YFont.titleMD()),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close, size: 20),
+                    visualDensity: VisualDensity.compact,
                   ),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(
+                    child: _actionBox(
+                      icon: Icons.bookmark_add_outlined,
+                      label: 'Hold for later',
+                      color: YColor.brand,
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _showHoldName(context, cart);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _actionBox(
+                      icon: Icons.delete_outline,
+                      label: 'Clear cart',
+                      color: YColor.danger,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        final ok = await showConfirm(context,
+                            title: 'Clear this order?',
+                            message:
+                                'This empties the cart and can’t be undone.',
+                            confirmLabel: 'Clear cart',
+                            danger: true,
+                            icon: Icons.delete_outline);
+                        if (ok) cart.clear();
+                      },
+                    ),
+                  ),
+                ]),
+              ],
+            ),
           ),
-          // Totals + Pay
-          if (cart.lines.isNotEmpty) _totals(context, cart),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionBox({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(YRadius.lg),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 10),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: YFont.bodyStrong().copyWith(color: color)),
+        ]),
+      ),
+    );
+  }
+
+  /// Step 2 after "Hold for later" — name it for the customer (optional).
+  void _showHoldName(BuildContext context, CartStore cart) {
+    final app = context.read<AppState>();
+    final nameC = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Hold for'),
+        content: SizedBox(
+          width: 320,
+          child: TextField(
+            controller: nameC,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: 'Customer name (optional)',
+              hintText: 'e.g. Maria · Table 4',
+              filled: true,
+              fillColor: YColor.surface2,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md),
+                  borderSide: BorderSide.none),
+            ),
+            onSubmitted: (_) {
+              app.holdCurrentOrder(label: nameC.text);
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              app.holdCurrentOrder(label: nameC.text);
+              Navigator.of(ctx).pop();
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand, foregroundColor: Colors.white),
+            child: const Text('Hold'),
+          ),
         ],
       ),
     );
@@ -200,40 +462,59 @@ class CartPanel extends StatelessWidget {
     );
   }
 
-  Widget _line(line, cart) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: YColor.surface2,
-        borderRadius: BorderRadius.circular(YRadius.md),
+  Widget _line(CartLine line, CartStore cart) {
+    return Dismissible(
+      key: ValueKey(line.id),
+      direction: DismissDirection.endToStart, // swipe left to remove
+      onDismissed: (_) => cart.remove(line),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 22),
+        decoration: BoxDecoration(
+          color: YColor.danger,
+          borderRadius: BorderRadius.circular(YRadius.md),
+        ),
+        child: const Icon(Icons.delete_rounded, color: Colors.white, size: 26),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        ProductVisual(
-          imageUrl: line.imageUrl,
-          name: line.title,
-          iconName: line.iconName,
-          size: 44,
-          iconSize: 22,
+      child: CustomPaint(
+        foregroundPainter: _DashedBoxPainter(),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: YColor.surface1,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(line.title,
+                  style: YFont.bodyStrong().copyWith(height: 1.1),
+                  overflow: TextOverflow.ellipsis),
+              if (line.subtitle != null &&
+                  line.subtitle!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(line.subtitle!,
+                    style: YFont.caption(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+              const SizedBox(height: 6),
+              Row(children: [
+                _qtyBtn(Icons.remove,
+                    () => cart.setQuantity(line, line.quantity - 1)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('${line.quantity}', style: YFont.bodyStrong()),
+                ),
+                _qtyBtn(Icons.add,
+                    () => cart.setQuantity(line, line.quantity + 1)),
+                const Spacer(),
+                Text(line.lineTotal.formatted, style: YFont.bodyStrong()),
+              ]),
+            ],
+          ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(line.title, style: YFont.bodyStrong(), overflow: TextOverflow.ellipsis),
-            if (line.subtitle != null) Text(line.subtitle, style: YFont.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 8),
-            Row(children: [
-              _qtyBtn(Icons.remove, () => cart.setQuantity(line, line.quantity - 1)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text('${line.quantity}', style: YFont.bodyStrong()),
-              ),
-              _qtyBtn(Icons.add, () => cart.setQuantity(line, line.quantity + 1)),
-              const Spacer(),
-              Text(line.lineTotal.formatted, style: YFont.bodyStrong()),
-            ]),
-          ]),
-        ),
-      ]),
+      ),
     );
   }
 
