@@ -114,8 +114,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // Icon only for now (no product photo).
                           ProductVisual(
-                            imageUrl: widget.item.imageUrl,
+                            imageUrl: null,
                             name: widget.item.name,
                             iconName: widget.item.iconName,
                             size: 140,
@@ -143,16 +144,23 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                               ),
                             ),
                           ),
-                          if (widget.item.subtitle.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Padding(
+                          // Sub-type the product belongs to (instead of a long
+                          // description), as a small brand pill.
+                          if ((widget.item.categoryName ?? '')
+                              .trim()
+                              .isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 28),
-                              child: Text(widget.item.subtitle,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: YFont.caption()),
+                                  horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: YColor.brandTint,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(widget.item.categoryName!.trim(),
+                                  style: YFont.caption().copyWith(
+                                      color: YColor.brandDeep,
+                                      fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ],
@@ -184,13 +192,18 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                 children: [
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(28, 56, 28, 24),
+                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
-                            Text('Customize', style: YFont.titleMD()),
-                            const Spacer(),
+                            Expanded(
+                              child: Text('Customize : ${widget.item.name}',
+                                  style: YFont.titleMD(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            const SizedBox(width: 12),
                             Text(unitPrice.formatted,
                                 style: YFont.priceLG().copyWith(color: YColor.brand)),
                           ]),
