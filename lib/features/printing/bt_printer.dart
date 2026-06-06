@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
@@ -9,6 +10,24 @@ class BtDevice {
   final String name;
   final String address;
   const BtDevice(this.name, this.address);
+}
+
+/// iOS CoreBluetooth identifies peripherals by UUID. The native plugin runs
+/// `UUID(uuidString: address)!` and force-unwraps — so handing it anything that
+/// isn't a valid UUID (e.g. an Android-style MAC, or a stale/blank saved value)
+/// crashes the whole app with a Swift fatalError that Dart try/catch CANNOT
+/// catch. The only safe defense is to never call connect with a bad value.
+final RegExp _uuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+bool _isConnectableAddress(String address) {
+  final a = address.trim();
+  if (a.isEmpty) return false;
+  // Android uses MAC addresses (any non-empty handle is fine). iOS must be a
+  // UUID or the native connect force-unwrap crashes the app.
+  if (Platform.isIOS) return _uuidPattern.hasMatch(a);
+  return true;
 }
 
 /// Thin wrapper over `print_bluetooth_thermal` so the rest of the app doesn't
@@ -50,6 +69,9 @@ class BtPrinter {
   /// socket half-open after the printer slept / went out of range, so a single
   /// attempt frequently fails — these retries are what make reconnect reliable.
   static Future<bool> connect(String address) async {
+    // Guard BEFORE touching the native plugin: a non-UUID address on iOS would
+    // crash via force-unwrap (uncatchable from Dart). Bail safely instead.
+    if (!_isConnectableAddress(address)) return false;
     try {
       // Always tear down first — `connectionStatus` can report a stale "true"
       // for a socket that's actually dead, which then blocks a fresh connect.
@@ -98,6 +120,7 @@ class BtPrinter {
   }
 
   static Future<bool> _write(String address, List<int> bytes) async {
+    if (!_isConnectableAddress(address)) return false;
     // Reuse a live connection if there is one; otherwise (re)connect with
     // retries. `connect` already disconnects-then-retries for cold radios.
     var connected = false;

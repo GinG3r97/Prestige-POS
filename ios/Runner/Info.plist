@@ -72,5 +72,10 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
+		<!-- Export compliance: app only uses standard HTTPS/TLS (OS-provided
+		     encryption), so it is exempt. Stops App Store Connect asking the
+		     "App Encryption Documentation" question on every upload. -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 	</dict>
 </plist>
