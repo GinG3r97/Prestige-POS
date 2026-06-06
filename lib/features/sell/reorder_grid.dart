@@ -286,6 +286,7 @@ class ReorderStrip extends StatefulWidget {
     required this.itemBuilder,
     required this.onReorder,
     required this.mainExtent,
+    this.extentFor,
     this.crossExtent,
     this.spacing = 10,
     this.padding = EdgeInsets.zero,
@@ -299,6 +300,11 @@ class ReorderStrip extends StatefulWidget {
   /// Tile size along the scroll axis (width when horizontal, height when
   /// vertical). The cross size fills the strip unless [crossExtent] is set.
   final double mainExtent;
+
+  /// Optional per-item main-axis size (e.g. a sub-type box that's taller when
+  /// its name wraps to 2 lines). Falls back to [mainExtent] when null, which
+  /// keeps the uniform-size behaviour for the horizontal Type strip.
+  final double Function(int index)? extentFor;
   final double? crossExtent;
   final double spacing;
   final EdgeInsets padding;
@@ -319,7 +325,7 @@ class _ReorderStripState extends State<ReorderStrip> {
 
   bool get _h => widget.axis == Axis.horizontal;
   double get _padMainStart => _h ? widget.padding.left : widget.padding.top;
-  double get _step => widget.mainExtent + widget.spacing;
+  double _extent(int item) => widget.extentFor?.call(item) ?? widget.mainExtent;
 
   @override
   void initState() {
@@ -342,13 +348,22 @@ class _ReorderStripState extends State<ReorderStrip> {
     super.dispose();
   }
 
-  double _slotMain(int slot) => _padMainStart + slot * _step;
+  // Cumulative start of [slot] in content space — supports per-item extents.
+  double _slotMain(int slot) {
+    var m = _padMainStart;
+    for (var k = 0; k < slot && k < _order.length; k++) {
+      m += _extent(_order[k]) + widget.spacing;
+    }
+    return m;
+  }
 
   int _slotAt(double contentMain) {
-    var s = ((contentMain - _padMainStart) / _step).floor();
-    if (s < 0) s = 0;
-    if (s >= widget.itemCount) s = widget.itemCount - 1;
-    return s;
+    var m = _padMainStart;
+    for (var s = 0; s < widget.itemCount && s < _order.length; s++) {
+      m += _extent(_order[s]) + widget.spacing;
+      if (contentMain < m) return s;
+    }
+    return widget.itemCount > 0 ? widget.itemCount - 1 : 0;
   }
 
   double _contentMain(Offset vl) => (_h ? vl.dx : vl.dy) + _scroll.offset;
@@ -366,7 +381,9 @@ class _ReorderStripState extends State<ReorderStrip> {
 
   void _move(Offset vl) {
     final cm = _contentMain(vl);
-    final target = _slotAt(cm - _grabMain + widget.mainExtent / 2);
+    final draggedExtent =
+        _activeSlot != null ? _extent(_order[_activeSlot!]) : widget.mainExtent;
+    final target = _slotAt(cm - _grabMain + draggedExtent / 2);
     setState(() {
       _pointerMain = cm;
       if (_activeSlot != null && target != _activeSlot) {
@@ -425,23 +442,26 @@ class _ReorderStripState extends State<ReorderStrip> {
           (crossFull -
               (_h ? widget.padding.vertical : widget.padding.horizontal));
       final crossStart = _h ? widget.padding.top : widget.padding.left;
-      final contentMain = _padMainStart +
-          (_h ? widget.padding.right : widget.padding.bottom) +
-          widget.itemCount * widget.mainExtent +
-          (widget.itemCount > 0 ? (widget.itemCount - 1) * widget.spacing : 0);
+      var contentMain =
+          _padMainStart + (_h ? widget.padding.right : widget.padding.bottom);
+      for (var s = 0; s < widget.itemCount && s < _order.length; s++) {
+        contentMain += _extent(_order[s]);
+        if (s < widget.itemCount - 1) contentMain += widget.spacing;
+      }
       final dragging = _fromSlot != null;
       final proxyMain = _pointerMain - _grabMain;
 
       Widget slotTile(int slot) {
         final main = _slotMain(slot);
+        final ext = _extent(_order[slot]);
         return AnimatedPositioned(
           key: ValueKey('rs-${_order[slot]}'),
           duration: Duration(milliseconds: dragging ? 150 : 0),
           curve: Curves.easeOut,
           left: _h ? main : crossStart,
           top: _h ? crossStart : main,
-          width: _h ? widget.mainExtent : cross,
-          height: _h ? cross : widget.mainExtent,
+          width: _h ? ext : cross,
+          height: _h ? cross : ext,
           child: Opacity(
             opacity: (dragging && slot == _activeSlot) ? 0.0 : 1.0,
             child: widget.itemBuilder(_order[slot]),
@@ -476,8 +496,8 @@ class _ReorderStripState extends State<ReorderStrip> {
                   Positioned(
                     left: _h ? proxyMain : crossStart,
                     top: _h ? crossStart : proxyMain,
-                    width: _h ? widget.mainExtent : cross,
-                    height: _h ? cross : widget.mainExtent,
+                    width: _h ? _extent(_order[_activeSlot!]) : cross,
+                    height: _h ? cross : _extent(_order[_activeSlot!]),
                     child: IgnorePointer(
                       child: Transform.scale(
                         scale: 1.08,

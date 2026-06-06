@@ -69,8 +69,13 @@ class _SellViewState extends State<SellView> {
     for (final p in items) {
       (typeBuckets[state.effectiveTypeId(p)] ??= <CafeItem>[]).add(p);
     }
+    // Sort by sortOrder so the normal Sell view matches Customize/edit mode
+    // (which sorts the same way) — otherwise the in-memory list order can drift
+    // and the two views show types in a different order.
+    final orderedTypes = [...state.productTypes]
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     final typeBoxes = <_TypeEntry>[
-      for (final t in state.productTypes)
+      for (final t in orderedTypes)
         if (typeBuckets.containsKey(t.id))
           _TypeEntry(id: t.id, name: t.name, iconName: t.iconName),
     ];
@@ -380,6 +385,9 @@ class _SellViewState extends State<SellView> {
                 axis: Axis.vertical,
                 itemCount: all.length,
                 mainExtent: 50,
+                // Each box hugs its text: short for 1 line ("Coffee"), taller
+                // for 2 lines ("Hot Non-Coffee") — so the dashed border fits.
+                extentFor: (i) => _subTypeExtent(all[i].name),
                 spacing: 8,
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                 onReorder: (from, to) => _onReorderSubTypes(all, from, to),
@@ -484,6 +492,21 @@ class _SellViewState extends State<SellView> {
         ]),
       ),
     );
+  }
+
+  /// Height for a sub-type box in edit mode — fits 1 line of text snugly, grows
+  /// for 2 lines so the dashed border hugs the box instead of floating around a
+  /// short one. Mirrors the _railBox text style + the rail's text width.
+  double _subTypeExtent(String name) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: name,
+        style: YFont.bodyStrong().copyWith(fontSize: 12, height: 1.15),
+      ),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 82);
+    return tp.computeLineMetrics().length >= 2 ? 50.0 : 40.0;
   }
 
   // ───── Arrange mode: handlers + shared bits ───────────────────────────
