@@ -54,6 +54,7 @@ class PrintJobs {
     required o.Order order,
     required Tenant tenant,
     required PrinterConfig config,
+    String? number,
   }) async {
     final bytes = await ReceiptBuilder.barista(
       order: order,
@@ -61,6 +62,7 @@ class PrintJobs {
       template: tenant.ticketTemplate,
       tailLines: tenant.printTailLines,
       font: tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA,
+      number: number,
     );
     return _send(config, bytes);
   }
@@ -98,6 +100,7 @@ class PrintJobs {
     required o.Order order,
     required Tenant tenant,
     required PrinterConfig config,
+    String? number,
   }) async {
     final bytes = await ReceiptBuilder.kitchenFood(
       order: order,
@@ -105,6 +108,7 @@ class PrintJobs {
       template: tenant.ticketTemplate,
       tailLines: tenant.printTailLines,
       font: tenant.printFont == 'b' ? PosFontType.fontB : PosFontType.fontA,
+      number: number,
     );
     return _send(config, bytes);
   }

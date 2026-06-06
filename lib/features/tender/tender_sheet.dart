@@ -10,6 +10,7 @@ import '../../design_system/typography.dart';
 import '../../models/cart.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
+import '../auth/otp_numpad.dart';
 import '../printing/drawer_prefs.dart';
 import '../printing/print_jobs.dart';
 import '../printing/receipt_builder.dart';
@@ -161,6 +162,19 @@ class _TenderSheetState extends State<TenderSheet> {
   bool _baristaPrinted = false;
   bool _kitchenPrinted = false;
   bool _skipPrinting = false;
+  // Optional buzzer / table number the cashier hands the customer — printed
+  // big on the barista + kitchen tickets so they can call it out.
+  String _buzzer = '';
+
+  void _onBuzzerDigit(String d) {
+    if (_buzzer.length >= 4) return;
+    setState(() => _buzzer += d);
+  }
+
+  void _onBuzzerBackspace() {
+    if (_buzzer.isEmpty) return;
+    setState(() => _buzzer = _buzzer.substring(0, _buzzer.length - 1));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +200,7 @@ class _TenderSheetState extends State<TenderSheet> {
     if (completed) {
       return Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: 760),
           child: IntrinsicHeight(child: card),
         ),
       );
@@ -1038,22 +1052,21 @@ class _TenderSheetState extends State<TenderSheet> {
 
   Widget _completed(AppState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+      padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 88,
-            height: 88,
+            width: 72,
+            height: 72,
             decoration: const BoxDecoration(
               color: YColor.successSoft,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle,
-                size: 56, color: YColor.success),
+                size: 48, color: YColor.success),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text('Payment Complete', style: YFont.titleLG()),
           if (_orderNumber != null) ...[
             const SizedBox(height: 4),
@@ -1064,46 +1077,103 @@ class _TenderSheetState extends State<TenderSheet> {
                   letterSpacing: 0.6,
                 )),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(_amountDue(state).formatted,
               style: YFont.titleLG().copyWith(color: YColor.brand)),
-          const SizedBox(height: 24),
-          _printActions(state),
-          Builder(builder: (_) {
-            final pending = _printsPending(state);
-            return Column(children: [
-              ElevatedButton(
-                onPressed: pending
-                    ? null
-                    : () {
-                        state.cart.clear();
-                        Navigator.of(context).pop();
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: YColor.surface3,
-                  disabledForegroundColor: YColor.inkMuted,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
+          const SizedBox(height: 22),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left — buzzer/table number + print actions + finish.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('BUZZER / TABLE NO. (optional)',
+                        style: YFont.caption()),
+                    const SizedBox(height: 8),
+                    _buzzerDisplay(),
+                    const SizedBox(height: 6),
+                    Text('Printed big on the barista & kitchen tickets.',
+                        style: YFont.caption()
+                            .copyWith(color: YColor.inkMuted)),
+                    const SizedBox(height: 18),
+                    _printActions(state),
+                    Builder(builder: (_) {
+                      final pending = _printsPending(state);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton(
+                            onPressed: pending
+                                ? null
+                                : () {
+                                    state.cart.clear();
+                                    Navigator.of(context).pop();
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: YColor.brand,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: YColor.surface3,
+                              disabledForegroundColor: YColor.inkMuted,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(YRadius.md)),
+                            ),
+                            child: Text(
+                                pending ? 'Print to continue' : 'New Order'),
+                          ),
+                          if (pending) ...[
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: () =>
+                                  setState(() => _skipPrinting = true),
+                              child: Text(
+                                  'Printer down? Finish without printing',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.inkMuted)),
+                            ),
+                          ],
+                        ],
+                      );
+                    }),
+                  ],
                 ),
-                child: Text(pending ? 'Print to continue' : 'New Order'),
               ),
-              if (pending) ...[
-                const SizedBox(height: 6),
-                TextButton(
-                  onPressed: () => setState(() => _skipPrinting = true),
-                  child: Text('Printer down? Finish without printing',
-                      style: YFont.caption()
-                          .copyWith(color: YColor.inkMuted)),
-                ),
-              ],
-            ]);
-          }),
+              const SizedBox(width: 26),
+              // Right — number pad to enter the buzzer / table number.
+              OtpNumpad(
+                onDigit: _onBuzzerDigit,
+                onBackspace: _onBuzzerBackspace,
+                keyWidth: 58,
+                keyHeight: 44,
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buzzerDisplay() {
+    final empty = _buzzer.isEmpty;
+    return Container(
+      height: 56,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: YColor.surface2,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(
+            color: empty ? YColor.hairline : YColor.brand, width: 1.4),
+      ),
+      child: Text(empty ? '—' : _buzzer,
+          style: YFont.titleLG().copyWith(
+              fontSize: 30,
+              color: empty ? YColor.inkSubtle : YColor.brand,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 4)),
     );
   }
 
@@ -1156,7 +1226,10 @@ class _TenderSheetState extends State<TenderSheet> {
                 Icons.local_cafe_outlined,
                 () => _doPrint(
                       () => PrintJobs.barista(
-                          order: order, tenant: tenant, config: printer),
+                          order: order,
+                          tenant: tenant,
+                          config: printer,
+                          number: _buzzer),
                       what: 'Barista ticket',
                     ),
                 done: _baristaPrinted),
@@ -1166,7 +1239,10 @@ class _TenderSheetState extends State<TenderSheet> {
                 Icons.restaurant_outlined,
                 () => _doPrint(
                       () => PrintJobs.kitchen(
-                          order: order, tenant: tenant, config: printer),
+                          order: order,
+                          tenant: tenant,
+                          config: printer,
+                          number: _buzzer),
                       what: 'Kitchen ticket',
                     ),
                 done: _kitchenPrinted),

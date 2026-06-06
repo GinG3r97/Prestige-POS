@@ -635,6 +635,7 @@ class ReceiptBuilder {
     int template = 1,
     int tailLines = 2,
     PosFontType font = PosFontType.fontA,
+    String? number,
   }) =>
       _prepTicket(
         order: order,
@@ -644,6 +645,7 @@ class ReceiptBuilder {
         template: template,
         tailLines: tailLines,
         font: font,
+        number: number,
       );
 
   /// Kitchen ticket — food only (excludes drinks + retail/service), no prices.
@@ -653,6 +655,7 @@ class ReceiptBuilder {
     int template = 1,
     int tailLines = 2,
     PosFontType font = PosFontType.fontA,
+    String? number,
   }) =>
       _prepTicket(
         order: order,
@@ -665,6 +668,7 @@ class ReceiptBuilder {
         template: template,
         tailLines: tailLines,
         font: font,
+        number: number,
       );
 
   /// True if [order] has any drink line (so a Barista ticket is worth offering).
@@ -685,6 +689,7 @@ class ReceiptBuilder {
     int template = 1,
     int tailLines = 2,
     PosFontType font = PosFontType.fontA,
+    String? number,
   }) async {
     final profile = await CapabilityProfile.load();
     final size = printer.paperWidth == 80 ? PaperSize.mm80 : PaperSize.mm58;
@@ -700,12 +705,26 @@ class ReceiptBuilder {
     bytes.addAll(g.text(title,
         styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
     bytes.addAll(g.text('#${order.orderNumber.toString().padLeft(4, '0')}',
-        styles: PosStyles(fontType: font, 
+        styles: PosStyles(fontType: font,
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size2,
           width: PosTextSize.size2,
         )));
+    // Buzzer / table number the cashier gives the customer — printed big so the
+    // barista/kitchen can call it out on pickup.
+    if (number != null && number.trim().isNotEmpty) {
+      bytes.addAll(g.text('-- BUZZER / TABLE --',
+          styles: PosStyles(fontType: font, align: PosAlign.center)));
+      bytes.addAll(g.text(number.trim(),
+          styles: PosStyles(
+            fontType: font,
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2,
+          )));
+    }
     if (!minimal) {
       bytes.addAll(g.text(_fmtDateTime(order.paidAt ?? order.createdAt),
           styles: PosStyles(fontType: font, align: PosAlign.center)));

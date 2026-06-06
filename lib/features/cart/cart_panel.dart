@@ -21,6 +21,34 @@ class CartPanel extends StatefulWidget {
 
 class _CartPanelState extends State<CartPanel> {
   bool _showHeld = false;
+  bool _showBreakdown = false; // Subtotal + VAT rows (collapsed by default)
+  final ScrollController _cartScroll = ScrollController();
+  int _prevLineCount = 0;
+
+  @override
+  void dispose() {
+    _cartScroll.dispose();
+    super.dispose();
+  }
+
+  /// Small labelled box button used in the cart header (Repeat, Hold / Clear).
+  Widget _headerChip(String label, VoidCallback onTap, {bool danger = false}) {
+    final c = danger ? YColor.danger : YColor.brandDeep;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(YRadius.sm),
+          border: Border.all(color: c.withValues(alpha: 0.4)),
+        ),
+        child: Text(label,
+            style: YFont.caption()
+                .copyWith(color: c, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +58,20 @@ class _CartPanelState extends State<CartPanel> {
     if (app.arrangeMode) return _arrangeHelp(context);
 
     final cart = context.watch<CartStore>();
+    // When a new line is rung up, scroll the order to it so the cashier never
+    // has to reach for it.
+    if (cart.lines.length > _prevLineCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_cartScroll.hasClients) {
+          _cartScroll.animateTo(
+            _cartScroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+    _prevLineCount = cart.lines.length;
     final heldCount = app.heldOrders.length;
     if (heldCount == 0 && _showHeld) _showHeld = false;
 
@@ -89,26 +131,26 @@ class _CartPanelState extends State<CartPanel> {
                 Border(bottom: BorderSide(color: YColor.hairline, width: 0.5)),
           ),
           child: Row(children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Current Order', style: YFont.titleMD()),
-                Text('${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}',
-                    style: YFont.caption()),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Current Order',
+                      style: YFont.titleMD(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text(
+                      '${cart.itemCount} item${cart.itemCount == 1 ? '' : 's'}',
+                      style: YFont.caption()),
+                ],
+              ),
             ),
-            const Spacer(),
             if (cart.lines.isNotEmpty) ...[
-              IconButton(
-                tooltip: 'Repeat order (read back)',
-                onPressed: () => _showRepeat(context, cart),
-                icon: const Icon(Icons.zoom_out_map, color: YColor.brandDeep),
-              ),
-              IconButton(
-                tooltip: 'Hold or clear order',
-                onPressed: () => _showOrderActions(context, cart),
-                icon: const Icon(Icons.delete_rounded, color: YColor.danger),
-              ),
+              _headerChip('Repeat', () => _showRepeat(context, cart)),
+              const SizedBox(width: 6),
+              _headerChip('Hold / Clear',
+                  () => _showOrderActions(context, cart),
+                  danger: true),
             ],
           ]),
         ),
@@ -116,6 +158,7 @@ class _CartPanelState extends State<CartPanel> {
           child: cart.lines.isEmpty
               ? _empty()
               : ListView.separated(
+                  controller: _cartScroll,
                   padding: const EdgeInsets.all(16),
                   itemCount: cart.lines.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -540,10 +583,65 @@ class _CartPanelState extends State<CartPanel> {
       ),
       child: Column(
         children: [
-          _totalRow('Subtotal', cart.subtotal.formatted),
-          _totalRow('VAT (incl.)', cart.vat.formatted, faded: true),
-          const SizedBox(height: 8),
-          const Divider(color: YColor.hairline, height: 1),
+          // Subtotal + VAT — collapsed by default, animates open/closed.
+          ClipRect(
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              alignment: Alignment.topCenter,
+              child: _showBreakdown
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _totalRow('Subtotal', cart.subtotal.formatted),
+                        _totalRow('VAT (incl.)', cart.vat.formatted,
+                            faded: true),
+                        const SizedBox(height: 8),
+                      ],
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ),
+          // Separator with a labelled SHOW/HIDE VAT toggle in the centre.
+          SizedBox(
+            height: 26,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Divider(color: YColor.hairline, height: 1),
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => _showBreakdown = !_showBreakdown),
+                  child: Container(
+                    color: YColor.surface1,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(8, 3, 10, 3),
+                      decoration: BoxDecoration(
+                        color: YColor.surface2,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: YColor.hairline),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(
+                            _showBreakdown
+                                ? Icons.keyboard_arrow_down
+                                : Icons.keyboard_arrow_up,
+                            size: 16,
+                            color: YColor.brandDeep),
+                        const SizedBox(width: 2),
+                        Text(_showBreakdown ? 'HIDE VAT' : 'SHOW VAT',
+                            style: YFont.caption().copyWith(
+                                color: YColor.brandDeep,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
           Row(children: [
             Text('Total', style: YFont.titleMD()),
