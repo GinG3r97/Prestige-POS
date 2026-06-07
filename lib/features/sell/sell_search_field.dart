@@ -129,11 +129,9 @@ class _SellSearchFieldState extends State<SellSearchField>
   List<CafeItem> _matches(String q) {
     final s = q.trim().toLowerCase();
     if (s.isEmpty) return const [];
+    // Match the product NAME only — not sub-type or subtitle.
     return widget.products
-        .where((p) =>
-            p.name.toLowerCase().contains(s) ||
-            p.subtitle.toLowerCase().contains(s) ||
-            p.categoryName.toLowerCase().contains(s))
+        .where((p) => p.name.toLowerCase().contains(s))
         .toList();
   }
 

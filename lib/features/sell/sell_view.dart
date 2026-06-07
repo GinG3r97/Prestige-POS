@@ -193,11 +193,8 @@ class _SellViewState extends State<SellView> {
       List<CafeItem> all, List<CafeItem> inType, AppState state) {
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
-      return all
-          .where((p) =>
-              p.name.toLowerCase().contains(q) ||
-              p.subtitle.toLowerCase().contains(q))
-          .toList();
+      // Match the product NAME only — not sub-type or subtitle.
+      return all.where((p) => p.name.toLowerCase().contains(q)).toList();
     }
     if (_filterCategoryId == null) return inType;
     if (_filterCategoryId == _kOtherCat) {
