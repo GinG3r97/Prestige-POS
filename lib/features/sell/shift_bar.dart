@@ -893,7 +893,13 @@ class _ShiftsSheetState extends State<_ShiftsSheet> {
             child: Row(children: [
               const Icon(Icons.summarize_outlined, color: YColor.brandDeep),
               const SizedBox(width: 10),
-              Expanded(child: Text('Shifts & Z-readings', style: YFont.titleMD())),
+              Expanded(
+                child: Text('Shifts & Z-readings',
+                    style: YFont.titleMD(),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis),
+              ),
               // Store-wide total — owner only. Cashiers see just their own
               // shifts and can reprint their own Z-readings by tapping a row.
               if (isOwner)
