@@ -776,7 +776,10 @@ class _SellViewState extends State<SellView> {
   }
 
   Widget _empty() {
-    return Center(
+    // Pull up off true-center so it sits visually centred in the area above
+    // the floating bottom nav (which covers the lower strip).
+    return Align(
+      alignment: const Alignment(0, -0.3),
       child: Padding(
         padding: const EdgeInsets.all(36),
         child: Column(
