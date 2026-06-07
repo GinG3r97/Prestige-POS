@@ -54,7 +54,6 @@ class SellSearchField extends StatefulWidget {
 
 class _SellSearchFieldState extends State<SellSearchField>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final FocusNode _focusNode = FocusNode();
   final FocusNode _cardFocus = FocusNode();
   late final AnimationController _anim;
   OverlayEntry? _entry;
@@ -69,7 +68,6 @@ class _SellSearchFieldState extends State<SellSearchField>
       duration: const Duration(milliseconds: 300),
       reverseDuration: const Duration(milliseconds: 200),
     );
-    _focusNode.addListener(_onFocusChange);
     _cardFocus.addListener(_onFocusChange);
     WidgetsBinding.instance.addObserver(this);
   }
@@ -77,9 +75,7 @@ class _SellSearchFieldState extends State<SellSearchField>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _focusNode.removeListener(_onFocusChange);
     _cardFocus.removeListener(_onFocusChange);
-    _focusNode.dispose();
     _cardFocus.dispose();
     _entry?.remove();
     _entry = null;
@@ -93,23 +89,22 @@ class _SellSearchFieldState extends State<SellSearchField>
   void didChangeMetrics() => _entry?.markNeedsBuild();
 
   void _onFocusChange() {
-    if (_focusNode.hasFocus || _cardFocus.hasFocus) {
+    if (_cardFocus.hasFocus) {
       _show();
-      // Hand editing to the card's field (above the keyboard) once shown.
-      if (_focusNode.hasFocus && !_cardFocus.hasFocus) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _entry != null && _focusNode.hasFocus) {
-            _cardFocus.requestFocus();
-          }
-        });
-      }
     } else {
-      // Defer — focus may just be transferring between the pill and the card.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (!_focusNode.hasFocus && !_cardFocus.hasFocus) _hide();
+        if (mounted && !_cardFocus.hasFocus) _hide();
       });
     }
+  }
+
+  /// Tapping the header button opens the card and raises the keyboard — the
+  /// card hosts the one real editable field.
+  void _openSearch() {
+    _show();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _entry != null) _cardFocus.requestFocus();
+    });
   }
 
   void _show() {
@@ -128,7 +123,6 @@ class _SellSearchFieldState extends State<SellSearchField>
 
   void _dismiss() {
     _cardFocus.unfocus();
-    _focusNode.unfocus();
   }
 
   List<CafeItem> _matches(String q) {
@@ -143,6 +137,10 @@ class _SellSearchFieldState extends State<SellSearchField>
   }
 
   void _selectProduct(CafeItem item) {
+    // Drop focus *globally* (not just our two nodes) so the product sheet has
+    // no focus to restore when it's dismissed — otherwise cancelling it would
+    // bounce focus back here and re-open the search card.
+    FocusManager.instance.primaryFocus?.unfocus();
     _dismiss();
     // Open the detail sheet once the overlay has begun tearing down.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -409,54 +407,59 @@ class _SellSearchFieldState extends State<SellSearchField>
     );
   }
 
-  // ── Inline pill (lives in the Sell header) ───────────────────────────────
+  // ── Header button (lives in the Sell header) ─────────────────────────────
+  // A plain button — not a text field — so it's unmistakably a tap target and
+  // never confused with the type boxes' long-press-to-Customize gesture.
   @override
   Widget build(BuildContext context) {
-    final hasQuery = widget.activeQuery.trim().isNotEmpty;
-    return SizedBox(
-      height: 38,
-      child: TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        autocorrect: false,
-        enableSuggestions: false,
-        textAlignVertical: TextAlignVertical.center,
-        style: YFont.body().copyWith(fontSize: 13),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: 'Search',
-          hintStyle: YFont.body().copyWith(fontSize: 13, color: YColor.inkSubtle),
-          prefixIcon:
-              const Icon(Icons.search, size: 18, color: YColor.inkMuted),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 36, minHeight: 36),
-          suffixIcon: hasQuery
-              ? GestureDetector(
-                  onTap: () {
-                    widget.controller.clear();
-                    widget.onClear();
-                  },
+    final query = widget.activeQuery.trim();
+    final hasQuery = query.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: _openSearch,
+        child: Container(
+          height: 38,
+          padding: EdgeInsets.only(left: 14, right: hasQuery ? 8 : 16),
+          decoration: BoxDecoration(
+            color: hasQuery ? YColor.brandTint : YColor.surface2,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: hasQuery ? YColor.brand : YColor.hairline),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.search,
+                size: 18,
+                color: hasQuery ? YColor.brand : YColor.inkMuted),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                hasQuery ? query : 'Search',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.body().copyWith(
+                  fontSize: 13,
+                  color: hasQuery ? YColor.brandDeep : YColor.inkMuted,
+                  fontWeight: hasQuery ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            if (hasQuery) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  widget.controller.clear();
+                  widget.onClear();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(3),
                   child: const Icon(Icons.close_rounded,
-                      size: 16, color: YColor.inkMuted),
-                )
-              : null,
-          suffixIconConstraints:
-              const BoxConstraints(minWidth: 36, minHeight: 36),
-          filled: true,
-          fillColor: YColor.surface2,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: const BorderSide(color: YColor.hairline),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: const BorderSide(color: YColor.hairline),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: const BorderSide(color: YColor.brand),
-          ),
+                      size: 16, color: YColor.brandDeep),
+                ),
+              ),
+            ],
+          ]),
         ),
       ),
     );

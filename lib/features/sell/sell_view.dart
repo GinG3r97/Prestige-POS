@@ -228,16 +228,19 @@ class _SellViewState extends State<SellView> {
           if (!_editMode) ...[
             Align(
               alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 300,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
                 child: SellSearchField(
                   controller: _searchC,
                   products: items,
                   activeQuery: _query,
-                  onSelect: (item) {
+                  onSelect: (item) async {
                     _searchC.clear();
                     if (_query.isNotEmpty) setState(() => _query = '');
-                    _openSheet(item);
+                    await _openSheet(item);
+                    // Belt-and-suspenders: never let the dismissed sheet bounce
+                    // focus back into search mode.
+                    if (mounted) FocusManager.instance.primaryFocus?.unfocus();
                   },
                   onShowMore: (q) => setState(() => _query = q),
                   onClear: () {
@@ -853,8 +856,8 @@ class _SellViewState extends State<SellView> {
     );
   }
 
-  void _openSheet(CafeItem item) {
-    showModalBottomSheet(
+  Future<void> _openSheet(CafeItem item) {
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
