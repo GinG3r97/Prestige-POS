@@ -43,11 +43,6 @@ class MaintenanceView extends StatelessWidget {
                   Text('Maintenance',
                       style: YFont.titleLG()
                           .copyWith(fontSize: 30, letterSpacing: -0.5)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Master menu data shared across all your products.',
-                    style: YFont.body().copyWith(color: YColor.inkMuted),
-                  ),
                   const SizedBox(height: 16),
                   TabBar(
                     isScrollable: true,
