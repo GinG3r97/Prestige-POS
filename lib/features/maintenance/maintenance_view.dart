@@ -103,6 +103,8 @@ class MaintenanceView extends StatelessWidget {
             // Body
             Expanded(
               child: TabBarView(
+                // Tabs only switch via the TabBar — no left/right swipe.
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _ModifierGroupsTab(state: state),
                   _AddOnsTab(state: state),
