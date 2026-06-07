@@ -1131,6 +1131,8 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
                         fit: BoxFit.cover,
                         width: 48,
                         height: 48,
+                        cacheWidth: 144,
+                        cacheHeight: 144,
                         errorBuilder: (_, __, ___) => NameIconOrEmoji(
                             name: widget.item.name,
                             iconName: widget.item.iconName))

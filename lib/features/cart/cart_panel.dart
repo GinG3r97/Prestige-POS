@@ -6,7 +6,6 @@ import '../../models/cart.dart';
 import '../../models/held_order.dart';
 import '../../models/money.dart';
 import '../../design_system/colors.dart';
-import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../cafe/product_detail_sheet.dart';
@@ -839,7 +838,7 @@ class _RepeatOrderView extends StatelessWidget {
             }
             final detail = [
               if ((cafe?.item.categoryName ?? '').trim().isNotEmpty)
-                cafe!.item.categoryName!.trim(),
+                cafe!.item.categoryName.trim(),
               ...mods,
             ].join(' · ');
             return (

@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # The Supabase seeder importer is a separate Dart package with its own
+  # pubspec/deps — it isn't part of the Flutter app build, so don't analyze it
+  # here (its unresolved imports otherwise surface as app errors).
+  exclude:
+    - supabase/migrations/seeder/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

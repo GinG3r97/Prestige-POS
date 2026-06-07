@@ -130,10 +130,12 @@ class _ShellViewState extends State<ShellView> {
                         if (_showsCart(state.selectedRoute) &&
                             state.hasOpenShift) ...[
                           Container(width: 0.5, color: YColor.hairline),
+                          // RepaintBoundary so cart updates (add/remove items)
+                          // don't repaint the product grid beside it.
                           SizedBox(
                             width: panelWidth(context,
                                 fraction: 0.30, min: 300, max: 360),
-                            child: const CartPanel(),
+                            child: const RepaintBoundary(child: CartPanel()),
                           ),
                         ],
                       ],
@@ -144,16 +146,20 @@ class _ShellViewState extends State<ShellView> {
             ),
           ),
           // Floating glass nav — anchored to bottom edge. Locked while arranging.
+          // RepaintBoundary so its expand/collapse animation doesn't repaint
+          // the whole content layer behind it.
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: IgnorePointer(
-              ignoring: arranging,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: arranging ? 0.45 : 1,
-                child: const FloatingBottomNav(),
+            child: RepaintBoundary(
+              child: IgnorePointer(
+                ignoring: arranging,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: arranging ? 0.45 : 1,
+                  child: const FloatingBottomNav(),
+                ),
               ),
             ),
           ),

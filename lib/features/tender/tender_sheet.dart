@@ -1634,15 +1634,12 @@ class _DashLinePainter extends CustomPainter {
 
 /// Dashed rounded-rectangle border (used for the Senior/PWD discount button).
 class _DashedRRectPainter extends CustomPainter {
-  _DashedRRectPainter({
-    required this.color,
-    this.radius = 12,
-    this.dash = 5,
-    this.gap = 4,
-    this.strokeWidth = 1.4,
-  });
+  _DashedRRectPainter({required this.color, this.radius = 12});
   final Color color;
-  final double radius, dash, gap, strokeWidth;
+  final double radius;
+  static const double dash = 5;
+  static const double gap = 4;
+  static const double strokeWidth = 1.4;
 
   @override
   void paint(Canvas canvas, Size size) {

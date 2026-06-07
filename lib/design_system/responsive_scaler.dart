@@ -29,7 +29,6 @@ class ResponsiveScaler extends StatelessWidget {
   final double minScale;
   final double maxScale;
 
-  @override
   /// The scale currently applied to the whole app (real width ÷ design width,
   /// clamped). Published so overlay-based widgets (e.g. drag proxies, which the
   /// framework renders OUTSIDE this FittedBox at 1.0) can match the on-screen

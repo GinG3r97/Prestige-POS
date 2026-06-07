@@ -159,9 +159,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                           ),
                           // Sub-type the product belongs to (instead of a long
                           // description), as a small brand pill.
-                          if ((widget.item.categoryName ?? '')
-                              .trim()
-                              .isNotEmpty) ...[
+                          if (widget.item.categoryName.trim().isNotEmpty) ...[
                             const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -170,7 +168,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                                 color: YColor.brandTint,
                                 borderRadius: BorderRadius.circular(999),
                               ),
-                              child: Text(widget.item.categoryName!.trim(),
+                              child: Text(widget.item.categoryName.trim(),
                                   style: YFont.caption().copyWith(
                                       color: YColor.brandDeep,
                                       fontWeight: FontWeight.w700)),

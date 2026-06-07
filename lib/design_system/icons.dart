@@ -174,6 +174,10 @@ class ProductVisual extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
     if (hasImage) {
+      // Decode at the on-screen resolution instead of full source size — far
+      // less memory + decode work, so image-heavy grids scroll smoothly. No
+      // visual change (it's displayed at `size` anyway).
+      final cache = (size * MediaQuery.devicePixelRatioOf(context)).round();
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
         child: Image.network(
@@ -181,6 +185,8 @@ class ProductVisual extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
+          cacheWidth: cache,
+          cacheHeight: cache,
           errorBuilder: (_, __, ___) => _iconBox(),
         ),
       );

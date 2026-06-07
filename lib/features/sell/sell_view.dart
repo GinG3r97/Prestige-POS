@@ -40,7 +40,9 @@ class _SellViewState extends State<SellView> {
   /// Selected Sub-type chip within the type; null = "All", `_kOtherCat` =
   /// products here with no sub-type (or one that belongs to another type).
   String? _filterCategoryId;
-  String _query = '';
+  // Search was removed from the Sell header; kept as a const so the existing
+  // filter/empty-state logic still compiles (always "not searching").
+  final String _query = '';
 
   /// "Arrange mode" — entered by a 3s long-press on a Type box. Shows dashed
   /// borders, drag-to-reorder, and dashed "+" add boxes across all 3 levels.
@@ -926,7 +928,11 @@ class _CafeCard extends StatelessWidget {
                           child: Image.network(
                             item.imageUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _sellTileFallback(item),
+                            // Tiles are ~186px wide; decode at ~2.7x, not full
+                            // source res, so the grid scrolls smoothly.
+                            cacheWidth: 512,
+                            errorBuilder: (_, __, ___) =>
+                                _sellTileFallback(item),
                           ),
                         )
                       : _sellTileFallback(item),
@@ -1035,18 +1041,12 @@ class _CafeCard extends StatelessWidget {
 
 /// Paints a dashed rounded-rect border — the "arrange mode" affordance.
 class _DashedBorderPainter extends CustomPainter {
-  _DashedBorderPainter({
-    this.radius = 12,
-    this.color = YColor.brandDeep,
-    this.dash = 5,
-    this.gap = 4,
-    this.strokeWidth = 1.4,
-  });
+  _DashedBorderPainter({this.radius = 12});
   final double radius;
-  final Color color;
-  final double dash;
-  final double gap;
-  final double strokeWidth;
+  static const Color color = YColor.brandDeep;
+  static const double dash = 5;
+  static const double gap = 4;
+  static const double strokeWidth = 1.4;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1073,6 +1073,5 @@ class _DashedBorderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DashedBorderPainter old) =>
-      old.radius != radius || old.color != color;
+  bool shouldRepaint(_DashedBorderPainter old) => old.radius != radius;
 }
