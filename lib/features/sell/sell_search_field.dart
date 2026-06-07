@@ -412,78 +412,58 @@ class _SellSearchFieldState extends State<SellSearchField>
   // confused with the type boxes' long-press-to-Customize gesture.
   @override
   Widget build(BuildContext context) {
-    final query = widget.activeQuery.trim();
-    final hasQuery = query.isNotEmpty;
-    return SizedBox(
-      width: 104,
-      child: Stack(clipBehavior: Clip.none, children: [
-        GestureDetector(
-          onTap: _openSearch,
-          child: Container(
-            width: 104,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              color: hasQuery ? YColor.brand : YColor.brandTint,
-              borderRadius: BorderRadius.circular(YRadius.lg),
-              border: Border.all(
-                color: hasQuery
-                    ? YColor.brand
-                    : YColor.brand.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              // Enhanced magnifier — rounded, in a soft tinted disc so it
-              // reads as a proper search affordance, not just a glyph.
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: hasQuery
-                      ? Colors.white.withValues(alpha: 0.22)
-                      : YColor.brand.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.search_rounded,
-                    size: 19,
-                    color: hasQuery ? Colors.white : YColor.brandDeep),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                hasQuery ? query : 'Search',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: YFont.caption().copyWith(
-                  color: hasQuery ? Colors.white : YColor.brandDeep,
-                  fontWeight: FontWeight.w700,
-                  height: 1.1,
-                ),
-              ),
-            ]),
+    final hasQuery = widget.activeQuery.trim().isNotEmpty;
+    // Idle → a Search box. While a search is applied the same box flips to a
+    // Cancel button that clears it (replaces the old corner ×).
+    return GestureDetector(
+      onTap: hasQuery
+          ? () {
+              widget.controller.clear();
+              widget.onClear();
+            }
+          : _openSearch,
+      child: Container(
+        width: 104,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: hasQuery ? YColor.brand : YColor.brandTint,
+          borderRadius: BorderRadius.circular(YRadius.lg),
+          border: Border.all(
+            color: hasQuery ? YColor.brand : YColor.brand.withValues(alpha: 0.35),
           ),
         ),
-        if (hasQuery)
-          Positioned(
-            top: -6,
-            right: -6,
-            child: GestureDetector(
-              onTap: () {
-                widget.controller.clear();
-                widget.onClear();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: YColor.danger,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-                child: const Icon(Icons.close_rounded,
-                    size: 12, color: Colors.white),
-              ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Rounded glyph in a soft tinted disc — magnifier idle, × when a
+          // search is active.
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: hasQuery
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : YColor.brand.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              hasQuery ? Icons.close_rounded : Icons.search_rounded,
+              size: 19,
+              color: hasQuery ? Colors.white : YColor.brandDeep,
             ),
           ),
-      ]),
+          const SizedBox(height: 6),
+          Text(
+            hasQuery ? 'Cancel' : 'Search',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: YFont.caption().copyWith(
+              color: hasQuery ? Colors.white : YColor.brandDeep,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }
