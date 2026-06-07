@@ -942,51 +942,40 @@ class AppState extends ChangeNotifier {
       // Idempotent — unique(tenant_id, name) keeps re-runs safe.
       final typeIds = await _seedDefaultProductTypes(tenantDbId);
 
-      // Every café gets these baseline categories — universal staples.
-      // Owners can rename or remove them from Maintenance any time. The
-      // pack-specific seeds layer on top, de-duped by name (the
-      // unique(tenant_id, name) constraint also enforces this at DB).
-      const baselineCategories = [
-        (name: 'Coffee', emoji: '☕', sortOrder: 10),
-        (name: 'Tea', emoji: '🍵', sortOrder: 20),
-        (name: 'Pastry', emoji: '🥐', sortOrder: 30),
-        (name: 'Food', emoji: '🍽', sortOrder: 40),
+      // Default cafe sub-types under each product type. Owners can rename,
+      // reorder, or remove them in Maintenance. icon_name is left null so each
+      // sub-type gets a themed icon resolved from its name.
+      const defaultSubTypes =
+          <({String name, String type, String emoji, int sortOrder})>[
+        // Drinks
+        (name: 'Coffee', type: 'drinks', emoji: '☕', sortOrder: 10),
+        (name: 'Tea', type: 'drinks', emoji: '🍵', sortOrder: 20),
+        (name: 'Soda', type: 'drinks', emoji: '🥤', sortOrder: 30),
+        (name: 'Milk Tea', type: 'drinks', emoji: '🧋', sortOrder: 40),
+        (name: 'Smoothie', type: 'drinks', emoji: '🥤', sortOrder: 50),
+        // Foods
+        (name: 'Breakfast Meal', type: 'foods', emoji: '🍳', sortOrder: 60),
+        (name: 'Rice Meals', type: 'foods', emoji: '🍚', sortOrder: 70),
+        (name: 'Snacks', type: 'foods', emoji: '🍟', sortOrder: 80),
+        // Pastries
+        (name: 'Bread', type: 'pastries', emoji: '🍞', sortOrder: 90),
+        (name: 'Cake', type: 'pastries', emoji: '🍰', sortOrder: 100),
+        (name: 'Cookies', type: 'pastries', emoji: '🍪', sortOrder: 110),
+        (name: 'Croissant', type: 'pastries', emoji: '🥐', sortOrder: 120),
+        (name: 'Donut', type: 'pastries', emoji: '🍩', sortOrder: 130),
       ];
-      final seenNames = <String>{};
-      final categoryPayload = <Map<String, dynamic>>[];
-      for (final c in baselineCategories) {
-        if (seenNames.add(c.name)) {
-          categoryPayload.add({
+      final categoryPayload = <Map<String, dynamic>>[
+        for (final c in defaultSubTypes)
+          {
             'tenant_id': tenantDbId,
             'name': c.name,
             'emoji': c.emoji,
-            // icon_name + is_system MUST be present on every row in the batch:
-            // a Supabase batch insert unions the keys across all maps and fills
-            // any missing key with NULL. Baseline rows omitting is_system would
-            // otherwise be sent as is_system=NULL → NOT NULL violation once a
-            // pack row in the same batch carries is_system. Keep keys uniform.
             'icon_name': null,
             'sort_order': c.sortOrder,
-            'type_id': _seedTypeIdForCategory(c.name, typeIds),
-            'is_system': false,
-          });
-        }
-      }
-      for (final pack in sellPacks) {
-        for (final c in pack.seedCategories) {
-          if (seenNames.add(c.name)) {
-            categoryPayload.add({
-              'tenant_id': tenantDbId,
-              'name': c.name,
-              'emoji': c.emoji,
-              'icon_name': c.iconName,
-              'sort_order': c.sortOrder,
-              'type_id': _seedTypeIdForCategory(c.name, typeIds),
-              'is_system': true,
-            });
-          }
-        }
-      }
+            'type_id': typeIds[c.type],
+            'is_system': true,
+          },
+      ];
       if (categoryPayload.isNotEmpty) {
         final inserted = await supabase
             .from('categories')
@@ -4134,8 +4123,9 @@ class AppState extends ChangeNotifier {
     final rows = [
       {
         'tenant_id': tenantId,
-        'name': 'Drink',
+        'name': 'Drinks',
         'icon_name': 'local_cafe_outlined',
+        // Drinks have Size / Temperature / Strength options + add-ons.
         'supports_modifiers': true,
         'deducts_stock': true,
         'is_system': true,
@@ -4143,8 +4133,9 @@ class AppState extends ChangeNotifier {
       },
       {
         'tenant_id': tenantId,
-        'name': 'Item',
-        'icon_name': 'sell_outlined',
+        'name': 'Foods',
+        'icon_name': 'restaurant_outlined',
+        // Rung up flat (no size/temp); still deducts recipe ingredients.
         'supports_modifiers': false,
         'deducts_stock': true,
         'is_system': true,
@@ -4152,10 +4143,10 @@ class AppState extends ChangeNotifier {
       },
       {
         'tenant_id': tenantId,
-        'name': 'Service',
-        'icon_name': 'handshake_outlined',
+        'name': 'Pastries',
+        'icon_name': 'bakery_dining_outlined',
         'supports_modifiers': false,
-        'deducts_stock': false,
+        'deducts_stock': true,
         'is_system': true,
         'sort_order': 30,
       },
@@ -4200,19 +4191,6 @@ class AppState extends ChangeNotifier {
     return map;
   }
 
-  /// Maps a seeded category name to its parent product-type id, using the same
-  /// drink-keyword rule as the SQL backfill. Drink-y names -> Drink type,
-  /// everything else -> Item (the default non-drink bucket). Returns null if
-  /// the matching type wasn't seeded (category falls into "Other").
-  static final RegExp _drinkNameRe = RegExp(
-      r'(coffee|tea|espresso|latte|frappe|smoothie|shake|juice|soda|milk\s*tea|refresher|matcha|drink)');
-  String? _seedTypeIdForCategory(String name, Map<String, String> typeIds) {
-    final n = name.toLowerCase();
-    if (_drinkNameRe.hasMatch(n)) {
-      return typeIds['drink'] ?? typeIds['item'];
-    }
-    return typeIds['item'];
-  }
 
   Future<String?> addEmployeeRole(EmployeeRole r) async {
     final tenantId = _currentTenantDbId;
