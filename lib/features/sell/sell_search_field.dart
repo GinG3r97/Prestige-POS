@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/responsive_scaler.dart';
+import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/catalog.dart';
 
@@ -407,61 +408,84 @@ class _SellSearchFieldState extends State<SellSearchField>
     );
   }
 
-  // ── Header button (lives in the Sell header) ─────────────────────────────
-  // A plain button — not a text field — so it's unmistakably a tap target and
-  // never confused with the type boxes' long-press-to-Customize gesture.
+  // ── Header box (sits beside the Customize box in the type row) ────────────
+  // A box — same 104-wide footprint as the Customize button, icon over label —
+  // so the two read as a matched pair and it's clearly a tap target, never
+  // confused with the type boxes' long-press-to-Customize gesture.
   @override
   Widget build(BuildContext context) {
     final query = widget.activeQuery.trim();
     final hasQuery = query.isNotEmpty;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: _openSearch,
-        child: Container(
-          height: 38,
-          padding: EdgeInsets.only(left: 14, right: hasQuery ? 8 : 16),
-          decoration: BoxDecoration(
-            color: hasQuery ? YColor.brandTint : YColor.surface2,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-                color: hasQuery ? YColor.brand : YColor.hairline),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.search,
-                size: 18,
-                color: hasQuery ? YColor.brand : YColor.inkMuted),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
+    return SizedBox(
+      width: 104,
+      child: Stack(clipBehavior: Clip.none, children: [
+        GestureDetector(
+          onTap: _openSearch,
+          child: Container(
+            width: 104,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: hasQuery ? YColor.brand : YColor.brandTint,
+              borderRadius: BorderRadius.circular(YRadius.lg),
+              border: Border.all(
+                color: hasQuery
+                    ? YColor.brand
+                    : YColor.brand.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // Enhanced magnifier — rounded, in a soft tinted disc so it
+              // reads as a proper search affordance, not just a glyph.
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: hasQuery
+                      ? Colors.white.withValues(alpha: 0.22)
+                      : YColor.brand.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.search_rounded,
+                    size: 19,
+                    color: hasQuery ? Colors.white : YColor.brandDeep),
+              ),
+              const SizedBox(height: 6),
+              Text(
                 hasQuery ? query : 'Search',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: YFont.body().copyWith(
-                  fontSize: 13,
-                  color: hasQuery ? YColor.brandDeep : YColor.inkMuted,
-                  fontWeight: hasQuery ? FontWeight.w600 : FontWeight.w400,
+                textAlign: TextAlign.center,
+                style: YFont.caption().copyWith(
+                  color: hasQuery ? Colors.white : YColor.brandDeep,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
                 ),
+              ),
+            ]),
+          ),
+        ),
+        if (hasQuery)
+          Positioned(
+            top: -6,
+            right: -6,
+            child: GestureDetector(
+              onTap: () {
+                widget.controller.clear();
+                widget.onClear();
+              },
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: YColor.danger,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const Icon(Icons.close_rounded,
+                    size: 12, color: Colors.white),
               ),
             ),
-            if (hasQuery) ...[
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () {
-                  widget.controller.clear();
-                  widget.onClear();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  child: const Icon(Icons.close_rounded,
-                      size: 16, color: YColor.brandDeep),
-                ),
-              ),
-            ],
-          ]),
-        ),
-      ),
+          ),
+      ]),
     );
   }
 }

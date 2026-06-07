@@ -219,49 +219,44 @@ class _SellViewState extends State<SellView> {
     final searching = _query.isNotEmpty;
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 14, 24, 2),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Small search pill — pops a floating card above the keyboard with
-          // live results. Hidden in arrange mode (the row is busy reordering).
-          if (!_editMode) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
-                child: SellSearchField(
-                  controller: _searchC,
-                  products: items,
-                  activeQuery: _query,
-                  onSelect: (item) async {
-                    _searchC.clear();
-                    if (_query.isNotEmpty) setState(() => _query = '');
-                    await _openSheet(item);
-                    // Belt-and-suspenders: never let the dismissed sheet bounce
-                    // focus back into search mode.
-                    if (mounted) FocusManager.instance.primaryFocus?.unfocus();
-                  },
-                  onShowMore: (q) => setState(() => _query = q),
-                  onClear: () {
-                    if (_query.isNotEmpty) setState(() => _query = '');
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          // LEVEL 1 — Product Type boxes (reorderable + add in arrange mode).
-          _typeRow(typeBoxes, searching),
+          // LEVEL 1 — Product Type boxes + the Search & Customize boxes at the
+          // end of the row (reorderable + "+ Type" add box in arrange mode).
+          _typeRow(typeBoxes, searching, items),
         ],
       ),
+    );
+  }
+
+  /// The Search box that sits beside Customize — opens the floating result card.
+  Widget _searchBox(List<CafeItem> items) {
+    return SellSearchField(
+      controller: _searchC,
+      products: items,
+      activeQuery: _query,
+      onSelect: (item) async {
+        _searchC.clear();
+        if (_query.isNotEmpty) setState(() => _query = '');
+        await _openSheet(item);
+        // Belt-and-suspenders: never let the dismissed sheet bounce focus
+        // back into search mode.
+        if (mounted) FocusManager.instance.primaryFocus?.unfocus();
+      },
+      onShowMore: (q) => setState(() => _query = q),
+      onClear: () {
+        if (_query.isNotEmpty) setState(() => _query = '');
+      },
     );
   }
 
   /// The Level-1 Product Type row. View mode: horizontal scroll; long-press a
   /// box 3s to enter arrange mode. Edit mode: reorderable row of all types +
   /// a dashed "+" to add; tap a box to edit it.
-  Widget _typeRow(List<_TypeEntry> typeBoxes, bool searching) {
+  Widget _typeRow(
+      List<_TypeEntry> typeBoxes, bool searching, List<CafeItem> items) {
     const h = 84.0;
     if (_editMode) {
       final state = context.watch<AppState>();
@@ -346,6 +341,10 @@ class _SellViewState extends State<SellView> {
             ),
           ),
         ),
+        // Search box — always available (you can clear/refine even while a
+        // search is applied). Sits just before Customize as a matched pair.
+        const SizedBox(width: 10),
+        _searchBox(items),
         // Tap to enter arrange mode — this same spot becomes the "+ Type" box
         // once you're editing. Hidden while searching.
         if (!searching) ...[
