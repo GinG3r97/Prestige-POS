@@ -20,9 +20,14 @@ class _OnboardingViewState extends State<OnboardingView> {
   bool _busy = false;
   String? _error;
 
-  // Coffee is pre-selected because every business in our market sells it;
-  // owners can clear it if they're somehow pure non-coffee.
-  final Set<SellPack> _picks = {SellPack.coffee};
+  // Catalog packs offered at signup — the cafe set, all pre-selected. Books /
+  // Retail, Co-working and Memberships are hidden for now.
+  static const _visiblePacks = [
+    SellPack.coffee,
+    SellPack.food,
+    SellPack.drinks,
+  ];
+  final Set<SellPack> _picks = {..._visiblePacks};
 
   late final TextEditingController _businessName;
   late final TextEditingController _businessAddress;
@@ -257,9 +262,9 @@ class _OnboardingViewState extends State<OnboardingView> {
             // Wider than tall — fits icon + label + 1-line description.
             childAspectRatio: 4.2,
           ),
-          itemCount: SellPack.values.length,
+          itemCount: _visiblePacks.length,
           itemBuilder: (_, i) {
-            final pack = SellPack.values[i];
+            final pack = _visiblePacks[i];
             final selected = _picks.contains(pack);
             return _PackChip(
               pack: pack,
