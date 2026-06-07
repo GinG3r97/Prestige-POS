@@ -290,7 +290,9 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                   Text(type.name,
                       style: YFont.titleMD().copyWith(fontSize: 22)),
                   const SizedBox(height: 2),
-                  Text(type.behaviorSummary, style: YFont.caption()),
+                  Text(
+                      '${subs.length} sub-type${subs.length == 1 ? '' : 's'}',
+                      style: YFont.caption()),
                 ],
               ),
             ),
@@ -2631,8 +2633,6 @@ class _ProductTypeDialog extends StatefulWidget {
 class _ProductTypeDialogState extends State<_ProductTypeDialog> {
   late final TextEditingController _name;
   String? _iconName;
-  late bool _supportsModifiers;
-  late bool _deductsStock;
 
   @override
   void initState() {
@@ -2640,8 +2640,6 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
     final t = widget.initial;
     _name = TextEditingController(text: t?.name ?? '');
     _iconName = t?.iconName ?? (t == null ? 'label_outlined' : null);
-    _supportsModifiers = t?.supportsModifiers ?? false;
-    _deductsStock = t?.deductsStock ?? true;
   }
 
   @override
@@ -2655,8 +2653,10 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
       id: widget.initial?.id ?? '',
       name: _name.text.trim(),
       iconName: _iconName,
-      supportsModifiers: _supportsModifiers,
-      deductsStock: _deductsStock,
+      // Behaviour moved to per-product; preserve existing values (default on)
+      // so the now-unused columns stay valid.
+      supportsModifiers: widget.initial?.supportsModifiers ?? true,
+      deductsStock: widget.initial?.deductsStock ?? true,
       isSystem: widget.initial?.isSystem ?? false,
       sortOrder: widget.initial?.sortOrder ?? 1000,
     ));
@@ -2737,32 +2737,30 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    SwitchListTile(
-                      value: _supportsModifiers,
-                      onChanged: (v) =>
-                          setState(() => _supportsModifiers = v),
-                      activeThumbColor: YColor.brand,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Supports modifiers',
-                          style:
-                              YFont.bodyStrong().copyWith(fontSize: 14)),
-                      subtitle: Text(
-                        'Products of this type can attach modifier groups (Size, Temperature, etc.).',
-                        style: YFont.caption(),
+                    // "Supports modifiers" + "Deducts from inventory" are now
+                    // set per-product (on the Products page) — a product opts
+                    // into modifier groups and toggles "Track inventory" there.
+                    // The type is just a grouping.
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: YColor.brandTint.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(YRadius.md),
                       ),
-                    ),
-                    SwitchListTile(
-                      value: _deductsStock,
-                      onChanged: (v) => setState(() => _deductsStock = v),
-                      activeThumbColor: YColor.brand,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Deducts from inventory',
-                          style:
-                              YFont.bodyStrong().copyWith(fontSize: 14)),
-                      subtitle: Text(
-                        'Sales decrement stock per the product\'s recipe. Turn off for non-stock items like Service.',
-                        style: YFont.caption(),
-                      ),
+                      child: Row(children: [
+                        const Icon(Icons.info_outline,
+                            size: 16, color: YColor.brandDeep),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Modifiers (Size, Temperature…) and inventory '
+                            'deduction are set per product on the Products '
+                            'page, not on the type.',
+                            style: YFont.caption()
+                                .copyWith(color: YColor.brandDeep),
+                          ),
+                        ),
+                      ]),
                     ),
                   ],
               ),

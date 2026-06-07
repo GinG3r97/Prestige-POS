@@ -2984,16 +2984,13 @@ class AppState extends ChangeNotifier {
   bool get inventoryTrackingEnabled =>
       tenant?.inventoryTrackingEnabled ?? true;
 
-  /// Whether [product] should draw down / be limited by inventory. True only
-  /// when the store master switch is on, the product's own toggle is on, and
-  /// its type is stock-bearing (Service opts out). This single gate replaces
-  /// the scattered `type.deductsStock` checks.
+  /// Whether [product] should draw down / be limited by inventory. Decided
+  /// per-product: the store master switch is on AND the product's own
+  /// "Track inventory" toggle is on. (The product type no longer gates this —
+  /// it's set on each product.)
   bool tracksStock(CafeItem product) {
     if (!inventoryTrackingEnabled) return false;
-    if (!product.trackInventory) return false;
-    final type = productTypeById(product.typeId);
-    if (type != null && !type.deductsStock) return false;
-    return true;
+    return product.trackInventory;
   }
 
   bool canFulfillOne(CafeItem product) {

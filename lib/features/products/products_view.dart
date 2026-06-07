@@ -1442,8 +1442,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     // otherwise fall back to the legacy enum on the in-memory CafeItem.
     final state = context.read<AppState>();
     final type = state.productTypeById(_typeId);
-    final supportsMods = type?.supportsModifiers ?? _itemType.supportsModifiers;
-    final deductsStock = type?.deductsStock ?? _itemType.consumesRecipe;
     final cat = state.categories
         .where((c) => c.id == _categoryId)
         .firstOrNull;
@@ -1486,12 +1484,13 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       itemType: _itemType,
       typeId: _typeId,
       typeName: type?.name ?? '',
-      modifierGroups: supportsMods ? _modifierGroups : const [],
-      modifierGroupIds:
-          supportsMods ? _modifierGroupIds.toList() : const [],
-      modifierAdjustments: supportsMods ? _adjustments : const [],
+      // Per-product now — the product keeps its own modifiers + recipe
+      // regardless of the type (the type is just a grouping).
+      modifierGroups: _modifierGroups,
+      modifierGroupIds: _modifierGroupIds.toList(),
+      modifierAdjustments: _adjustments,
       available: _available,
-      recipe: deductsStock ? _recipe : const [],
+      recipe: _recipe,
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
     if (!mounted) return;
@@ -1782,15 +1781,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 );
               }).toList(),
             ),
-          const SizedBox(height: 6),
-          if (picked != null)
-            Text(
-              [
-                if (picked.supportsModifiers) 'Supports modifiers',
-                if (picked.deductsStock) 'Deducts from inventory',
-              ].join(' · '),
-              style: YFont.caption(),
-            ),
         ],
       );
     });
@@ -1803,11 +1793,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   Widget _modifierGroupsSection() {
     return Builder(builder: (ctx) {
       final state = ctx.watch<AppState>();
-      final type = state.productTypeById(_typeId);
-      final supportsMods = type?.supportsModifiers ?? _itemType.supportsModifiers;
-      // If the picked product type doesn't support modifiers (e.g. Book,
-      // Service), don't even show the section — it would be misleading.
-      if (!supportsMods) return const SizedBox.shrink();
+      // Per-product: any product can opt into modifier groups (a product
+      // "supports modifiers" simply when groups are toggled on here).
       final groups = state.modifierGroups;
       return _section('Modifier groups — what choices customers pick on Sell', [
         if (groups.isEmpty)

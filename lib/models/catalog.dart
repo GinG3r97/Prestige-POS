@@ -280,15 +280,6 @@ class ProductType {
     this.sortOrder = 0,
   });
 
-  /// Plain-English explanation of what this type does, derived from its
-  /// behavior flags. Shown to owners so the type list explains itself — no
-  /// merchant should ever have to ask "what does this type mean?".
-  String get behaviorSummary {
-    if (!deductsStock) return 'No stock tracking · services & passes';
-    if (supportsModifiers) return 'Has size/options · tracks stock';
-    return 'Tracks stock · sold as-is';
-  }
-
   factory ProductType.fromRow(Map<String, dynamic> row) => ProductType(
         id: row['id'] as String,
         name: row['name'] as String,
