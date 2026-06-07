@@ -16,6 +16,7 @@ import '../products/products_view.dart'
     show showProductEditor, showProductQuickEdit;
 import '../widgets/push_toast.dart';
 import 'reorder_grid.dart';
+import 'sell_search_field.dart';
 import 'shift_bar.dart';
 
 /// Unified storefront for the coffee shop. Search + category chips on top,
@@ -40,13 +41,24 @@ class _SellViewState extends State<SellView> {
   /// Selected Sub-type chip within the type; null = "All", `_kOtherCat` =
   /// products here with no sub-type (or one that belongs to another type).
   String? _filterCategoryId;
-  // Search was removed from the Sell header; kept as a const so the existing
-  // filter/empty-state logic still compiles (always "not searching").
-  final String _query = '';
+
+  /// Global search query. Empty = browsing by type/sub-type. Set when the user
+  /// commits a search ("Show all" / Done) from the floating search card, which
+  /// switches the grid to global results across every available product.
+  String _query = '';
+
+  /// Backing controller for the small header search pill + its accessory card.
+  final TextEditingController _searchC = TextEditingController();
 
   /// "Arrange mode" — entered by a 3s long-press on a Type box. Shows dashed
   /// borders, drag-to-reorder, and dashed "+" add boxes across all 3 levels.
   bool _editMode = false;
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   bool get _realTypeSelected =>
       _filterTypeId != null && _filterTypeId != _kOtherType;
@@ -155,7 +167,7 @@ class _SellViewState extends State<SellView> {
             Container(height: 0.5, color: YColor.hairline),
             Expanded(child: _cashierClosed(context)),
           ] else ...[
-            _header(typeBoxes: typeBoxes),
+            _header(typeBoxes: typeBoxes, items: items),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -200,19 +212,43 @@ class _SellViewState extends State<SellView> {
     return inType.where((p) => p.categoryId == _filterCategoryId).toList();
   }
 
-  Widget _header({required List<_TypeEntry> typeBoxes}) {
+  Widget _header(
+      {required List<_TypeEntry> typeBoxes, required List<CafeItem> items}) {
     // When searching, results are global — dim and disable the type picker so
     // it's clear it's not constraining the search.
     final searching = _query.isNotEmpty;
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 2),
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Small search pill — pops a floating card above the keyboard with
+          // live results. Hidden in arrange mode (the row is busy reordering).
+          if (!_editMode) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 300,
+                child: SellSearchField(
+                  controller: _searchC,
+                  products: items,
+                  activeQuery: _query,
+                  onSelect: (item) {
+                    _searchC.clear();
+                    if (_query.isNotEmpty) setState(() => _query = '');
+                    _openSheet(item);
+                  },
+                  onShowMore: (q) => setState(() => _query = q),
+                  onClear: () {
+                    if (_query.isNotEmpty) setState(() => _query = '');
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           // LEVEL 1 — Product Type boxes (reorderable + add in arrange mode).
-          // Search box + Close Cashier removed — Close Cashier now lives in the
-          // header shift pill; products are browsed via the type/sub-type rail.
           _typeRow(typeBoxes, searching),
         ],
       ),
