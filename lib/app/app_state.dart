@@ -954,15 +954,16 @@ class AppState extends ChangeNotifier {
         (name: 'Milk Tea', type: 'drinks', emoji: '🧋', sortOrder: 40),
         (name: 'Smoothie', type: 'drinks', emoji: '🥤', sortOrder: 50),
         // Foods
-        (name: 'Breakfast Meal', type: 'foods', emoji: '🍳', sortOrder: 60),
-        (name: 'Rice Meals', type: 'foods', emoji: '🍚', sortOrder: 70),
-        (name: 'Snacks', type: 'foods', emoji: '🍟', sortOrder: 80),
+        (name: 'Rice Meals', type: 'foods', emoji: '🍚', sortOrder: 60),
+        (name: 'Breakfast', type: 'foods', emoji: '🍳', sortOrder: 70),
+        (name: 'Dinner', type: 'foods', emoji: '🍽', sortOrder: 80),
+        (name: 'Sharing', type: 'foods', emoji: '🍢', sortOrder: 90),
         // Pastries
-        (name: 'Bread', type: 'pastries', emoji: '🍞', sortOrder: 90),
-        (name: 'Cake', type: 'pastries', emoji: '🍰', sortOrder: 100),
-        (name: 'Cookies', type: 'pastries', emoji: '🍪', sortOrder: 110),
-        (name: 'Croissant', type: 'pastries', emoji: '🥐', sortOrder: 120),
-        (name: 'Donut', type: 'pastries', emoji: '🍩', sortOrder: 130),
+        (name: 'Bread', type: 'pastries', emoji: '🍞', sortOrder: 100),
+        (name: 'Cake', type: 'pastries', emoji: '🍰', sortOrder: 110),
+        (name: 'Cookies', type: 'pastries', emoji: '🍪', sortOrder: 120),
+        (name: 'Croissant', type: 'pastries', emoji: '🥐', sortOrder: 130),
+        (name: 'Donut', type: 'pastries', emoji: '🍩', sortOrder: 140),
       ];
       final categoryPayload = <Map<String, dynamic>>[
         for (final c in defaultSubTypes)
