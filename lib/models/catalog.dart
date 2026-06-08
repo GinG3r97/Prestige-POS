@@ -121,6 +121,11 @@ class CafeItem {
   /// store-wide [AppState.inventoryTrackingEnabled] master switch.
   bool trackInventory;
 
+  /// When true the price is entered by the cashier at checkout (e.g. consigned
+  /// books sold by the kilo). [basePrice] becomes an optional suggested value
+  /// pre-filled in the numpad. Tapping the tile opens the price modal.
+  bool openPrice;
+
   CafeItem({
     String? id,
     required this.name,
@@ -143,6 +148,7 @@ class CafeItem {
     this.available = true,
     this.sortOrder = 0,
     this.trackInventory = true,
+    this.openPrice = false,
   })  : id = id ?? _uuid.v4(),
         modifierGroupIds = modifierGroupIds ?? <String>[],
         recipe = recipe ?? <RecipeLine>[],
@@ -237,6 +243,7 @@ class CafeItem {
       available: (row['available'] as bool?) ?? true,
       sortOrder: (row['sort_order'] as int?) ?? 0,
       trackInventory: (row['track_inventory'] as bool?) ?? true,
+      openPrice: (row['open_price'] as bool?) ?? false,
     );
   }
 }
@@ -314,6 +321,7 @@ Map<String, dynamic> productRowPayload(CafeItem p, String tenantId) => {
       'available': p.available,
       'sort_order': p.sortOrder,
       'track_inventory': p.trackInventory,
+      'open_price': p.openPrice,
       'modifier_group_ids': p.modifierGroupIds,
       'recipe': [
         for (final l in p.recipe)

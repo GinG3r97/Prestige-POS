@@ -21,7 +21,15 @@ class CartLineCafe extends CartLineKind {
   /// Add-ons chosen by the customer at order time (snapshot of the AddOn).
   final List<CartAddOn> addOns;
 
-  CartLineCafe(this.item, this.selections, {List<CartAddOn>? addOns})
+  /// For "Custom price" products — the unit price the cashier typed at
+  /// checkout. When set it replaces the computed price entirely.
+  final Money? priceOverride;
+
+  /// Optional free-text note captured in the product modal (e.g. "2.5 kg").
+  final String? note;
+
+  CartLineCafe(this.item, this.selections,
+      {List<CartAddOn>? addOns, this.priceOverride, this.note})
       : addOns = addOns ?? <CartAddOn>[];
 
   /// Convenience: map of addOnId -> quantity for [AppState.expandRecipe].
@@ -42,7 +50,8 @@ class CartLine {
       };
 
   String? get subtitle => switch (kind) {
-        CartLineCafe(:final item, :final selections, :final addOns) => () {
+        CartLineCafe(:final item, :final selections, :final addOns, :final note) =>
+          () {
             final parts = item.modifierGroups
                 .map((g) {
                   final optId = selections[g.id];
@@ -59,7 +68,10 @@ class CartLine {
                   ? '+${a.addOn.name} ×${a.quantity}'
                   : '+${a.addOn.name}');
             }
-            return parts.isEmpty ? item.subtitle : parts.join(' · ');
+            final base = parts.isEmpty ? item.subtitle : parts.join(' · ');
+            final n = note?.trim() ?? '';
+            if (n.isEmpty) return base;
+            return base.isEmpty ? '📝 $n' : '$base · 📝 $n';
           }(),
       };
 
@@ -76,7 +88,15 @@ class CartLine {
       };
 
   Money get unitPrice => switch (kind) {
-        CartLineCafe(:final item, :final selections, :final addOns) => () {
+        CartLineCafe(
+          :final item,
+          :final selections,
+          :final addOns,
+          :final priceOverride
+        ) =>
+          () {
+            // Custom-price line — the typed price is the whole unit price.
+            if (priceOverride != null) return priceOverride;
             var total = item.basePrice;
             // Global per-option price (Maintenance → Modifier groups).
             for (final g in item.modifierGroups) {
@@ -125,30 +145,39 @@ class CartStore extends ChangeNotifier {
     Map<String, String> selections, {
     int quantity = 1,
     List<CartAddOn>? addOns,
+    Money? priceOverride,
+    String? note,
   }) {
     if (quantity < 1) return;
     final cleanAddOns = (addOns ?? <CartAddOn>[])
         .where((a) => a.quantity > 0)
         .toList();
 
-    final existing = lines.indexWhere((l) {
-      if (l.kind case CartLineCafe(
-        item: final lineItem,
-        selections: final s,
-        addOns: final ao,
-      )) {
-        return lineItem.id == item.id &&
-            _mapsEqual(s, selections) &&
-            _addOnsEqual(ao, cleanAddOns);
-      }
-      return false;
-    });
+    // Custom-price lines (and any with a note) stand alone — never merge, so a
+    // ₱120 book and a ₱200 book stay separate.
+    final existing = (priceOverride != null || (note?.trim().isNotEmpty ?? false))
+        ? -1
+        : lines.indexWhere((l) {
+            if (l.kind case CartLineCafe(
+              item: final lineItem,
+              selections: final s,
+              addOns: final ao,
+              priceOverride: final po,
+            )) {
+              return po == null &&
+                  lineItem.id == item.id &&
+                  _mapsEqual(s, selections) &&
+                  _addOnsEqual(ao, cleanAddOns);
+            }
+            return false;
+          });
     if (existing >= 0) {
       lines[existing].quantity += quantity;
     } else {
       lines.add(
         CartLine(
-          kind: CartLineCafe(item, selections, addOns: cleanAddOns),
+          kind: CartLineCafe(item, selections,
+              addOns: cleanAddOns, priceOverride: priceOverride, note: note),
           quantity: quantity,
         ),
       );

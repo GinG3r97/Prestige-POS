@@ -1075,7 +1075,12 @@ class _TenderSheetState extends State<TenderSheet> {
   /// Compact JSON snapshot of a line's modifier selections + add-ons so the
   /// receipt history preserves what the customer ordered.
   Map<String, dynamic>? _modifiersSnapshot(CartLine line) {
-    if (line.kind case CartLineCafe(:final item, :final selections, :final addOns)) {
+    if (line.kind case CartLineCafe(
+      :final item,
+      :final selections,
+      :final addOns,
+      :final note
+    )) {
       final mods = <String, String>{};
       for (final g in item.modifierGroups) {
         final optId = selections[g.id];
@@ -1090,10 +1095,12 @@ class _TenderSheetState extends State<TenderSheet> {
                 'quantity': a.quantity,
               })
           .toList();
-      if (mods.isEmpty && addOnList.isEmpty) return null;
+      final trimmedNote = note?.trim() ?? '';
+      if (mods.isEmpty && addOnList.isEmpty && trimmedNote.isEmpty) return null;
       return {
         if (mods.isNotEmpty) 'options': mods,
         if (addOnList.isNotEmpty) 'add_ons': addOnList,
+        if (trimmedNote.isNotEmpty) 'note': trimmedNote,
       };
     }
     return null;

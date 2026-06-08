@@ -5256,6 +5256,8 @@ class AppState extends ChangeNotifier {
         quantity: line.quantity,
         selections: Map<String, String>.from(kind.selections),
         addOns: {for (final a in kind.addOns) a.addOn.id: a.quantity},
+        priceOverrideCents: kind.priceOverride?.centavos,
+        note: kind.note,
       ));
     }
     if (lines.isEmpty) return;
@@ -5293,7 +5295,12 @@ class AppState extends ChangeNotifier {
         }
       });
       cart.addCafe(item, Map<String, String>.from(hl.selections),
-          quantity: hl.quantity, addOns: addOns);
+          quantity: hl.quantity,
+          addOns: addOns,
+          priceOverride: hl.priceOverrideCents == null
+              ? null
+              : Money(hl.priceOverrideCents!),
+          note: hl.note);
     }
     _heldOrders.removeWhere((h) => h.id == held.id);
     notifyListeners();

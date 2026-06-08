@@ -1041,7 +1041,8 @@ Future<void> showProductEditor(BuildContext context,
 /// preserving recipe/modifiers/type/category, so the full Products editor and
 /// the DB stay perfectly consistent.
 Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
-  final result = await showDialog<({String name, int priceCents})>(
+  final result =
+      await showDialog<({String name, int priceCents, bool openPrice})>(
     context: context,
     builder: (_) => _ProductQuickEditDialog(item: item),
   );
@@ -1049,6 +1050,7 @@ Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
   final state = context.read<AppState>();
   item.name = result.name;
   item.basePrice = Money(result.priceCents);
+  item.openPrice = result.openPrice;
   final err = await state.updateProduct(item);
   if (!context.mounted) return;
   PushToast.show(context,
@@ -1069,6 +1071,7 @@ class _ProductQuickEditDialog extends StatefulWidget {
 class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
   late final TextEditingController _name;
   late final TextEditingController _price;
+  late bool _openPrice;
 
   @override
   void initState() {
@@ -1076,6 +1079,7 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
     _name = TextEditingController(text: widget.item.name);
     _price = TextEditingController(
         text: (widget.item.basePrice.centavos / 100).toStringAsFixed(0));
+    _openPrice = widget.item.openPrice;
   }
 
   @override
@@ -1167,6 +1171,21 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
                   horizontal: 12, vertical: 12),
               onChanged: (_) => setState(() {}),
             ),
+            const SizedBox(height: 8),
+            Row(children: [
+              Switch(
+                value: _openPrice,
+                onChanged: (v) => setState(() => _openPrice = v),
+                activeThumbColor: YColor.brand,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Custom price — cashier types the price at checkout',
+                  style: YFont.caption(),
+                ),
+              ),
+            ]),
           ],
         ),
       ),
@@ -1184,6 +1203,7 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
                   Navigator.of(context).pop((
                     name: _name.text.trim(),
                     priceCents: Money.pesos(pesos).centavos,
+                    openPrice: _openPrice,
                   ));
                 },
           style: ElevatedButton.styleFrom(
@@ -1227,6 +1247,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   String? _typeId;
   String? _categoryId;
   late bool _available;
+  late bool _openPrice;
   // Image upload state. _imageUrl is the public URL already saved on the
   // product row (when editing). _pendingImageBytes is set when the user
   // picks a fresh photo — on Save we upload it, swap the URL, and clear.
@@ -1263,6 +1284,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     _typeId = p?.typeId ?? widget.presetTypeId;
     _categoryId = p?.categoryId ?? widget.presetCategoryId;
     _available = p?.available ?? true;
+    _openPrice = p?.openPrice ?? false;
     _imageUrl = p?.imageUrl;
     _emojiFallback = (p?.emoji.isNotEmpty ?? false) ? p!.emoji : '☕';
     _modifierGroups = p?.modifierGroups ?? const [];
@@ -1485,6 +1507,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       modifierGroupIds: _modifierGroupIds.toList(),
       modifierAdjustments: _adjustments,
       available: _available,
+      openPrice: _openPrice,
       recipe: _recipe,
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
@@ -1619,6 +1642,23 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                           _available
                               ? 'Available — shows on the Cafe menu'
                               : 'Hidden — sold out / off menu',
+                          style: YFont.caption(),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Switch(
+                        value: _openPrice,
+                        onChanged: (v) => setState(() => _openPrice = v),
+                        activeThumbColor: YColor.brand,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _openPrice
+                              ? 'Custom price — cashier types the price at checkout (the price above is just a suggestion)'
+                              : 'Custom price — let the cashier enter the price at checkout (e.g. items sold by the kilo)',
                           style: YFont.caption(),
                         ),
                       ),

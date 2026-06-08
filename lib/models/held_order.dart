@@ -9,12 +9,18 @@ class HeldLine {
   final int quantity;
   final Map<String, String> selections; // groupId -> optionId
   final Map<String, int> addOns; // addOnId -> quantity
+  /// Custom-price override (whole cents) + free-text note, preserved across a
+  /// hold/resume so a typed price isn't reset to the catalog base.
+  final int? priceOverrideCents;
+  final String? note;
 
   HeldLine({
     required this.itemId,
     required this.quantity,
     Map<String, String>? selections,
     Map<String, int>? addOns,
+    this.priceOverrideCents,
+    this.note,
   })  : selections = selections ?? const {},
         addOns = addOns ?? const {};
 
@@ -23,6 +29,8 @@ class HeldLine {
         'qty': quantity,
         'sel': selections,
         'add': addOns,
+        if (priceOverrideCents != null) 'price': priceOverrideCents,
+        if (note != null) 'note': note,
       };
 
   factory HeldLine.fromJson(Map<String, dynamic> j) => HeldLine(
@@ -34,6 +42,8 @@ class HeldLine {
         addOns: (j['add'] as Map?)
                 ?.map((k, v) => MapEntry(k as String, (v as num).toInt())) ??
             const {},
+        priceOverrideCents: (j['price'] as num?)?.toInt(),
+        note: j['note'] as String?,
       );
 }
 

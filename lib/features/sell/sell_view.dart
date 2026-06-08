@@ -1005,9 +1005,19 @@ class _CafeCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
-                  Text(item.basePrice.formatted,
-                      style: YFont.bodyStrong()
-                          .copyWith(fontSize: 12.5, color: YColor.brandDeep)),
+                  Row(children: [
+                    Text(
+                        item.openPrice
+                            ? 'Custom price'
+                            : item.basePrice.formatted,
+                        style: YFont.bodyStrong().copyWith(
+                            fontSize: 12.5, color: YColor.brandDeep)),
+                    if (item.openPrice) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.edit_outlined,
+                          size: 11, color: YColor.brandDeep),
+                    ],
+                  ]),
                 ],
               ),
             ),

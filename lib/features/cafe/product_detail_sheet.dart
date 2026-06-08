@@ -9,6 +9,7 @@ import '../../design_system/typography.dart';
 import '../../models/cart.dart';
 import '../../models/catalog.dart';
 import '../../models/money.dart';
+import '../auth/otp_numpad.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -31,6 +32,10 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   String notes = '';
   final TextEditingController _notesC = TextEditingController();
 
+  /// Raw whole-peso digits typed on the numpad for a Custom-price product.
+  String _customPrice = '';
+  int get _customPriceCents => (int.tryParse(_customPrice) ?? 0) * 100;
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +44,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         selections[g.id] = g.options[g.defaultIndex].id;
       }
     }
-    // Editing an existing line — restore its choices + quantity.
+    // Editing an existing line — restore its choices + quantity + note + price.
     final edit = widget.editLine?.kind;
     if (edit is CartLineCafe) {
       selections
@@ -47,6 +52,17 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         ..addAll(edit.selections);
       addOnQuantities.addAll(edit.addOnQuantities);
       quantity = widget.editLine!.quantity;
+      notes = edit.note ?? '';
+      _notesC.text = notes;
+      if (edit.priceOverride != null) {
+        _customPrice = (edit.priceOverride!.centavos ~/ 100).toString();
+      }
+    }
+    // New custom-price line — seed the numpad with the suggested base price.
+    if (widget.item.openPrice &&
+        _customPrice.isEmpty &&
+        widget.item.basePrice.centavos > 0) {
+      _customPrice = (widget.item.basePrice.centavos ~/ 100).toString();
     }
   }
 
@@ -61,6 +77,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   /// product), then the per-product modifier_adjustments[].priceDelta (set
   /// on the product form, applies only to this product).
   Money get unitPrice {
+    // Custom-price product — the typed amount is the price.
+    if (widget.item.openPrice) return Money(_customPriceCents);
     final addOnsCatalog = context.read<AppState>().addOns;
     var total = widget.item.basePrice;
     for (final g in widget.item.modifierGroups) {
@@ -207,28 +225,34 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            Expanded(
-                              child: Text('Customize : ${widget.item.name}',
-                                  style: YFont.titleMD(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(unitPrice.formatted,
-                                style: YFont.priceLG().copyWith(color: YColor.brand)),
-                          ]),
-                          const SizedBox(height: 22),
-                          ...widget.item.modifierGroups.map(_modifierSection),
-                          if (_visibleAddOns(context).isNotEmpty) ...[
-                            _addOnsSection(),
-                            const SizedBox(height: 16),
+                          if (widget.item.openPrice) ...[
+                            _openPriceSection(),
+                            const SizedBox(height: 18),
+                          ] else ...[
+                            Row(children: [
+                              Expanded(
+                                child: Text('Customize : ${widget.item.name}',
+                                    style: YFont.titleMD(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(unitPrice.formatted,
+                                  style: YFont.priceLG()
+                                      .copyWith(color: YColor.brand)),
+                            ]),
+                            const SizedBox(height: 22),
+                            ...widget.item.modifierGroups.map(_modifierSection),
+                            if (_visibleAddOns(context).isNotEmpty) ...[
+                              _addOnsSection(),
+                              const SizedBox(height: 16),
+                            ],
                           ],
                           KeyboardAccessoryField(
                             controller: _notesC,
                             accessoryLabel: 'NOTES',
                             label: 'Notes',
-                            hint: 'E.g., extra hot, light ice…',
+                            hint: 'E.g., 2.5 kg, hardcover…',
                             maxLines: 2,
                             onChanged: (v) => notes = v,
                           ),
@@ -242,10 +266,17 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _addToCart,
+                        // Custom-price products: no price typed yet → blocked.
+                        onPressed:
+                            (widget.item.openPrice && _customPriceCents <= 0)
+                                ? null
+                                : _addToCart,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: YColor.brand,
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor:
+                              YColor.inkMuted.withValues(alpha: 0.25),
+                          disabledForegroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 18),
                           elevation: 0,
@@ -561,6 +592,62 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     );
   }
 
+  /// Custom-price entry — big live amount + numpad (whole pesos).
+  Widget _openPriceSection() {
+    final has = _customPriceCents > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Enter price', style: YFont.titleMD()),
+        const SizedBox(height: 4),
+        Text(
+          'Type the amount for this item, then add it to the cart.',
+          style: YFont.caption().copyWith(color: YColor.inkMuted),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+            decoration: BoxDecoration(
+              color: YColor.surface2,
+              borderRadius: BorderRadius.circular(YRadius.lg),
+              border:
+                  Border.all(color: has ? YColor.brand : YColor.hairline),
+            ),
+            child: Text(
+              '₱ ${has ? _customPrice : '0'}',
+              style: YFont.titleLG().copyWith(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                color: has ? YColor.brand : YColor.inkSubtle,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: OtpNumpad(
+            keyWidth: 72,
+            keyHeight: 50,
+            onDigit: (d) => setState(() {
+              if (_customPrice.length >= 7) return;
+              // Drop a leading zero so "0" + "5" → "5".
+              _customPrice =
+                  (_customPrice + d).replaceFirst(RegExp(r'^0+(?=\d)'), '');
+            }),
+            onBackspace: () => setState(() {
+              if (_customPrice.isNotEmpty) {
+                _customPrice =
+                    _customPrice.substring(0, _customPrice.length - 1);
+              }
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _addToCart() {
     final state = context.read<AppState>();
     final addOnSnapshots = <CartAddOn>[];
@@ -573,11 +660,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     }
     // Editing — drop the old line first so this replaces it.
     if (widget.editLine != null) state.cart.remove(widget.editLine!);
+    final trimmedNote = notes.trim();
     state.cart.addCafe(
       widget.item,
       Map.from(selections),
       quantity: quantity,
       addOns: addOnSnapshots,
+      priceOverride: widget.item.openPrice ? Money(_customPriceCents) : null,
+      note: trimmedNote.isEmpty ? null : trimmedNote,
     );
     // Show the toast BEFORE popping — once the modal is gone, this context
     // is deactivated and Overlay.of() can't find the root overlay anymore.
