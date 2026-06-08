@@ -1085,20 +1085,6 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
     super.dispose();
   }
 
-  InputDecoration _dec(String hint, {String? prefix}) => InputDecoration(
-        hintText: hint,
-        prefixText: prefix,
-        filled: true,
-        fillColor: YColor.surface2,
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(YRadius.md),
-          borderSide: BorderSide.none,
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final hasImg =
@@ -1155,22 +1141,31 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
               ),
             ]),
             const SizedBox(height: 16),
-            Text('NAME', style: YFont.caption()),
-            const SizedBox(height: 6),
-            TextField(
-                controller: _name,
-                autofocus: true,
-                onChanged: (_) => setState(() {}),
-                decoration: _dec('Product name')),
+            KeyboardAccessoryField(
+              controller: _name,
+              label: 'Name',
+              accessoryLabel: 'PRODUCT NAME',
+              hint: 'Product name',
+              fillColor: YColor.surface2,
+              borderColor: YColor.hairline,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+              onChanged: (_) => setState(() {}),
+            ),
             const SizedBox(height: 12),
-            Text('PRICE', style: YFont.caption()),
-            const SizedBox(height: 6),
-            TextField(
+            KeyboardAccessoryField(
               controller: _price,
+              label: 'Price (₱)',
+              accessoryLabel: 'PRICE',
+              hint: '0',
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: moneyInputFormatters,
-              decoration: _dec('0.00', prefix: '₱ '),
+              fillColor: YColor.surface2,
+              borderColor: YColor.hairline,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+              onChanged: (_) => setState(() {}),
             ),
           ],
         ),
