@@ -266,7 +266,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
   Widget _detail(BuildContext context, AppState state, ProductType type,
       List<cat.Category> subs) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -295,12 +295,10 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
             ),
             _ghostBtn(Icons.edit_outlined, 'Edit',
                 () => showProductTypeEditor(context, initial: type)),
-            if (!type.isSystem) ...[
-              const SizedBox(width: 8),
-              _ghostBtn(Icons.delete_outline, 'Remove',
-                  () => _removeType(context, state, type),
-                  danger: true),
-            ],
+            const SizedBox(width: 8),
+            _ghostBtn(Icons.delete_outline, 'Remove',
+                () => _removeType(context, state, type),
+                danger: true),
           ]),
           const SizedBox(height: 20),
           const Divider(color: YColor.hairline),
@@ -327,11 +325,16 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
           ]),
           const SizedBox(height: 16),
           if (subs.isEmpty)
-            _emptyCard(
-              icon: Icons.category_outlined,
-              title: 'No categories yet',
-              subtitle:
-                  'Add a category like "Coffee" under Drinks or "Rice Meals" under Foods.',
+            Padding(
+              padding: const EdgeInsets.only(top: 32),
+              child: Center(
+                child: _emptyCard(
+                  icon: Icons.category_outlined,
+                  title: 'No categories yet',
+                  subtitle:
+                      'Add a category like "Coffee" under Drinks or "Rice Meals" under Foods.',
+                ),
+              ),
             )
           else
             Wrap(
@@ -377,18 +380,15 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                   style: YFont.bodyStrong().copyWith(fontSize: 13)),
             ),
             const SizedBox(width: 6),
-            if (cc.isSystem)
-              const Icon(Icons.lock_outline, size: 13, color: YColor.inkSubtle)
-            else
-              GestureDetector(
-                onTap: () => _removeSub(context, state, cc),
-                behavior: HitTestBehavior.opaque,
-                child: const Padding(
-                  padding: EdgeInsets.all(2),
-                  child: Icon(Icons.close_rounded,
-                      size: 15, color: YColor.inkMuted),
-                ),
+            GestureDetector(
+              onTap: () => _removeSub(context, state, cc),
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(Icons.close_rounded,
+                    size: 15, color: YColor.inkMuted),
               ),
+            ),
           ]),
         ),
       ),
@@ -1983,7 +1983,13 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  _typePicker(context),
+                  // Adding from a chosen type (Maintenance rail / Sell) → the
+                  // type is already decided, so just show it. Editing (or no
+                  // preset) → let them pick / move it.
+                  if (widget.initial == null && widget.presetTypeId != null)
+                    _presetTypeRow(context)
+                  else
+                    _typePicker(context),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: _separateSales,
@@ -2047,6 +2053,47 @@ class _CategoryDialogState extends State<_CategoryDialog> {
           ),
         ]),
       ),
+    );
+  }
+
+  /// Read-only Product Type confirmation — shown when adding a category from a
+  /// type that's already chosen (the Maintenance rail or the Sell page), so the
+  /// owner doesn't pick it twice.
+  Widget _presetTypeRow(BuildContext context) {
+    final type = context.read<AppState>().productTypeById(_typeId);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('PRODUCT TYPE',
+            style: YFont.caption().copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: YColor.brandDeep,
+            )),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: YColor.hairline),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: NameIconOrEmoji(
+                  name: type?.name ?? '',
+                  iconName: type?.iconName,
+                  fallbackIcon: Icons.label_outline),
+            ),
+            const SizedBox(width: 8),
+            Text(type?.name ?? 'Selected type',
+                style: YFont.bodyStrong().copyWith(fontSize: 14)),
+          ]),
+        ),
+      ],
     );
   }
 
@@ -2780,33 +2827,7 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    // "Supports modifiers" + "Deducts from inventory" are now
-                    // set per-product (on the Products page) — a product opts
-                    // into modifier groups and toggles "Track inventory" there.
-                    // The type is just a grouping.
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: YColor.brandTint.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(YRadius.md),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline,
-                            size: 16, color: YColor.brandDeep),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Modifiers (Size, Temperature…) and inventory '
-                            'deduction are set per product on the Products '
-                            'page, not on the type.',
-                            style: YFont.caption()
-                                .copyWith(color: YColor.brandDeep),
-                          ),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     SwitchListTile(
                       value: _separateSales,
                       onChanged: (v) => setState(() => _separateSales = v),
