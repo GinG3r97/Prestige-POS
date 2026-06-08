@@ -148,6 +148,9 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
         : state.categoriesForType(_typeId);
 
     return Row(
+      // Top-align both panes so the detail header sits up with the rail
+      // instead of being vertically centred (which read as a big gap above it).
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Left nav rail: Product Types + the selected type's Sub-types ──
         Container(
@@ -157,7 +160,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
             border: Border(right: BorderSide(color: YColor.hairline)),
           ),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 16, 12, 28),
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 28),
             children: [
               _railHeader('PRODUCT TYPES',
                   () => showProductTypeEditor(context)),
@@ -1983,10 +1986,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  // Adding from a chosen type (Maintenance rail / Sell) → the
-                  // type is already decided, so just show it. Editing (or no
-                  // preset) → let them pick / move it.
-                  if (widget.initial == null && widget.presetTypeId != null)
+                  // The product type is already known — from the type you were
+                  // in when adding, or the category's existing type when
+                  // editing — so just show it. The picker only appears for the
+                  // rare untyped ("Other") case so you can still assign one.
+                  if (_typeId != null)
                     _presetTypeRow(context)
                   else
                     _typePicker(context),
