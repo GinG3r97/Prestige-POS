@@ -36,14 +36,14 @@ class MaintenanceView extends StatelessWidget {
             // Header
             Container(
               color: YColor.surface1,
-              padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+              padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Maintenance',
                       style: YFont.titleLG()
                           .copyWith(fontSize: 30, letterSpacing: -0.5)),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 6),
                   TabBar(
                     isScrollable: true,
                     // center the row when it fits the viewport, scroll when
