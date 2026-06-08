@@ -23,6 +23,11 @@ class Category {
   /// can't accidentally trash their starter catalog.
   final bool isSystem;
 
+  /// When true this sub-type is settled as its own line in Reports → Sales
+  /// (e.g. consigned "Books"), instead of merging into "General". Takes
+  /// precedence over the parent type's flag.
+  bool separateSales;
+
   Category({
     required this.id,
     required this.name,
@@ -31,6 +36,7 @@ class Category {
     this.sortOrder = 0,
     this.typeId,
     this.isSystem = false,
+    this.separateSales = false,
   });
 
   factory Category.fromRow(Map<String, dynamic> row) => Category(
@@ -41,6 +47,7 @@ class Category {
         sortOrder: (row['sort_order'] as int?) ?? 0,
         typeId: row['type_id'] as String?,
         isSystem: (row['is_system'] as bool?) ?? false,
+        separateSales: (row['separate_sales'] as bool?) ?? false,
       );
 }
 

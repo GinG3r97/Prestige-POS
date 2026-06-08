@@ -1779,7 +1779,7 @@ Future<void> showProductTypeEditor(BuildContext context,
   PushToast.show(context,
       title: initial == null ? 'Type added' : 'Type updated',
       subtitle: saved.name,
-      leadingIcon: Icons.label_outline);
+      leadingIcon: Icons.check_circle_outline);
 }
 
 /// Opens the Sub-type editor — add when [initial] is null (defaulting its
@@ -1801,6 +1801,7 @@ Future<void> showSubTypeEditor(BuildContext context,
           iconName: saved.iconName,
           sortOrder: saved.sortOrder,
           typeId: saved.typeId,
+          separateSales: saved.separateSales,
         )
       : await state.updateCategory(saved);
   if (!context.mounted) return;
@@ -1814,7 +1815,7 @@ Future<void> showSubTypeEditor(BuildContext context,
   PushToast.show(context,
       title: initial == null ? 'Sub-type added' : 'Sub-type updated',
       subtitle: saved.name,
-      leadingEmoji: saved.emoji.isEmpty ? '🏷' : saved.emoji);
+      leadingIcon: Icons.check_circle_outline);
 }
 
 class _CategoryDialog extends StatefulWidget {
@@ -1834,10 +1835,12 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   String? _iconName;
   String? _typeId;
   late String _emoji;
+  late bool _separateSales;
 
   @override
   void initState() {
     super.initState();
+    _separateSales = widget.initial?.separateSales ?? false;
     _name = TextEditingController(text: widget.initial?.name ?? '');
     // New categories default to the themed Material "label" icon so the
     // picker tile and the resulting card both match the rest of the UI
@@ -1955,6 +1958,20 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                   ),
                   const SizedBox(height: 18),
                   _typePicker(context),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    value: _separateSales,
+                    onChanged: (v) => setState(() => _separateSales = v),
+                    activeThumbColor: YColor.brand,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Separate in Sales reports',
+                        style: YFont.bodyStrong().copyWith(fontSize: 14)),
+                    subtitle: Text(
+                      'Settle this sub-type as its own line in Reports → Sales '
+                      '(e.g. consigned Books). Overrides the type\'s setting.',
+                      style: YFont.caption(),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1985,6 +2002,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                             sortOrder:
                                 int.tryParse(_sortOrder.text) ?? 100,
                             typeId: _typeId,
+                            separateSales: _separateSales,
                           ),
                         )
                     : null,
@@ -2630,6 +2648,7 @@ class _ProductTypeDialog extends StatefulWidget {
 class _ProductTypeDialogState extends State<_ProductTypeDialog> {
   late final TextEditingController _name;
   String? _iconName;
+  late bool _separateSales;
 
   @override
   void initState() {
@@ -2637,6 +2656,7 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
     final t = widget.initial;
     _name = TextEditingController(text: t?.name ?? '');
     _iconName = t?.iconName ?? (t == null ? 'label_outlined' : null);
+    _separateSales = t?.separateSales ?? false;
   }
 
   @override
@@ -2656,6 +2676,7 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
       deductsStock: widget.initial?.deductsStock ?? true,
       isSystem: widget.initial?.isSystem ?? false,
       sortOrder: widget.initial?.sortOrder ?? 1000,
+      separateSales: _separateSales,
     ));
   }
 
@@ -2758,6 +2779,21 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
                           ),
                         ),
                       ]),
+                    ),
+                    const SizedBox(height: 6),
+                    SwitchListTile(
+                      value: _separateSales,
+                      onChanged: (v) => setState(() => _separateSales = v),
+                      activeThumbColor: YColor.brand,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Separate in Sales reports',
+                          style: YFont.bodyStrong().copyWith(fontSize: 14)),
+                      subtitle: Text(
+                        'Settle this type as its own line in Reports → Sales '
+                        '(e.g. consigned goods), instead of merging into '
+                        'General.',
+                        style: YFont.caption(),
+                      ),
                     ),
                   ],
               ),

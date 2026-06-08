@@ -514,6 +514,7 @@ class _ReportsViewState extends State<ReportsView> {
           left: _ByCashierSection(data: data),
           right: _RefundsVoidsSection(data: data),
         ),
+        _SalesGroupsSection(data: data),
       ];
 
   List<Widget> _productSections(_ReportData data) => [
@@ -1862,6 +1863,178 @@ class _ByCashierSection extends StatelessWidget {
 }
 
 // ─────────────────────── Category section ──────────────────────────
+
+/// One settlement line on the Sales lens — a separated Type/Sub-type
+/// (consignment) or the catch-all "General".
+class _SalesGroup {
+  _SalesGroup(this.name, this.cents, this.qty, this.isGeneral);
+  final String name;
+  int cents;
+  int qty;
+  final bool isGeneral;
+}
+
+/// Re-buckets the per-sub-type sales into "sales groups": any Sub-type flagged
+/// `separateSales` is its own line (it wins), else any Sub-type whose parent
+/// Type is flagged rolls into that Type's line, and everything else merges into
+/// "General". Lets a cashier ring up everything while the owner settles
+/// consigned goods (e.g. Books) on their own.
+class _SalesGroupsSection extends StatelessWidget {
+  const _SalesGroupsSection({required this.data});
+  final _ReportData data;
+
+  List<_SalesGroup> _groups(AppState state) {
+    final catByName = {
+      for (final c in state.categories) c.name.trim().toLowerCase(): c,
+    };
+    final typeById = {for (final t in state.productTypes) t.id: t};
+    final groups = <String, _SalesGroup>{};
+    void add(String key, String name, bool isGeneral, int cents, int qty) {
+      final g = groups[key];
+      if (g == null) {
+        groups[key] = _SalesGroup(name, cents, qty, isGeneral);
+      } else {
+        g.cents += cents;
+        g.qty += qty;
+      }
+    }
+
+    for (final r in data.categories) {
+      final c = catByName[r.name.trim().toLowerCase()];
+      final type = c?.typeId == null ? null : typeById[c!.typeId];
+      if (c != null && c.separateSales) {
+        add('sub:${c.id}', c.name, false, r.cents, r.qty);
+      } else if (type != null && type.separateSales) {
+        add('type:${type.id}', type.name, false, r.cents, r.qty);
+      } else {
+        add('__general__', 'General', true, r.cents, r.qty);
+      }
+    }
+    return groups.values.toList()
+      ..sort((a, b) {
+        if (a.isGeneral != b.isGeneral) return a.isGeneral ? 1 : -1;
+        return b.cents.compareTo(a.cents);
+      });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<AppState>();
+    final groups = _groups(state);
+    final hasSeparate = groups.any((g) => !g.isGeneral);
+    final maxCents =
+        groups.fold<int>(1, (m, g) => g.cents > m ? g.cents : m);
+    return _SectionCard(
+      title: 'Sales groups',
+      subtitle: 'Separate settlements (e.g. consigned goods) vs General',
+      onExportCsv: () {
+        final buf = StringBuffer('Sales group,Kind,Items sold,Revenue (PHP)\n');
+        for (final g in groups) {
+          final clean = g.name.replaceAll('"', '""');
+          buf.writeln('"$clean",${g.isGeneral ? 'General' : 'Separate'},'
+              '${g.qty},${(g.cents / 100).toStringAsFixed(2)}');
+        }
+        return buf.toString();
+      },
+      child: !hasSeparate
+          ? _empty('No separate sales groups yet. In Maintenance, turn on '
+              '"Separate in Sales reports" for a Product Type or Sub-type '
+              '(e.g. consigned Books) to settle it on its own line here.')
+          : Column(
+              children: [
+                for (final g in groups)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: g.isGeneral
+                              ? YColor.surface3
+                              : YColor.brandTint.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          g.isGeneral
+                              ? Icons.dashboard_customize_outlined
+                              : Icons.sell_outlined,
+                          size: 16,
+                          color:
+                              g.isGeneral ? YColor.inkMuted : YColor.brandDeep,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Flexible(
+                                child: Text(g.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: YFont.bodyStrong()
+                                        .copyWith(fontSize: 13)),
+                              ),
+                              if (!g.isGeneral) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: YColor.brandTint,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('SEPARATE',
+                                      style: YFont.caption().copyWith(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                        color: YColor.brandDeep,
+                                      )),
+                                ),
+                              ],
+                            ]),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: g.cents / maxCents,
+                                minHeight: 5,
+                                backgroundColor: YColor.surface3,
+                                valueColor: AlwaysStoppedAnimation(
+                                    g.isGeneral
+                                        ? YColor.inkMuted
+                                        : YColor.brand),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 84,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(Money(g.cents).formatted,
+                                style: YFont.bodyStrong()
+                                    .copyWith(fontSize: 13)),
+                            Text('${g.qty} items',
+                                style:
+                                    YFont.caption().copyWith(fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+              ],
+            ),
+    );
+  }
+}
 
 class _ByCategorySection extends StatelessWidget {
   const _ByCategorySection({required this.data});

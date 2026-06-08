@@ -1585,6 +1585,7 @@ class AppState extends ChangeNotifier {
     String? iconName,
     int sortOrder = 0,
     String? typeId,
+    bool separateSales = false,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return 'No store selected.';
@@ -1599,8 +1600,10 @@ class AppState extends ChangeNotifier {
             'icon_name': iconName,
             'sort_order': sortOrder,
             'type_id': typeId,
+            'separate_sales': separateSales,
           })
-          .select('id, name, emoji, icon_name, sort_order, type_id, is_system')
+          .select('id, name, emoji, icon_name, sort_order, type_id, '
+              'is_system, separate_sales')
           .single();
       _categories.add(cat.Category.fromRow(inserted));
       _categories.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -1627,6 +1630,7 @@ class AppState extends ChangeNotifier {
         'icon_name': updated.iconName,
         'sort_order': updated.sortOrder,
         'type_id': updated.typeId,
+        'separate_sales': updated.separateSales,
       }).eq('id', updated.id);
       final i = _categories.indexWhere((c) => c.id == updated.id);
       if (i >= 0) {
@@ -2758,6 +2762,7 @@ class AppState extends ChangeNotifier {
         'deducts_stock': t.deductsStock,
         'is_system': false,
         'sort_order': t.sortOrder,
+        'separate_sales': t.separateSales,
       }).select('*').single();
       _productTypes.add(ProductType.fromRow(row));
       _productTypes.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -2782,6 +2787,7 @@ class AppState extends ChangeNotifier {
         'supports_modifiers': updated.supportsModifiers,
         'deducts_stock': updated.deductsStock,
         'sort_order': updated.sortOrder,
+        'separate_sales': updated.separateSales,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', updated.id);
       final i = _productTypes.indexWhere((t) => t.id == updated.id);

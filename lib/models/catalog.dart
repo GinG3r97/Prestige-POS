@@ -270,6 +270,11 @@ class ProductType {
   final bool isSystem;
   int sortOrder;
 
+  /// When true, sales of products in this type are settled as their own line
+  /// in Reports → Sales instead of merging into "General". A sub-type with its
+  /// own [Category.separateSales] flag overrides this for that sub-type.
+  bool separateSales;
+
   ProductType({
     required this.id,
     required this.name,
@@ -278,6 +283,7 @@ class ProductType {
     this.deductsStock = true,
     this.isSystem = false,
     this.sortOrder = 0,
+    this.separateSales = false,
   });
 
   factory ProductType.fromRow(Map<String, dynamic> row) => ProductType(
@@ -288,6 +294,7 @@ class ProductType {
         deductsStock: (row['deducts_stock'] as bool?) ?? true,
         isSystem: (row['is_system'] as bool?) ?? false,
         sortOrder: (row['sort_order'] as int?) ?? 0,
+        separateSales: (row['separate_sales'] as bool?) ?? false,
       );
 }
 
