@@ -1938,7 +1938,7 @@ class _SalesGroupsSection extends StatelessWidget {
       },
       child: !hasSeparate
           ? _empty('No separate sales groups yet. In Maintenance, turn on '
-              '"Separate in Sales reports" for a Product Type or Sub-type '
+              '"Separate in Sales reports" for a Product Type or Category '
               '(e.g. consigned Books) to settle it on its own line here.')
           : Column(
               children: [

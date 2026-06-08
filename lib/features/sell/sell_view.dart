@@ -449,7 +449,7 @@ class _SellViewState extends State<SellView> {
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
               child: _addBox(
                   onTap: _addSubType,
-                  label: 'Sub-type',
+                  label: 'Category',
                   height: 44,
                   axis: Axis.horizontal),
             ),

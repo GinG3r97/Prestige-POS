@@ -288,7 +288,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                       style: YFont.titleMD().copyWith(fontSize: 22)),
                   const SizedBox(height: 2),
                   Text(
-                      '${subs.length} sub-type${subs.length == 1 ? '' : 's'}',
+                      '${subs.length} categor${subs.length == 1 ? 'y' : 'ies'}',
                       style: YFont.caption()),
                 ],
               ),
@@ -306,14 +306,14 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
           const Divider(color: YColor.hairline),
           const SizedBox(height: 16),
           Row(children: [
-            Text('Sub-types in ${type.name}',
+            Text('Categories in ${type.name}',
                 style: YFont.titleMD().copyWith(fontSize: 16)),
             const Spacer(),
             ElevatedButton.icon(
               onPressed: () =>
                   showSubTypeEditor(context, presetTypeId: type.id),
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add sub-type'),
+              label: const Text('Add category'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: YColor.brand,
                 foregroundColor: Colors.white,
@@ -329,9 +329,9 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
           if (subs.isEmpty)
             _emptyCard(
               icon: Icons.category_outlined,
-              title: 'No sub-types yet',
+              title: 'No categories yet',
               subtitle:
-                  'Add a sub-type like "Coffee" under Drinks or "Rice Meals" under Foods.',
+                  'Add a category like "Coffee" under Drinks or "Rice Meals" under Foods.',
             )
           else
             LayoutBuilder(builder: (ctx, c) {
@@ -409,7 +409,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
     final ok = await showConfirm(context,
         title: 'Remove ${c.name}?',
         message:
-            'Products in this sub-type keep their Product Type but lose this grouping.',
+            'Products in this category keep their Product Type but lose this grouping.',
         confirmLabel: 'Remove',
         danger: true,
         icon: Icons.delete_outline);
@@ -417,7 +417,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
     final err = await state.removeCategory(c.id);
     if (!context.mounted) return;
     PushToast.show(context,
-        title: err == null ? 'Sub-type removed' : 'Could not remove',
+        title: err == null ? 'Category removed' : 'Could not remove',
         subtitle: err ?? c.name,
         leadingIcon:
             err == null ? Icons.delete_outline : Icons.error_outline);
@@ -1813,7 +1813,7 @@ Future<void> showSubTypeEditor(BuildContext context,
     return;
   }
   PushToast.show(context,
-      title: initial == null ? 'Sub-type added' : 'Sub-type updated',
+      title: initial == null ? 'Category added' : 'Category updated',
       subtitle: saved.name,
       leadingIcon: Icons.check_circle_outline);
 }
@@ -1881,8 +1881,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
             child: Row(children: [
               Text(
                 widget.initial == null
-                    ? 'Add sub-type'
-                    : 'Edit sub-type',
+                    ? 'Add category'
+                    : 'Edit category',
                 style: YFont.titleLG().copyWith(fontSize: 22),
               ),
               const Spacer(),
@@ -1967,7 +1967,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                     title: Text('Separate in Sales reports',
                         style: YFont.bodyStrong().copyWith(fontSize: 14)),
                     subtitle: Text(
-                      'Settle this sub-type as its own line in Reports → Sales '
+                      'Settle this category as its own line in Reports → Sales '
                       '(e.g. consigned Books). Overrides the type\'s setting.',
                       style: YFont.caption(),
                     ),
@@ -2041,7 +2041,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
             )),
         const SizedBox(height: 4),
         Text(
-          'The top-level group this sub-type sits under on the Sell page. '
+          'The top-level group this category sits under on the Sell page. '
           'Optional — leave it off to keep it under "Other".',
           style: YFont.caption().copyWith(color: YColor.inkMuted),
         ),
