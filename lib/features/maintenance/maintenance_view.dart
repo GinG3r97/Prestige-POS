@@ -334,37 +334,63 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                   'Add a category like "Coffee" under Drinks or "Rice Meals" under Foods.',
             )
           else
-            LayoutBuilder(builder: (ctx, c) {
-              final cols = c.maxWidth > 760
-                  ? 3
-                  : c.maxWidth > 500
-                      ? 2
-                      : 1;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: subs.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 1.9,
-                ),
-                itemBuilder: (_, i) {
-                  final cc = subs[i];
-                  return _MaintGridTile(
-                    icon:
-                        NameIconOrEmoji(name: cc.name, iconName: cc.iconName),
-                    label: cc.name,
-                    subtitle: type.name,
-                    badge: cc.isSystem ? 'BUILT-IN' : null,
-                    onTap: () => showSubTypeEditor(context, initial: cc),
-                    onRemove: () => _removeSub(context, state, cc),
-                  );
-                },
-              );
-            }),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final cc in subs) _categoryChip(context, state, cc),
+              ],
+            ),
         ],
+      ),
+    );
+  }
+
+  /// Compact category chip — icon + name, tap to edit, × to remove (a lock for
+  /// built-in ones). Same compact footprint as the Product Type rail tiles so
+  /// the right pane shows many at a glance instead of a few big cards.
+  Widget _categoryChip(BuildContext context, AppState state, cat.Category cc) {
+    return Material(
+      color: YColor.surface1,
+      borderRadius: BorderRadius.circular(YRadius.md),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(YRadius.md),
+        onTap: () => showSubTypeEditor(context, initial: cc),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: YColor.hairline),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: NameIconOrEmoji(name: cc.name, iconName: cc.iconName),
+            ),
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: Text(cc.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(fontSize: 13)),
+            ),
+            const SizedBox(width: 6),
+            if (cc.isSystem)
+              const Icon(Icons.lock_outline, size: 13, color: YColor.inkSubtle)
+            else
+              GestureDetector(
+                onTap: () => _removeSub(context, state, cc),
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Icon(Icons.close_rounded,
+                      size: 15, color: YColor.inkMuted),
+                ),
+              ),
+          ]),
+        ),
       ),
     );
   }
