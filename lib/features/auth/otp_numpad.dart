@@ -70,6 +70,7 @@ class OtpNumpad extends StatelessWidget {
     this.enabled = true,
     this.keyWidth = 78,
     this.keyHeight = 56,
+    this.decimalKey = false,
   });
 
   final void Function(String digit) onDigit;
@@ -77,6 +78,10 @@ class OtpNumpad extends StatelessWidget {
   final bool enabled;
   final double keyWidth;
   final double keyHeight;
+
+  /// When true the empty bottom-left slot becomes a "." key (calls [onDigit]
+  /// with '.') — used for money entry.
+  final bool decimalKey;
 
   Widget _key(String label, {bool backspace = false}) {
     return Padding(
@@ -128,7 +133,9 @@ class OtpNumpad extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(width: keyWidth + 10), // empty bottom-left slot
+            decimalKey
+                ? _key('.')
+                : SizedBox(width: keyWidth + 10), // empty bottom-left slot
             _key('0'),
             _key('', backspace: true),
           ],

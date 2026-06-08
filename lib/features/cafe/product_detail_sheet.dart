@@ -32,9 +32,16 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   String notes = '';
   final TextEditingController _notesC = TextEditingController();
 
-  /// Raw whole-peso digits typed on the numpad for a Custom-price product.
+  /// Amount string (pesos, optional ".cc") typed on the numpad for a
+  /// Custom-price product.
   String _customPrice = '';
-  int get _customPriceCents => (int.tryParse(_customPrice) ?? 0) * 100;
+  int get _customPriceCents =>
+      ((double.tryParse(_customPrice) ?? 0) * 100).round();
+
+  /// Format cents as a clean amount string for the numpad ("120" or "120.50").
+  static String _fmtCents(int cents) => cents % 100 == 0
+      ? (cents ~/ 100).toString()
+      : (cents / 100).toStringAsFixed(2);
 
   @override
   void initState() {
@@ -55,14 +62,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       notes = edit.note ?? '';
       _notesC.text = notes;
       if (edit.priceOverride != null) {
-        _customPrice = (edit.priceOverride!.centavos ~/ 100).toString();
+        _customPrice = _fmtCents(edit.priceOverride!.centavos);
       }
     }
     // New custom-price line — seed the numpad with the suggested base price.
     if (widget.item.openPrice &&
         _customPrice.isEmpty &&
         widget.item.basePrice.centavos > 0) {
-      _customPrice = (widget.item.basePrice.centavos ~/ 100).toString();
+      _customPrice = _fmtCents(widget.item.basePrice.centavos);
     }
   }
 
@@ -630,11 +637,19 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           child: OtpNumpad(
             keyWidth: 72,
             keyHeight: 50,
+            decimalKey: true,
             onDigit: (d) => setState(() {
-              if (_customPrice.length >= 7) return;
-              // Drop a leading zero so "0" + "5" → "5".
-              _customPrice =
-                  (_customPrice + d).replaceFirst(RegExp(r'^0+(?=\d)'), '');
+              if (d == '.') {
+                if (_customPrice.contains('.')) return;
+                _customPrice = _customPrice.isEmpty ? '0.' : '$_customPrice.';
+                return;
+              }
+              if (_customPrice.length >= 9) return;
+              final dot = _customPrice.indexOf('.');
+              // Cap to 2 decimal places.
+              if (dot >= 0 && _customPrice.length - dot - 1 >= 2) return;
+              // Replace a lone leading zero so "0" + "5" → "5".
+              _customPrice = _customPrice == '0' ? d : _customPrice + d;
             }),
             onBackspace: () => setState(() {
               if (_customPrice.isNotEmpty) {
