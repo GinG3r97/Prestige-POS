@@ -2953,7 +2953,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final item = widget.inventory
         .where((i) => i.id == line.inventoryItemId)
         .firstOrNull;
-    final unit = item?.displayUnit ?? '';
+    // Full unit name (e.g. "Grams"), or a custom override.
+    final unit = item == null
+        ? ''
+        : ((item.unitLabel?.trim().isNotEmpty ?? false)
+            ? item.unitLabel!.trim()
+            : item.unit.label.split(' (').first);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
@@ -2994,31 +2999,41 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               ),
             ),
             const SizedBox(width: 8),
-            // Quantity with the unit shown inside the input.
+            // Quantity with the unit shown inside the input. Disabled until an
+            // ingredient is picked (no unit to measure against yet).
             SizedBox(
-              width: 128,
-              child: KeyboardAccessoryField(
-                controller: _qtyCtrl(line),
-                accessoryLabel: 'QUANTITY',
-                hint: '0',
-                keyboardType: TextInputType.number,
-                fillColor: YColor.surface2,
-                borderColor: YColor.hairline,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 12),
-                suffix: unit.isEmpty
-                    ? null
-                    : Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(unit,
-                            style: YFont.bodyStrong().copyWith(
-                                color: YColor.inkMuted, fontSize: 13)),
-                      ),
-                onChanged: (v) {
-                  line.quantity = double.tryParse(v) ?? 0;
-                  setState(() {});
-                },
+              width: 158,
+              child: IgnorePointer(
+                ignoring: item == null,
+                child: Opacity(
+                  opacity: item == null ? 0.4 : 1,
+                  child: KeyboardAccessoryField(
+                    controller: _qtyCtrl(line),
+                    accessoryLabel: 'QUANTITY',
+                    hint: '0',
+                    keyboardType: TextInputType.number,
+                    fillColor: YColor.surface2,
+                    borderColor: YColor.hairline,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 12),
+                    suffix: unit.isEmpty
+                        ? null
+                        : Center(
+                            widthFactor: 1.0,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 4, right: 10),
+                              child: Text(unit,
+                                  style: YFont.bodyStrong().copyWith(
+                                      color: YColor.inkMuted, fontSize: 12.5)),
+                            ),
+                          ),
+                    onChanged: (v) {
+                      line.quantity = double.tryParse(v) ?? 0;
+                      setState(() {});
+                    },
+                  ),
+                ),
               ),
             ),
           ]),
