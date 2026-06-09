@@ -22,6 +22,7 @@ import '../../models/money.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
+import 'ingredient_search_field.dart';
 
 class ProductsView extends StatefulWidget {
   const ProductsView({super.key});
@@ -1264,6 +1265,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   bool _saving = false;
   late List<RecipeLine> _recipe;
   late List<ModifierAdjustment> _adjustments;
+
+  /// Recipe lines that actually have an ingredient picked.
+  List<RecipeLine> get _cleanRecipe =>
+      _recipe.where((l) => l.inventoryItemId.isNotEmpty).toList();
   late List<ModifierGroup> _modifierGroups;
   /// FK ids of master modifier groups this product opts into. Source of
   /// truth on save; [_modifierGroups] is derived from these for the
@@ -1515,9 +1520,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       modifierAdjustments: _adjustments,
       available: _available,
       openPrice: _openPrice,
-      // No recipe → nothing to deduct, so tracking is forced off.
-      trackInventory: _recipe.isNotEmpty && _trackInventory,
-      recipe: _recipe,
+      // No recipe → nothing to deduct, so tracking is forced off. Drop any
+      // half-added lines that never got an ingredient picked.
+      trackInventory: _cleanRecipe.isNotEmpty && _trackInventory,
+      recipe: _cleanRecipe,
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
     if (!mounted) return;
@@ -2548,10 +2554,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           const SizedBox(height: 6),
           OutlinedButton.icon(
             onPressed: () => setState(() {
-              _recipe.add(RecipeLine(
-                inventoryItemId: widget.inventory.first.id,
-                quantity: 1,
-              ));
+              // Empty line — shows "Click to add ingredient" until one is
+              // picked via the search.
+              _recipe.add(RecipeLine(inventoryItemId: '', quantity: 1));
             }),
             icon: const Icon(Icons.add, size: 14),
             label: const Text('Add ingredient'),
@@ -2949,146 +2954,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
   /// Searchable ingredient picker — a bottom sheet listing inventory items
   /// (icon · name · stock) with a live search box.
-  Future<void> _pickIngredient(RecipeLine line) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    final searchCtrl = TextEditingController();
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: YColor.surface1,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          final q = searchCtrl.text.trim().toLowerCase();
-          final items = widget.inventory.where((it) {
-            return q.isEmpty ||
-                it.name.toLowerCase().contains(q) ||
-                it.category.toLowerCase().contains(q);
-          }).toList();
-          return Padding(
-            padding:
-                EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-            child: SizedBox(
-              height: MediaQuery.of(ctx).size.height * 0.62,
-              child: Column(children: [
-                const SizedBox(height: 10),
-                Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: YColor.hairline,
-                        borderRadius: BorderRadius.circular(2))),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                  child: Row(children: [
-                    const Icon(Icons.science_outlined,
-                        size: 18, color: YColor.brandDeep),
-                    const SizedBox(width: 10),
-                    Text('Pick ingredient',
-                        style: YFont.titleMD().copyWith(fontSize: 17)),
-                  ]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: TextField(
-                    controller: searchCtrl,
-                    autofocus: true,
-                    onChanged: (_) => setSheet(() {}),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      hintText: 'Search ingredients…',
-                      hintStyle:
-                          YFont.body().copyWith(color: YColor.inkSubtle),
-                      filled: true,
-                      fillColor: YColor.surface2,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                Container(height: 0.5, color: YColor.hairline),
-                Expanded(
-                  child: items.isEmpty
-                      ? Center(
-                          child: Text('No ingredients match.',
-                              style: YFont.caption()))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          itemCount: items.length,
-                          itemBuilder: (_, i) {
-                            final it = items[i];
-                            final selected = it.id == line.inventoryItemId;
-                            return InkWell(
-                              onTap: () => Navigator.pop(ctx, it.id),
-                              child: Container(
-                                color: selected
-                                    ? YColor.brandTint.withValues(alpha: 0.4)
-                                    : null,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
-                                child: Row(children: [
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                        color: YColor.brandTint
-                                            .withValues(alpha: 0.5),
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                    child: Icon(
-                                        materialIconForName(it.name) ??
-                                            Icons.inventory_2_outlined,
-                                        size: 18,
-                                        color: YColor.brandDeep),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(it.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: YFont.bodyStrong()
-                                                .copyWith(fontSize: 14)),
-                                        Text(
-                                            '${it.category} · ${it.currentStock.toStringAsFixed(0)} ${it.displayUnit} in stock',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: YFont.caption()),
-                                      ],
-                                    ),
-                                  ),
-                                  if (selected)
-                                    const Icon(Icons.check_circle,
-                                        size: 18, color: YColor.brand),
-                                ]),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ]),
-            ),
-          );
-        },
-      ),
-    );
-    searchCtrl.dispose();
-    if (!mounted) return;
-    if (picked != null) setState(() => line.inventoryItemId = picked);
-  }
-
   Widget _recipeLine(int index) {
     final line = _recipe[index];
     final item = widget.inventory
@@ -3107,41 +2972,14 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Tappable ingredient picker (opens a searchable sheet)
+            // Sell-style search picker (glass card above the keyboard).
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _pickIngredient(line),
-                child: Row(children: [
-                  Container(
-                    width: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: YColor.brandTint.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                        materialIconForName(item?.name ?? '') ??
-                            Icons.inventory_2_outlined,
-                        size: 18,
-                        color: YColor.brandDeep),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      item?.name ?? 'Select ingredient',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: YFont.bodyStrong().copyWith(
-                          fontSize: 13.5,
-                          color: item == null
-                              ? YColor.inkSubtle
-                              : YColor.ink),
-                    ),
-                  ),
-                  const Icon(Icons.unfold_more,
-                      size: 16, color: YColor.inkSubtle),
-                ]),
+              child: IngredientSearchField(
+                items: widget.inventory,
+                selectedId:
+                    line.inventoryItemId.isEmpty ? null : line.inventoryItemId,
+                onSelect: (id) =>
+                    setState(() => line.inventoryItemId = id),
               ),
             ),
             const SizedBox(width: 6),
