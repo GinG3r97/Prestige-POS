@@ -244,36 +244,13 @@ class _ProductsViewState extends State<ProductsView> {
           Expanded(
             child: selected == null
                 ? _empty()
-                : _ProductDetailPane(
-                    product: selected,
+                // Inline, tabbed, editable details — saves in place via Update.
+                : ProductFormDialog(
+                    key: ValueKey(selected.id),
+                    initial: selected,
                     inventory: state.inventory,
-                    onEdit: () => _openForm(context, state, selected),
-                    onToggleAvailability: () async {
-                      selected.available = !selected.available;
-                      final err = await state.updateProduct(selected);
-                      if (!mounted) return;
-                      if (err != null) {
-                        // Roll back the local optimistic toggle.
-                        selected.available = !selected.available;
-                        PushToast.show(context,
-                            title: 'Could not update',
-                            subtitle: err,
-                            leadingIcon: Icons.error_outline);
-                      }
-                    },
-                    onToggleTracking: () async {
-                      final err = await state.setProductTrackInventory(
-                          selected, !selected.trackInventory);
-                      if (!mounted) return;
-                      if (err != null) {
-                        PushToast.show(context,
-                            title: 'Could not update',
-                            subtitle: err,
-                            leadingIcon: Icons.error_outline);
-                      }
-                    },
-                    onRemove: () =>
-                        _confirmRemove(context, state, selected),
+                    embedded: true,
+                    onRemove: () => _confirmRemove(context, state, selected),
                   ),
           ),
               ],
@@ -1226,12 +1203,21 @@ class ProductFormDialog extends StatefulWidget {
     required this.inventory,
     this.presetTypeId,
     this.presetCategoryId,
+    this.embedded = false,
+    this.onRemove,
   });
   final CafeItem? initial;
   final List<InventoryItem> inventory;
   /// For a NEW product, pre-select these (used by Sell "arrange mode" + box).
   final String? presetTypeId;
   final String? presetCategoryId;
+
+  /// When true, renders inline (no Dialog chrome) as a tabbed, editable details
+  /// pane that saves in place with an Update button — used on the Products page.
+  final bool embedded;
+
+  /// Embedded mode only — invoked by the Remove button in the pane header.
+  final VoidCallback? onRemove;
 
   @override
   State<ProductFormDialog> createState() => _ProductFormDialogState();
@@ -1523,36 +1509,41 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
     if (!mounted) return;
-    Navigator.of(context).pop(saved);
+    // Inline editor saves in place; the dialog returns the item to its caller.
+    if (widget.embedded) {
+      final err = await context.read<AppState>().updateProduct(saved);
+      if (!mounted) return;
+      setState(() => _saving = false);
+      PushToast.show(context,
+          title: err == null ? 'Product updated' : 'Could not save',
+          subtitle: err ?? saved.name,
+          leadingIcon: err == null
+              ? Icons.check_circle_outline
+              : Icons.error_outline);
+    } else {
+      Navigator.of(context).pop(saved);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    return Dialog(
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
-      backgroundColor: YColor.surface1,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: size.width - 200,
-        height: size.height - 120,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 18, 16, 14),
-            child: Row(children: [
-              Text(
-                widget.initial == null ? 'Add Product' : 'Edit Product',
-                style: YFont.titleLG().copyWith(fontSize: 22),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ]),
-          ),
+    final body = Column(children: [
+          widget.embedded
+              ? _compactHeader(context)
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 18, 16, 14),
+                  child: Row(children: [
+                    Text(
+                      widget.initial == null ? 'Add Product' : 'Edit Product',
+                      style: YFont.titleLG().copyWith(fontSize: 22),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ]),
+                ),
           Container(height: 0.5, color: YColor.hairline),
           _stepBar(),
           Expanded(
@@ -1659,36 +1650,54 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ),
           ),
           Container(height: 0.5, color: YColor.hairline),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(children: [
-              if (_step > 0)
-                TextButton.icon(
-                  onPressed: () => setState(() => _step--),
-                  icon: const Icon(Icons.arrow_back, size: 16),
-                  label: const Text('Back'),
+          widget.embedded
+              ? _embeddedFooter(context)
+              : Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(children: [
+                    if (_step > 0)
+                      TextButton.icon(
+                        onPressed: () => setState(() => _step--),
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Back'),
+                      ),
+                    const Spacer(),
+                    if (_step < 3)
+                      ElevatedButton(
+                        // Can't leave Basics until the required fields are set.
+                        onPressed: (_step == 0 && !_basicsValid)
+                            ? null
+                            : () => setState(() => _step++),
+                        style: _primaryBtnStyle(),
+                        child: const Text('Next'),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: _canSave ? _save : null,
+                        style: _primaryBtnStyle(),
+                        child: Text(widget.initial == null
+                            ? 'Create product'
+                            : 'Save changes'),
+                      ),
+                  ]),
                 ),
-              const Spacer(),
-              if (_step < 3)
-                ElevatedButton(
-                  // Can't leave Basics until name/price/type/category are set.
-                  onPressed: (_step == 0 && !_basicsValid)
-                      ? null
-                      : () => setState(() => _step++),
-                  style: _primaryBtnStyle(),
-                  child: const Text('Next'),
-                )
-              else
-                ElevatedButton(
-                  onPressed: _canSave ? _save : null,
-                  style: _primaryBtnStyle(),
-                  child: Text(widget.initial == null
-                      ? 'Create product'
-                      : 'Save changes'),
-                ),
-            ]),
-          ),
-        ]),
+        ]);
+    if (widget.embedded) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(color: YColor.surface1),
+        child: body,
+      );
+    }
+    final size = MediaQuery.sizeOf(context);
+    return Dialog(
+      insetPadding:
+          const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
+      backgroundColor: YColor.surface1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: size.width - 200,
+        height: size.height - 120,
+        child: body,
       ),
     );
   }
@@ -1701,6 +1710,103 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(YRadius.md)),
       );
+
+  /// Compact live-preview header for the inline (embedded) editor — icon
+  /// (category) · name · price · category · Available toggle.
+  Widget _compactHeader(BuildContext context) {
+    final priceN = double.tryParse(_price.text.trim()) ?? 0;
+    final c = context
+        .read<AppState>()
+        .categories
+        .where((x) => x.id == _categoryId)
+        .firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
+      child: Row(children: [
+        Container(
+          width: 52,
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: NameIconOrEmoji(
+              name: c?.name ?? _name.text, iconName: c?.iconName, iconSize: 26),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                  _name.text.trim().isEmpty
+                      ? 'Unnamed product'
+                      : _name.text.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.titleMD().copyWith(fontSize: 18)),
+              const SizedBox(height: 3),
+              Row(children: [
+                Text(
+                    _openPrice ? 'Custom price' : '₱${priceN.toStringAsFixed(0)}',
+                    style: YFont.bodyStrong()
+                        .copyWith(color: YColor.brandDeep, fontSize: 13)),
+                if (c != null) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text('· ${c.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: YFont.caption()),
+                  ),
+                ],
+              ]),
+            ],
+          ),
+        ),
+        Text(_available ? 'Available' : 'Hidden',
+            style: YFont.caption().copyWith(
+                color: _available ? YColor.brand : YColor.inkMuted)),
+        Switch(
+          value: _available,
+          onChanged: (v) => setState(() => _available = v),
+          activeThumbColor: YColor.brand,
+        ),
+      ]),
+    );
+  }
+
+  Widget _embeddedFooter(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        if (widget.onRemove != null)
+          OutlinedButton.icon(
+            onPressed: widget.onRemove,
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: YColor.danger),
+            label: const Text('Remove',
+                style: TextStyle(color: YColor.danger)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: YColor.danger.withValues(alpha: 0.4)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
+            ),
+          ),
+        const Spacer(),
+        ElevatedButton.icon(
+          onPressed: _canSave ? _save : null,
+          icon: const Icon(Icons.check_circle, size: 18),
+          label: const Text('Update'),
+          style: _primaryBtnStyle(),
+        ),
+      ]),
+    );
+  }
 
   /// Tappable progress header — jump to any step.
   Widget _stepBar() {
