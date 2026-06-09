@@ -6,27 +6,21 @@ import '../../design_system/colors.dart';
 import '../../design_system/responsive_scaler.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
-import '../../models/employee.dart';
 
 /// Staff-page search — the same technique as the Sell page's [SellSearchField].
 /// A small square button; when tapped it pops a glass card above the keyboard
-/// with the live, editable query plus up to [_kMaxInline] matching employees
-/// ABOVE the input. Tapping a match selects that employee; "Show all" applies
-/// the query to the list; the backdrop / × cancels.
+/// with the live, editable query. Submitting / "Done" applies the query to the
+/// staff list; the backdrop / × cancels. (No results inside the card.)
 class EmployeeSearchField extends StatefulWidget {
   const EmployeeSearchField({
     super.key,
     required this.controller,
-    required this.employees,
-    required this.onSelect,
     required this.onShowMore,
     required this.onClear,
     this.activeQuery = '',
   });
 
   final TextEditingController controller;
-  final List<Employee> employees;
-  final ValueChanged<Employee> onSelect;
   final ValueChanged<String> onShowMore;
   final VoidCallback onClear;
   final String activeQuery;
@@ -40,8 +34,6 @@ class _EmployeeSearchFieldState extends State<EmployeeSearchField>
   final FocusNode _cardFocus = FocusNode();
   late final AnimationController _anim;
   OverlayEntry? _entry;
-
-  static const int _kMaxInline = 3;
 
   @override
   void initState() {
@@ -101,24 +93,6 @@ class _EmployeeSearchFieldState extends State<EmployeeSearchField>
   }
 
   void _dismiss() => _cardFocus.unfocus();
-
-  List<Employee> _matches(String q) {
-    final s = q.trim().toLowerCase();
-    if (s.isEmpty) return const [];
-    return widget.employees
-        .where((e) =>
-            e.name.toLowerCase().contains(s) ||
-            e.role.toLowerCase().contains(s))
-        .toList();
-  }
-
-  void _selectEmployee(Employee e) {
-    FocusManager.instance.primaryFocus?.unfocus();
-    _dismiss();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onSelect(e);
-    });
-  }
 
   void _showMore(String q) {
     _dismiss();
@@ -207,174 +181,69 @@ class _EmployeeSearchFieldState extends State<EmployeeSearchField>
                 ),
               ],
             ),
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: widget.controller,
-              builder: (_, value, __) {
-                final q = value.text;
-                final matches = _matches(q);
-                final inline = matches.take(_kMaxInline).toList();
-                final more = matches.length - inline.length;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (q.trim().isEmpty)
-                      _hintRow('Type to search your team')
-                    else if (matches.isEmpty)
-                      _hintRow('No staff match "${q.trim()}"')
-                    else ...[
-                      for (final e in inline) _resultRow(e),
-                      if (more > 0) _showAllButton(matches.length, q),
-                    ],
-                    const SizedBox(height: 8),
-                    Container(
-                        height: 1,
-                        color: YColor.hairline.withValues(alpha: 0.6)),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      const Icon(Icons.search,
-                          size: 22, color: YColor.brandDeep),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: widget.controller,
-                          focusNode: _cardFocus,
-                          autofocus: false,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          textInputAction: TextInputAction.search,
-                          cursorColor: YColor.brand,
-                          onSubmitted: (v) {
-                            final m = _matches(v);
-                            if (m.length == 1) {
-                              _selectEmployee(m.first);
-                            } else if (m.isNotEmpty) {
-                              _showMore(v);
-                            } else {
-                              _cancel();
-                            }
-                          },
-                          style: YFont.titleMD().copyWith(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: YColor.brand,
-                          ),
-                          decoration: InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            hintText: 'Search staff',
-                            hintStyle: YFont.titleMD().copyWith(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: YColor.inkSubtle,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          final qq = widget.controller.text.trim();
-                          if (qq.isEmpty) {
-                            _cancel();
-                          } else {
-                            _showMore(qq);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: YColor.brand,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            'Done',
-                            style: YFont.bodyStrong()
-                                .copyWith(color: Colors.white, fontSize: 13),
-                          ),
-                        ),
-                      ),
-                    ]),
-                  ],
-                );
-              },
-            ),
+            child: Row(children: [
+              const Icon(Icons.search, size: 22, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  focusNode: _cardFocus,
+                  autofocus: false,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textInputAction: TextInputAction.search,
+                  cursorColor: YColor.brand,
+                  onSubmitted: (v) {
+                    final qq = v.trim();
+                    if (qq.isEmpty) {
+                      _cancel();
+                    } else {
+                      _showMore(qq);
+                    }
+                  },
+                  style: YFont.titleMD().copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: YColor.brand,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: 'Search staff',
+                    hintStyle: YFont.titleMD().copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: YColor.inkSubtle,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  final qq = widget.controller.text.trim();
+                  if (qq.isEmpty) {
+                    _cancel();
+                  } else {
+                    _showMore(qq);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: YColor.brand,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'Done',
+                    style: YFont.bodyStrong()
+                        .copyWith(color: Colors.white, fontSize: 13),
+                  ),
+                ),
+              ),
+            ]),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _hintRow(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-      child: Text(text, style: YFont.body().copyWith(color: YColor.inkMuted)),
-    );
-  }
-
-  Widget _resultRow(Employee e) {
-    final initials = e.name.trim().isEmpty
-        ? '?'
-        : e.name
-            .trim()
-            .split(RegExp(r'\s+'))
-            .take(2)
-            .map((w) => w[0].toUpperCase())
-            .join();
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => _selectEmployee(e),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
-        child: Row(children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: YColor.brandTint,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(initials,
-                style: YFont.bodyStrong()
-                    .copyWith(fontSize: 13, color: YColor.brandDeep)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(e.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.bodyStrong().copyWith(fontSize: 14)),
-                if (e.role.trim().isNotEmpty)
-                  Text(e.role,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: YFont.caption()),
-              ],
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _showAllButton(int total, String q) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _showMore(q),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          child: Text('Show all $total results  →',
-              style: YFont.bodyStrong()
-                  .copyWith(color: YColor.brandDeep, fontSize: 13)),
         ),
       ),
     );

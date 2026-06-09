@@ -268,9 +268,7 @@ class _ListPane extends StatelessWidget {
                 const SizedBox(width: 10),
                 EmployeeSearchField(
                   controller: searchController,
-                  employees: allEmployees,
                   activeQuery: query,
-                  onSelect: (e) => onSelect(e.id),
                   onShowMore: onSearch,
                   onClear: () => onSearch(''),
                 ),
@@ -485,14 +483,20 @@ class _DetailPaneState extends State<_DetailPane> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _header(e),
-              const SizedBox(height: 24),
-              _profileCard(e),
+              const SizedBox(height: 18),
+              // Profile + Salary side by side.
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _profileCard(e)),
+                  const SizedBox(width: 18),
+                  Expanded(child: _payCard(e)),
+                ],
+              ),
               const SizedBox(height: 18),
               _accessCard(e),
               const SizedBox(height: 18),
               _portalCard(e),
-              const SizedBox(height: 18),
-              _payCard(e),
               const SizedBox(height: 18),
               _scheduleCard(e),
               const SizedBox(height: 18),
@@ -501,8 +505,6 @@ class _DetailPaneState extends State<_DetailPane> {
                 const SizedBox(height: 18),
                 _notesCard(e),
               ],
-              const SizedBox(height: 18),
-              _actions(),
             ],
           ),
         ),
@@ -513,7 +515,7 @@ class _DetailPaneState extends State<_DetailPane> {
   Widget _header(Employee e) {
     final tenure = _tenure(e.hireDate);
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
@@ -528,30 +530,23 @@ class _DetailPaneState extends State<_DetailPane> {
         children: [
           Stack(children: [
             Container(
-              width: 76,
-              height: 76,
+              width: 54,
+              height: 54,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: YColor.brandTint.withValues(alpha: 0.7),
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Icon(e.gender.icon,
-                  size: 44, color: YColor.brandDeep),
+                  size: 30, color: YColor.brandDeep),
             ),
             if (e.status == EmployeeStatus.active)
               Positioned(
                 right: 0,
-                bottom: 4,
+                bottom: 2,
                 child: Container(
-                  width: 14,
-                  height: 14,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
                     color: YColor.success,
                     shape: BoxShape.circle,
@@ -560,17 +555,19 @@ class _DetailPaneState extends State<_DetailPane> {
                 ),
               ),
           ]),
-          const SizedBox(width: 18),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(e.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: YFont.titleLG().copyWith(
-                      fontSize: 26,
-                      letterSpacing: -0.4,
+                      fontSize: 21,
+                      letterSpacing: -0.3,
                     )),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Row(children: [
                   Text(
                     '${e.role} · ${e.employmentType.label}',
@@ -594,6 +591,42 @@ class _DetailPaneState extends State<_DetailPane> {
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          // Update / Remove moved into the header.
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            ElevatedButton.icon(
+              onPressed: widget.onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 15),
+              label: const Text('Update'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: widget.onRemove,
+              icon: const Icon(Icons.delete_outline, size: 15),
+              label: const Text('Remove'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: YColor.danger,
+                side: const BorderSide(color: YColor.hairline),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+          ]),
         ],
       ),
     );
@@ -777,7 +810,7 @@ class _DetailPaneState extends State<_DetailPane> {
     };
     final hasPay = amount > 0;
     return _SectionCard(
-      title: 'Pay & employment',
+      title: 'Salary',
       icon: Icons.payments_outlined,
       children: [
         if (hasPay)
@@ -792,8 +825,11 @@ class _DetailPaneState extends State<_DetailPane> {
                   color: YColor.brandTint,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.attach_money,
-                    color: YColor.brandDeep, size: 20),
+                child: Text('₱',
+                    style: YFont.titleMD().copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: YColor.brandDeep)),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -992,43 +1028,6 @@ class _DetailPaneState extends State<_DetailPane> {
         ],
       );
 
-  Widget _actions() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: widget.onRemove,
-            icon: const Icon(Icons.delete_outline, size: 16),
-            label: const Text('Remove'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: YColor.danger,
-              side: const BorderSide(color: YColor.hairline),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton.icon(
-            onPressed: widget.onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            label: const Text('Edit employee'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: YColor.brand,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   String _formatDate(DateTime d) {
     const months = [

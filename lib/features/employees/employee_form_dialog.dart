@@ -362,7 +362,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                     const SizedBox(height: 18),
                     _lockedPortalSection(),
                     const SizedBox(height: 18),
-                    _section('Pay & employment', [
+                    _section('Salary', [
                       _row(_employmentTypeDropdown(),
                           _compensationDropdown()),
                       const SizedBox(height: 12),
