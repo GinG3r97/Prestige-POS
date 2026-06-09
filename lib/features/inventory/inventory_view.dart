@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
+import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
@@ -75,13 +76,6 @@ class _InventoryViewState extends State<InventoryView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
-            child: Text('Inventory',
-                style: YFont.titleLG()
-                    .copyWith(fontSize: 22, letterSpacing: -0.4)),
-          ),
-          Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -137,7 +131,7 @@ class _InventoryViewState extends State<InventoryView> {
                           for (final c in categories)
                             _railRow(
                                 c, all.where((i) => i.category == c).length,
-                                icon: Icons.folder_outlined,
+                                icon: _iconForCategory(state, c),
                                 selected: _filter == _Filter.all &&
                                     _category == c,
                                 onTap: () => setState(() {
@@ -316,6 +310,20 @@ class _InventoryViewState extends State<InventoryView> {
       }).toList();
     }
     return result;
+  }
+
+  /// The icon for a category rail row — mirrors the category's own icon
+  /// (from inventory_categories), falling back to a name-based guess.
+  IconData _iconForCategory(AppState state, String name) {
+    final lower = name.toLowerCase();
+    for (final ic in state.inventoryCategories) {
+      if (ic.name.toLowerCase() == lower) {
+        return iconFromKey(ic.iconName) ??
+            materialIconForName(name) ??
+            Icons.folder_outlined;
+      }
+    }
+    return materialIconForName(name) ?? Icons.folder_outlined;
   }
 
   /// Left-rail nav row — icon + label + count, brand highlight when selected.
@@ -525,7 +533,7 @@ class _ItemRow extends StatelessWidget {
         child: Opacity(
           opacity: dim ? 0.55 : 1.0,
           child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          padding: const EdgeInsets.fromLTRB(18, 14, 6, 14),
           child: Row(children: [
             // Status dot
             Container(
