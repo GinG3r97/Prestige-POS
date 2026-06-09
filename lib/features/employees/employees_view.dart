@@ -8,6 +8,7 @@ import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/push_toast.dart';
 import 'employee_form_dialog.dart';
 import 'employee_search_field.dart';
@@ -142,27 +143,16 @@ class _EmployeesViewState extends State<EmployeesView> {
 
   Future<void> _confirmRemove(
       BuildContext context, AppState state, Employee e) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${e.name}?'),
-        content: const Text(
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${e.name}?',
+      message:
           'This removes the employee from this store. Sales history is preserved.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.person_remove_outlined,
     );
-    if (ok != true) return;
+    if (!ok) return;
     final err = await state.removeEmployee(e.id);
     if (!mounted) return;
     if (err != null) {
