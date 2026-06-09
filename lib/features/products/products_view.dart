@@ -1445,7 +1445,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   /// (everything required except the subtitle).
   bool get _basicsValid =>
       _name.text.trim().isNotEmpty &&
-      (double.tryParse(_price.text.trim()) ?? 0) > 0 &&
+      // Price required (> 0) unless this is a custom-price product.
+      (_openPrice || (double.tryParse(_price.text.trim()) ?? 0) > 0) &&
       _typeId != null &&
       _categoryId != null;
 
@@ -1609,24 +1610,46 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                           const SizedBox(width: 10),
                           Expanded(
                             flex: 2,
-                            child: KeyboardAccessoryField(
-                              controller: _price,
-                              label: 'Price (₱)',
-                              accessoryLabel: 'PRICE',
-                              hint: '0',
-                              keyboardType: TextInputType.number,
-                              formatPreview: (raw) {
-                                final n = double.tryParse(raw) ?? 0;
-                                return '₱${n.toStringAsFixed(0)}';
-                              },
-                              fillColor: YColor.surface1,
-                              borderColor: YColor.hairline,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              onChanged: (_) => setState(() {}),
-                            ),
+                            child: _openPrice
+                                ? _customPriceSlot()
+                                : KeyboardAccessoryField(
+                                    controller: _price,
+                                    label: 'Price (₱)',
+                                    accessoryLabel: 'PRICE',
+                                    hint: '0',
+                                    keyboardType: TextInputType.number,
+                                    formatPreview: (raw) {
+                                      final n = double.tryParse(raw) ?? 0;
+                                      return '₱${n.toStringAsFixed(0)}';
+                                    },
+                                    fillColor: YColor.surface1,
+                                    borderColor: YColor.hairline,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 12),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      // Custom price — hides the price field; cashier types it
+                      // at checkout (e.g. items sold by the kilo).
+                      GestureDetector(
+                        onTap: () => setState(() => _openPrice = !_openPrice),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(
+                              _openPrice
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              size: 19,
+                              color:
+                                  _openPrice ? YColor.brand : YColor.inkMuted),
+                          const SizedBox(width: 8),
+                          Text(
+                              'Custom price — cashier enters it at checkout (no fixed price)',
+                              style: YFont.caption()),
+                        ]),
                       ),
                       const SizedBox(height: 14),
                       // Product Type · Category — both dropdowns, blank default.
@@ -1910,7 +1933,34 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  /// Step 4 — Options: the three behaviour toggles.
+  /// Price slot shown when "Custom price" is ticked — keeps the row layout but
+  /// makes it clear the cashier sets the price at checkout.
+  Widget _customPriceSlot() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Price (₱)', style: YFont.bodyStrong()),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          decoration: BoxDecoration(
+            color: YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: YColor.hairline),
+          ),
+          child: Row(children: [
+            const Icon(Icons.edit_outlined, size: 15, color: YColor.inkMuted),
+            const SizedBox(width: 6),
+            Text('Custom',
+                style: YFont.body().copyWith(color: YColor.inkMuted)),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  /// Step 4 — Options: the behaviour toggles.
   Widget _optionsSection() {
     return _section('Options', [
       _toggleRow(
@@ -1920,14 +1970,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         subtitle: _available
             ? 'Shows on the Sell menu.'
             : 'Hidden — sold out / off menu.',
-      ),
-      const Divider(height: 1, color: YColor.hairline),
-      _toggleRow(
-        value: _openPrice,
-        onChanged: (v) => setState(() => _openPrice = v),
-        title: 'Custom price',
-        subtitle:
-            'Cashier types the price at checkout (e.g. items sold by the kilo). The base price becomes a suggestion.',
       ),
       const Divider(height: 1, color: YColor.hairline),
       _toggleRow(
