@@ -63,6 +63,11 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// Wizard step (0 = Profile, 1 = Access & pay, 2 = Schedule & docs).
   int _step = 0;
   static const _stepTitles = ['Profile', 'Access & pay', 'Schedule & docs'];
+  final ScrollController _scrollC = ScrollController();
+
+  /// Name of the account already using the typed PIN (null = free).
+  String? _pinDupName;
+  bool _pinChecking = false;
   late EmploymentType _employmentType;
   late CompensationType _compensationType;
   late DateTime _hireDate;
@@ -150,7 +155,41 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     for (final c in _docCtrls.values) {
       c.dispose();
     }
+    _scrollC.dispose();
     super.dispose();
+  }
+
+  /// Change wizard step and snap the content back to the top.
+  void _setStep(int i) {
+    setState(() => _step = i);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollC.hasClients) _scrollC.jumpTo(0);
+    });
+  }
+
+  void _onPinChanged(String v) {
+    setState(() {});
+    final p = v.trim();
+    if (_needsPin && p.length == 4) {
+      _checkPinDup(p);
+    } else if (_pinDupName != null || _pinChecking) {
+      setState(() {
+        _pinDupName = null;
+        _pinChecking = false;
+      });
+    }
+  }
+
+  Future<void> _checkPinDup(String pin) async {
+    setState(() => _pinChecking = true);
+    final name = await context
+        .read<AppState>()
+        .pinConflictName(pin, excludeId: widget.initial?.id);
+    if (!mounted || _pin.text.trim() != pin) return;
+    setState(() {
+      _pinDupName = name;
+      _pinChecking = false;
+    });
   }
 
   /// Apply the matching employment template for [t] — pre-fills compensation
@@ -192,14 +231,19 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     // means "keep current PIN", which is also valid.
     final v = _pin.text.trim();
     if (widget.initial != null && v.isEmpty) return true;
-    return v.length >= 4 && v.length <= 8 && int.tryParse(v) != null;
+    // Exactly 4 digits, and not already used by another account.
+    return v.length == 4 && int.tryParse(v) != null && _pinDupName == null;
   }
 
-  bool get _canSave =>
-      _name.text.trim().isNotEmpty && _roleId != null && _pinValid;
+  bool get _profileValid =>
+      _name.text.trim().isNotEmpty &&
+      _email.text.trim().isNotEmpty &&
+      _phone.text.trim().isNotEmpty;
+
+  bool get _canSave => _profileValid && _roleId != null && _pinValid;
 
   /// Per-step gates for the Next button.
-  bool get _step1Valid => _name.text.trim().isNotEmpty;
+  bool get _step1Valid => _profileValid;
   bool get _step2Valid => _roleId != null && _pinValid;
   bool _stepValid(int i) => switch (i) {
         0 => _step1Valid,
@@ -273,6 +317,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollC,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -292,11 +337,13 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         _field(
                             label: 'Email',
                             controller: _email,
+                            required: true,
                             keyboardType: TextInputType.emailAddress,
                             hint: 'name@example.com'),
                         _field(
                             label: 'Phone',
                             controller: _phone,
+                            required: true,
                             keyboardType: TextInputType.phone,
                             hint: '+63 9XX XXX XXXX'),
                       ),
@@ -343,7 +390,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             child: Row(children: [
               if (_step > 0)
                 TextButton.icon(
-                  onPressed: () => setState(() => _step--),
+                  onPressed: () => _setStep(_step - 1),
                   icon: const Icon(Icons.arrow_back, size: 16),
                   label: const Text('Back'),
                 ),
@@ -351,7 +398,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
               if (_step < _stepTitles.length - 1)
                 ElevatedButton(
                   onPressed: _stepValid(_step)
-                      ? () => setState(() => _step++)
+                      ? () => _setStep(_step + 1)
                       : null,
                   style: _primaryBtnStyle(),
                   child: const Text('Next'),
@@ -399,9 +446,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                 ),
               ),
             GestureDetector(
-              onTap: () => setState(() {
-                if (i <= _step || _stepValid(_step)) _step = i;
-              }),
+              onTap: () {
+                if (i <= _step || _stepValid(_step)) _setStep(i);
+              },
               behavior: HitTestBehavior.opaque,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Container(
@@ -558,11 +605,26 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       label: 'Hire date',
       child: InkWell(
         onTap: () async {
+          // Drop any field focus first — otherwise the picker route restores
+          // focus on close and re-pops the last field's keyboard accessory
+          // (the "phone shows" bug).
+          FocusManager.instance.primaryFocus?.unfocus();
           final picked = await showDatePicker(
             context: context,
             initialDate: _hireDate,
             firstDate: DateTime(2015),
             lastDate: DateTime.now().add(const Duration(days: 30)),
+            builder: (ctx, child) => Theme(
+              data: Theme.of(ctx).copyWith(
+                colorScheme: Theme.of(ctx).colorScheme.copyWith(
+                      primary: YColor.brand,
+                      onPrimary: Colors.white,
+                      surface: YColor.surface1,
+                      onSurface: YColor.ink,
+                    ),
+              ),
+              child: child!,
+            ),
           );
           if (picked != null) setState(() => _hireDate = picked);
         },
@@ -624,30 +686,50 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           controller: _pin,
           label: isEdit ? 'PIN (leave blank to keep)' : 'PIN *',
           accessoryLabel: 'PIN',
-          hint: '4 to 8 digits',
+          hint: '4 digits',
           obscure: !_showPin,
           keyboardType: TextInputType.number,
+          maxLength: 4,
           fillColor: YColor.surface1,
           borderColor: YColor.hairline,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          onChanged: (_) => setState(() {}),
-          suffix: IconButton(
-            icon: Icon(
-              _showPin
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
-              color: YColor.inkMuted,
-            ),
-            onPressed: () => setState(() => _showPin = !_showPin),
-          ),
+          onChanged: _onPinChanged,
+          suffix: _pinChecking
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : IconButton(
+                  icon: Icon(
+                    _showPin
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 18,
+                    color: YColor.inkMuted,
+                  ),
+                  onPressed: () => setState(() => _showPin = !_showPin),
+                ),
         ),
-        if (!_pinValid && _pin.text.isNotEmpty)
+        if (_pinDupName != null)
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 4),
             child: Text(
-              'PIN must be 4 to 8 digits.',
+              'This PIN is already used by $_pinDupName. Pick another.',
+              style: YFont.caption().copyWith(color: YColor.danger),
+            ),
+          )
+        else if (_needsPin &&
+            _pin.text.isNotEmpty &&
+            (_pin.text.trim().length != 4 ||
+                int.tryParse(_pin.text.trim()) == null))
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'PIN must be exactly 4 digits.',
               style: YFont.caption().copyWith(color: YColor.danger),
             ),
           ),

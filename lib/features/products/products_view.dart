@@ -1251,6 +1251,15 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   /// Wizard step (0=Basics, 1=Modifiers, 2=Recipe, 3=Options).
   int _step = 0;
   static const _stepTitles = ['Basics', 'Modifiers', 'Recipe', 'Options'];
+  final ScrollController _scrollC = ScrollController();
+
+  /// Change step and snap the content back to the top.
+  void _setStep(int i) {
+    setState(() => _step = i);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollC.hasClients) _scrollC.jumpTo(0);
+    });
+  }
 
   /// Modifiers step — which group is shown in the right pane.
   String? _modGroupSel;
@@ -1442,6 +1451,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     for (final c in _priceDeltaCtrls.values) {
       c.dispose();
     }
+    _scrollC.dispose();
     super.dispose();
   }
 
@@ -1560,6 +1570,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           _stepBar(),
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollC,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1651,7 +1662,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                   child: Row(children: [
                     if (_step > 0)
                       TextButton.icon(
-                        onPressed: () => setState(() => _step--),
+                        onPressed: () => _setStep(_step - 1),
                         icon: const Icon(Icons.arrow_back, size: 16),
                         label: const Text('Back'),
                       ),
@@ -1661,7 +1672,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                         // Can't leave Basics until the required fields are set.
                         onPressed: (_step == 0 && !_basicsValid)
                             ? null
-                            : () => setState(() => _step++),
+                            : () => _setStep(_step + 1),
                         style: _primaryBtnStyle(),
                         child: const Text('Next'),
                       )
@@ -1836,7 +1847,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   Widget _tabItem(int i) {
     final active = i == _step;
     return GestureDetector(
-      onTap: () => setState(() => _step = i),
+      onTap: () => _setStep(i),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -1865,7 +1876,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final active = i == _step;
     final reached = i <= _step;
     return GestureDetector(
-      onTap: () => setState(() => _step = i),
+      onTap: () => _setStep(i),
       behavior: HitTestBehavior.opaque,
       // Number above the label — compact, centered.
       child: Column(mainAxisSize: MainAxisSize.min, children: [

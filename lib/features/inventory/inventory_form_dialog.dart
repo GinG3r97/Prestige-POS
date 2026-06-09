@@ -38,6 +38,15 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   /// Wizard step (0 = Details, 1 = Stock & cost).
   int _step = 0;
   static const _stepTitles = ['Details', 'Stock & cost'];
+  final ScrollController _scrollC = ScrollController();
+
+  /// Change step and snap the content back to the top.
+  void _setStep(int i) {
+    setState(() => _step = i);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollC.hasClients) _scrollC.jumpTo(0);
+    });
+  }
   /// "Will I restock this item?" toggle. When true, low-stock alerts fire
   /// on the Stock page (backed by `low_stock_threshold > 0`). When false,
   /// alerts are silenced — useful for one-off items (rare books, signed
@@ -93,6 +102,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
     _threshold.dispose();
     _cost.dispose();
     _unitLabel.dispose();
+    _scrollC.dispose();
     super.dispose();
   }
 
@@ -153,6 +163,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
           _stepBar(),
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollC,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -316,14 +327,14 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
             child: Row(children: [
               if (_step > 0)
                 TextButton.icon(
-                  onPressed: () => setState(() => _step--),
+                  onPressed: () => _setStep(_step - 1),
                   icon: const Icon(Icons.arrow_back, size: 16),
                   label: const Text('Back'),
                 ),
               const Spacer(),
               if (_step == 0)
                 ElevatedButton(
-                  onPressed: _canSave ? () => setState(() => _step++) : null,
+                  onPressed: _canSave ? () => _setStep(_step + 1) : null,
                   style: _primaryBtnStyle(),
                   child: const Text('Next'),
                 )
@@ -369,7 +380,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
               ),
             GestureDetector(
               onTap: () => setState(() {
-                if (i == 0 || _canSave) _step = i;
+                if (i == 0 || _canSave) _setStep(i);
               }),
               behavior: HitTestBehavior.opaque,
               child: Column(mainAxisSize: MainAxisSize.min, children: [

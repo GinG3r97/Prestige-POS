@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
+import '../../design_system/themed_dropdown.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -22,6 +23,7 @@ class _EmployeesViewState extends State<EmployeesView> {
   String? _selectedId;
   String _query = '';
   String? _roleFilter;
+  bool _showSearch = false;
   final TextEditingController _searchC = TextEditingController();
 
   @override
@@ -63,7 +65,7 @@ class _EmployeesViewState extends State<EmployeesView> {
         children: [
           // List pane
           SizedBox(
-            width: panelWidth(context, fraction: 0.30, min: 300, max: 360),
+            width: panelWidth(context, fraction: 0.24, min: 248, max: 300),
             child: _ListPane(
               employees: filtered,
               total: employees.length,
@@ -73,6 +75,14 @@ class _EmployeesViewState extends State<EmployeesView> {
               selectedId: _selectedId,
               query: _query,
               searchController: _searchC,
+              showSearch: _showSearch,
+              onToggleSearch: () => setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _query = '';
+                  _searchC.clear();
+                }
+              }),
               roleFilter: _roleFilter,
               availableRoles: availableRoles,
               onSearch: (q) => setState(() => _query = q),
@@ -194,6 +204,8 @@ class _ListPane extends StatelessWidget {
     required this.selectedId,
     required this.query,
     required this.searchController,
+    required this.showSearch,
+    required this.onToggleSearch,
     required this.roleFilter,
     required this.availableRoles,
     required this.onSearch,
@@ -208,6 +220,8 @@ class _ListPane extends StatelessWidget {
   final String? selectedId;
   final String query;
   final TextEditingController searchController;
+  final bool showSearch;
+  final VoidCallback onToggleSearch;
   final String? roleFilter;
   final List<String> availableRoles;
   final ValueChanged<String> onSearch;
@@ -215,70 +229,91 @@ class _ListPane extends StatelessWidget {
   final ValueChanged<String> onSelect;
   final VoidCallback onAdd;
 
+  Widget _squareBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool filled,
+  }) {
+    return SizedBox(
+      width: 46,
+      height: 46,
+      child: Material(
+        color: filled ? YColor.brand : YColor.surface2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          side: filled
+              ? BorderSide.none
+              : const BorderSide(color: YColor.hairline),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Icon(icon,
+              size: 20, color: filled ? Colors.white : YColor.brandDeep),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       color: YColor.surface1,
       child: Column(
         children: [
-          // Search + Add (keyboard-accessory search, same as Sell/Inventory)
+          // Search button + Add (search reveals the field, same as Sell)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(children: [
-              Expanded(
-                child: KeyboardAccessoryField(
-                  controller: searchController,
-                  accessoryLabel: 'SEARCH',
-                  hint: 'Search by name, role, PIN…',
-                  fillColor: YColor.surface2,
-                  borderColor: YColor.hairline,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 11),
-                  onChanged: onSearch,
-                  suffix: query.isEmpty
-                      ? null
-                      : GestureDetector(
-                          onTap: () {
-                            searchController.clear();
-                            onSearch('');
-                          },
-                          child: const Icon(Icons.close_rounded,
-                              size: 17, color: YColor.inkMuted),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                height: 46,
-                child: ElevatedButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: YColor.brand,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    textStyle: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
+              if (showSearch) ...[
+                Expanded(
+                  child: KeyboardAccessoryField(
+                    controller: searchController,
+                    accessoryLabel: 'SEARCH',
+                    hint: 'Search by name, role, PIN…',
+                    fillColor: YColor.surface2,
+                    borderColor: YColor.hairline,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 11),
+                    onChanged: onSearch,
+                    suffix: query.isEmpty
+                        ? null
+                        : GestureDetector(
+                            onTap: () {
+                              searchController.clear();
+                              onSearch('');
+                            },
+                            child: const Icon(Icons.close_rounded,
+                                size: 17, color: YColor.inkMuted),
+                          ),
                   ),
                 ),
+                const SizedBox(width: 10),
+              ] else
+                const Spacer(),
+              _squareBtn(
+                icon: showSearch ? Icons.close : Icons.search,
+                onTap: onToggleSearch,
+                filled: false,
               ),
+              const SizedBox(width: 10),
+              _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
             ]),
           ),
-          // Role chips — only roles in use
+          // Role filter — dropdown of roles in use
           if (availableRoles.isNotEmpty)
-            SizedBox(
-              height: 36,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _roleChip(null, 'All'),
-                  ...availableRoles.map((r) => _roleChip(r, r)),
-                ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: ThemedDropdown<String>(
+                label: 'Role',
+                value: roleFilter ?? '__all__',
+                items: ['__all__', ...availableRoles],
+                labelOf: (r) => r == '__all__' ? 'All roles' : r,
+                iconOf: (r) => r == '__all__'
+                    ? Icons.groups_outlined
+                    : Icons.badge_outlined,
+                onChanged: (r) => onRoleFilter(
+                    (r == null || r == '__all__') ? null : r),
               ),
             ),
           const SizedBox(height: 6),
@@ -318,32 +353,6 @@ class _ListPane extends StatelessWidget {
     );
   }
 
-  Widget _roleChip(String? role, String label) {
-    final selected = roleFilter == role;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: () => onRoleFilter(role),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? YColor.brand : YColor.surface2,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: YFont.bodyStrong().copyWith(
-                color: selected ? Colors.white : YColor.ink,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ListRow extends StatelessWidget {

@@ -1245,6 +1245,44 @@ class AppState extends ChangeNotifier {
     return 'No PIN matched. Try again.';
   }
 
+  /// Side-effect-free duplicate-PIN probe for the employee form. Returns the
+  /// name of the account (Owner or an existing cashier) that already uses
+  /// [pin], or null if it's free. Unlike [verifyPin] this never signs anyone
+  /// in or charges the brute-force throttle. Only 4-digit PINs are checked.
+  Future<String?> pinConflictName(String pin, {String? excludeId}) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return null;
+    final p = pin.trim();
+    if (p.length != 4 || int.tryParse(p) == null) return null;
+    // Owner PIN — probe without counting a failure.
+    try {
+      final ok = await supabase.rpc('verify_owner_pin', params: {
+        'p_tenant_id': tenantId,
+        'p_pin': p,
+        'p_count_failure': false,
+      });
+      if (ok == true) return 'the Owner';
+    } catch (_) {
+      // Locked / unreachable — fall through to cashier matching.
+    }
+    for (final emp in _employees) {
+      if (emp.id == excludeId) continue;
+      final role = roleById(emp.roleId);
+      if (role?.requiresPin != true) continue;
+      try {
+        final ok = await supabase.rpc('verify_cashier_pin', params: {
+          'p_tenant_id': tenantId,
+          'p_employee_id': emp.id,
+          'p_pin': p,
+        });
+        if (ok == true) return emp.name;
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
   // ───── branches ─────
   void addBranchToCurrentStore(String name) {
     if (tenant == null || name.trim().isEmpty) return;
