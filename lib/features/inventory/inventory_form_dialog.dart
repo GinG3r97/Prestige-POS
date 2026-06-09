@@ -34,6 +34,10 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   /// saved row payload.
   String? _categoryId;
   late String _category;
+
+  /// Wizard step (0 = Details, 1 = Stock & cost).
+  int _step = 0;
+  static const _stepTitles = ['Details', 'Stock & cost'];
   /// "Will I restock this item?" toggle. When true, low-stock alerts fire
   /// on the Stock page (backed by `low_stock_threshold > 0`). When false,
   /// alerts are silenced — useful for one-off items (rare books, signed
@@ -145,13 +149,15 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
             ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
+          _stepBar(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _section('Item details', [
+                  if (_step == 0)
+                    _section('Item details', [
                     _row(
                       KeyboardAccessoryField(
                         controller: _name,
@@ -192,8 +198,8 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
                           horizontal: 12, vertical: 12),
                     ),
                   ]),
-                  const SizedBox(height: 18),
-                  _section('Stock & cost', [
+                  if (_step == 1)
+                    _section('Stock & cost', [
                     // Restockable toggle drives whether low-stock alerts
                     // ever fire for this item. OFF = silent (one-off books,
                     // signed copies, rare items). ON = alerts based on the
@@ -307,32 +313,94 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(children: [
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _canSave ? _save : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
+              if (_step > 0)
+                TextButton.icon(
+                  onPressed: () => setState(() => _step--),
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Back'),
                 ),
-                child: Text(widget.initial == null
-                    ? 'Add item'
-                    : 'Save changes'),
-              ),
+              const Spacer(),
+              if (_step == 0)
+                ElevatedButton(
+                  onPressed: _canSave ? () => setState(() => _step++) : null,
+                  style: _primaryBtnStyle(),
+                  child: const Text('Next'),
+                )
+              else
+                ElevatedButton(
+                  onPressed: _canSave ? _save : null,
+                  style: _primaryBtnStyle(),
+                  child: Text(widget.initial == null
+                      ? 'Add item'
+                      : 'Save changes'),
+                ),
             ]),
           ),
         ]),
       ),
     );
+  }
+
+  ButtonStyle _primaryBtnStyle() => ElevatedButton.styleFrom(
+        backgroundColor: YColor.brand,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YRadius.md)),
+      );
+
+  /// Two-step tab bar — Details · Stock & cost.
+  Widget _stepBar() {
+    return Row(children: [
+      for (var i = 0; i < _stepTitles.length; i++)
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() {
+              if (i == 0 || _canSave) _step = i;
+            }),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: i == _step ? YColor.brand : YColor.hairline,
+                    width: i == _step ? 2.5 : 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i <= _step ? YColor.brand : YColor.surface2,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text('${i + 1}',
+                        style: YFont.caption().copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              i <= _step ? Colors.white : YColor.inkMuted,
+                        )),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(_stepTitles[i],
+                      style: YFont.bodyStrong().copyWith(
+                        fontSize: 13.5,
+                        color: i == _step ? YColor.brand : YColor.inkMuted,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 
   Widget _section(String title, List<Widget> children) {
@@ -414,38 +482,15 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   }
 
   Widget _unitDropdown() {
-    return _dropdownWrap(
+    // Same ThemedDropdown as Category so the two fields match in size + style.
+    return ThemedDropdown<StockUnit>(
       label: 'Unit',
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<StockUnit>(
-          value: _unit,
-          isExpanded: true,
-          items: StockUnit.values
-              .map((u) =>
-                  DropdownMenuItem(value: u, child: Text(u.label)))
-              .toList(),
-          onChanged: (v) => setState(() => _unit = v ?? _unit),
-        ),
-      ),
-    );
-  }
-
-  Widget _dropdownWrap({required String label, required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: YFont.bodyStrong().copyWith(fontSize: 13)),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: YColor.surface1,
-            borderRadius: BorderRadius.circular(YRadius.md),
-            border: Border.all(color: YColor.hairline),
-          ),
-          child: child,
-        ),
-      ],
+      value: _unit,
+      items: StockUnit.values.toList(),
+      labelOf: (u) => u.label,
+      iconOf: (_) => Icons.straighten_outlined,
+      hint: 'Pick a unit',
+      onChanged: (u) => setState(() => _unit = u ?? _unit),
     );
   }
 }
