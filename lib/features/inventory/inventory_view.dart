@@ -255,8 +255,8 @@ class _InventoryViewState extends State<InventoryView> {
                             : GridView.builder(
                                 padding: const EdgeInsets.all(14),
                                 gridDelegate:
-                                    const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 470,
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
                                   mainAxisExtent: 80,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 12,
