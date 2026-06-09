@@ -206,8 +206,6 @@ class _ReportsViewState extends State<ReportsView> {
       color: YColor.surface2,
       child: Column(
         children: [
-          _compactHeader(),
-          Container(height: 0.5, color: YColor.hairline),
           if (_hadError) _errorBanner(),
           Expanded(
             child: Row(
@@ -245,35 +243,6 @@ class _ReportsViewState extends State<ReportsView> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _compactHeader() {
-    return Container(
-      color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(24, 14, 14, 12),
-      child: Row(children: [
-        Container(
-          width: 34,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: YColor.brandTint,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.insights_outlined,
-              color: YColor.brandDeep, size: 19),
-        ),
-        const SizedBox(width: 12),
-        Text('Reports',
-            style: YFont.titleLG().copyWith(fontSize: 22, letterSpacing: -0.3)),
-        const Spacer(),
-        IconButton(
-          tooltip: 'Refresh',
-          onPressed: _loading ? null : _refresh,
-          icon: const Icon(Icons.refresh),
-        ),
-      ]),
     );
   }
 
