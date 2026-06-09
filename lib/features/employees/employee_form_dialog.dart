@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -604,30 +605,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     return _dropdownWrap(
       label: 'Hire date',
       child: InkWell(
-        onTap: () async {
-          // Drop any field focus first — otherwise the picker route restores
-          // focus on close and re-pops the last field's keyboard accessory
-          // (the "phone shows" bug).
-          FocusManager.instance.primaryFocus?.unfocus();
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: _hireDate,
-            firstDate: DateTime(2015),
-            lastDate: DateTime.now().add(const Duration(days: 30)),
-            builder: (ctx, child) => Theme(
-              data: Theme.of(ctx).copyWith(
-                colorScheme: Theme.of(ctx).colorScheme.copyWith(
-                      primary: YColor.brand,
-                      onPrimary: Colors.white,
-                      surface: YColor.surface1,
-                      onSurface: YColor.ink,
-                    ),
-              ),
-              child: child!,
-            ),
-          );
-          if (picked != null) setState(() => _hireDate = picked);
-        },
+        onTap: _pickHireDate,
         child: Row(children: [
           const Icon(Icons.calendar_today_outlined,
               size: 16, color: YColor.inkMuted),
@@ -640,6 +618,65 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         ]),
       ),
     );
+  }
+
+  /// Wheel date picker in a bottom sheet — no text field, so the keyboard never
+  /// shows. We also unfocus before AND after so a focused field (e.g. phone)
+  /// can't re-open its keyboard accessory when the sheet restores focus.
+  Future<void> _pickHireDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    DateTime temp = _hireDate;
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: YColor.surface1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+            child: Row(children: [
+              const Icon(Icons.calendar_today_outlined,
+                  size: 18, color: YColor.brandDeep),
+              const SizedBox(width: 10),
+              Text('Hire date',
+                  style: YFont.titleMD().copyWith(fontSize: 17)),
+              const Spacer(),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, temp),
+                style: TextButton.styleFrom(foregroundColor: YColor.brand),
+                child: const Text('Done',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ),
+          Container(height: 0.5, color: YColor.hairline),
+          SizedBox(
+            height: 230,
+            child: CupertinoTheme(
+              data: CupertinoThemeData(
+                textTheme: CupertinoTextThemeData(
+                  dateTimePickerTextStyle:
+                      YFont.bodyStrong().copyWith(fontSize: 19),
+                ),
+              ),
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: _hireDate,
+                minimumDate: DateTime(2015),
+                maximumDate: DateTime.now().add(const Duration(days: 30)),
+                onDateTimeChanged: (d) => temp = d,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (picked != null) setState(() => _hireDate = picked);
   }
 
   Widget _statusDropdown() {

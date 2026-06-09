@@ -484,19 +484,29 @@ class _DetailPaneState extends State<_DetailPane> {
             children: [
               _header(e),
               const SizedBox(height: 18),
-              // Profile + Salary side by side.
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _profileCard(e)),
-                  const SizedBox(width: 18),
-                  Expanded(child: _payCard(e)),
-                ],
+              // Profile + Salary side by side, matched height.
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _profileCard(e)),
+                    const SizedBox(width: 18),
+                    Expanded(child: _payCard(e)),
+                  ],
+                ),
               ),
               const SizedBox(height: 18),
-              _accessCard(e),
-              const SizedBox(height: 18),
-              _portalCard(e),
+              // Access + Portal side by side, matched height.
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _accessCard(e)),
+                    const SizedBox(width: 18),
+                    Expanded(child: _portalCard(e)),
+                  ],
+                ),
+              ),
               const SizedBox(height: 18),
               _scheduleCard(e),
               const SizedBox(height: 18),
@@ -530,15 +540,15 @@ class _DetailPaneState extends State<_DetailPane> {
         children: [
           Stack(children: [
             Container(
-              width: 54,
-              height: 54,
+              width: 46,
+              height: 46,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: YColor.brandTint.withValues(alpha: 0.7),
                 shape: BoxShape.circle,
               ),
               child: Icon(e.gender.icon,
-                  size: 30, color: YColor.brandDeep),
+                  size: 26, color: YColor.brandDeep),
             ),
             if (e.status == EmployeeStatus.active)
               Positioned(
@@ -592,41 +602,38 @@ class _DetailPaneState extends State<_DetailPane> {
             ),
           ),
           const SizedBox(width: 12),
-          // Update / Remove moved into the header.
-          Column(mainAxisSize: MainAxisSize.min, children: [
-            ElevatedButton.icon(
-              onPressed: widget.onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 15),
-              label: const Text('Update'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md)),
-              ),
+          // Update / Remove moved into the header — side by side to keep the
+          // banner short.
+          OutlinedButton.icon(
+            onPressed: widget.onRemove,
+            icon: const Icon(Icons.delete_outline, size: 15),
+            label: const Text('Remove'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: YColor.danger,
+              side: const BorderSide(color: YColor.hairline),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              textStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: widget.onRemove,
-              icon: const Icon(Icons.delete_outline, size: 15),
-              label: const Text('Remove'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: YColor.danger,
-                side: const BorderSide(color: YColor.hairline),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md)),
-              ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: widget.onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 15),
+            label: const Text('Update'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: YColor.brand,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              textStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
             ),
-          ]),
+          ),
         ],
       ),
     );
