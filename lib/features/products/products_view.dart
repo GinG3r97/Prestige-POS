@@ -1929,17 +1929,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               borderRadius: BorderRadius.circular(YRadius.md),
               border: Border.all(color: YColor.hairline),
             ),
-            child: Row(children: [
-              const Icon(Icons.edit_outlined,
-                  size: 15, color: YColor.inkMuted),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text('Price is custom — set at checkout',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.body().copyWith(color: YColor.inkMuted)),
-              ),
-            ]),
+            child: Text('Price is custom, set at checkout',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.body().copyWith(color: YColor.inkMuted)),
           )
         else
           KeyboardAccessoryField(
