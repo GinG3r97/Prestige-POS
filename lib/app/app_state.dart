@@ -1014,6 +1014,10 @@ class AppState extends ChangeNotifier {
       // the SQL backfill uses for existing tenants.
       await _seedDefaultModifierGroups(tenantDbId);
 
+      // Starter inventory categories (Drinks / Foods / Items) so the Stock
+      // page has buckets from day one. Owners rename/remove freely.
+      await _seedDefaultInventoryCategories(tenantDbId);
+
       // Seed payroll rules + default leaves + employment templates. Same
       // shape the SQL backfill uses for existing tenants. Idempotent —
       // relies on unique constraints to no-op if already present.
@@ -1706,6 +1710,30 @@ class AppState extends ChangeNotifier {
   /// for a freshly created tenant. Called from [completeOnboarding].
   /// Idempotent — relies on the unique(tenant_id, name) constraint to
   /// no-op if defaults already exist (e.g. from the SQL backfill).
+  /// Starter inventory categories for a new tenant — Drinks / Foods / Items.
+  Future<void> _seedDefaultInventoryCategories(String tenantId) async {
+    const cats = [
+      (name: 'Drinks', iconName: 'local_cafe_outlined', sortOrder: 10),
+      (name: 'Foods', iconName: 'restaurant_outlined', sortOrder: 20),
+      (name: 'Items', iconName: 'inventory_2_outlined', sortOrder: 30),
+    ];
+    try {
+      await supabase.from('inventory_categories').insert([
+        for (final c in cats)
+          {
+            'tenant_id': tenantId,
+            'name': c.name,
+            'icon_name': c.iconName,
+            'sort_order': c.sortOrder,
+          },
+      ]);
+    } on sb.PostgrestException catch (e) {
+      if (kDebugMode) {
+        debugPrint('Seed inventory categories failed: ${e.message}');
+      }
+    } catch (_) {}
+  }
+
   Future<void> _seedDefaultModifierGroups(String tenantId) async {
     Future<String> insertGroup({
       required String name,
