@@ -356,7 +356,8 @@ class _ProductsViewState extends State<ProductsView> {
   }
 
   Widget _empty() {
-    return Center(
+    return Align(
+      alignment: const Alignment(-0.12, -0.3),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -372,9 +373,11 @@ class _ProductsViewState extends State<ProductsView> {
           ),
           const SizedBox(height: 14),
           Text('Select a product',
+              textAlign: TextAlign.center,
               style: YFont.titleMD().copyWith(color: YColor.inkMuted)),
           const SizedBox(height: 4),
           Text('Choose one on the left to view its recipe and details',
+              textAlign: TextAlign.center,
               style: YFont.caption()),
         ],
       ),
