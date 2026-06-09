@@ -1645,10 +1645,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               ),
             ),
           ),
-          Container(height: 0.5, color: YColor.hairline),
-          widget.embedded
-              ? _embeddedFooter(context)
-              : Padding(
+          if (!widget.embedded) ...[
+            Container(height: 0.5, color: YColor.hairline),
+            Padding(
                   padding: const EdgeInsets.all(20),
                   child: Row(children: [
                     if (_step > 0)
@@ -1677,6 +1676,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       ),
                   ]),
                 ),
+          ],
         ]);
     if (widget.embedded) {
       return DecoratedBox(
@@ -1762,45 +1762,80 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ],
           ),
         ),
-        Text(_available ? 'Available' : 'Hidden',
-            style: YFont.caption().copyWith(
-                color: _available ? YColor.brand : YColor.inkMuted)),
-        Switch(
-          value: _available,
-          onChanged: (v) => setState(() => _available = v),
-          activeThumbColor: YColor.brand,
+        // Available toggle · Update · Remove — three matched squares.
+        _headerSquare(
+          icon: _available
+              ? Icons.check_circle
+              : Icons.visibility_off_outlined,
+          label: _available ? 'Available' : 'Hidden',
+          onTap: () => setState(() => _available = !_available),
+          bg: _available ? YColor.brandTint : YColor.surface2,
+          fg: _available ? YColor.brandDeep : YColor.inkMuted,
+          border: _available
+              ? YColor.brand.withValues(alpha: 0.4)
+              : YColor.hairline,
         ),
+        const SizedBox(width: 8),
+        _headerSquare(
+          icon: Icons.check,
+          label: 'Update',
+          onTap: _canSave ? _save : null,
+          bg: YColor.brand,
+          fg: Colors.white,
+        ),
+        if (widget.onRemove != null) ...[
+          const SizedBox(width: 8),
+          _headerSquare(
+            icon: Icons.delete_outline,
+            label: 'Remove',
+            onTap: widget.onRemove,
+            bg: YColor.surface2,
+            fg: YColor.danger,
+            border: YColor.danger.withValues(alpha: 0.4),
+          ),
+        ],
       ]),
     );
   }
 
-  Widget _embeddedFooter(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(children: [
-        if (widget.onRemove != null)
-          OutlinedButton.icon(
-            onPressed: widget.onRemove,
-            icon: const Icon(Icons.delete_outline,
-                size: 18, color: YColor.danger),
-            label: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: YColor.danger.withValues(alpha: 0.4)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
+  /// A 64×56 action square (icon over label) for the inline editor header.
+  Widget _headerSquare({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    required Color bg,
+    required Color fg,
+    Color? border,
+  }) {
+    return Opacity(
+      opacity: onTap == null ? 0.45 : 1,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 64,
+          height: 56,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: border != null ? Border.all(color: border) : null,
           ),
-        const Spacer(),
-        ElevatedButton.icon(
-          onPressed: _canSave ? _save : null,
-          icon: const Icon(Icons.check_circle, size: 18),
-          label: const Text('Update'),
-          style: _primaryBtnStyle(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 19, color: fg),
+              const SizedBox(height: 3),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.caption().copyWith(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: fg)),
+            ],
+          ),
         ),
-      ]),
+      ),
     );
   }
 
