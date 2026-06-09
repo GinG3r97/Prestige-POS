@@ -7,6 +7,7 @@ import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'employee_form_dialog.dart';
 
@@ -21,6 +22,13 @@ class _EmployeesViewState extends State<EmployeesView> {
   String? _selectedId;
   String _query = '';
   String? _roleFilter;
+  final TextEditingController _searchC = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +72,7 @@ class _EmployeesViewState extends State<EmployeesView> {
                   .length,
               selectedId: _selectedId,
               query: _query,
+              searchController: _searchC,
               roleFilter: _roleFilter,
               availableRoles: availableRoles,
               onSearch: (q) => setState(() => _query = q),
@@ -184,6 +193,7 @@ class _ListPane extends StatelessWidget {
     required this.activeCount,
     required this.selectedId,
     required this.query,
+    required this.searchController,
     required this.roleFilter,
     required this.availableRoles,
     required this.onSearch,
@@ -197,6 +207,7 @@ class _ListPane extends StatelessWidget {
   final int activeCount;
   final String? selectedId;
   final String query;
+  final TextEditingController searchController;
   final String? roleFilter;
   final List<String> availableRoles;
   final ValueChanged<String> onSearch;
@@ -210,63 +221,52 @@ class _ListPane extends StatelessWidget {
       color: YColor.surface1,
       child: Column(
         children: [
-          // Header
+          // Search + Add (keyboard-accessory search, same as Sell/Inventory)
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text('Employees',
-                      style: YFont.titleLG().copyWith(fontSize: 22)),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: onAdd,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: YColor.brand,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      textStyle: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md)),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 4),
-                Text(
-                  '$activeCount active · ${total - activeCount} inactive',
-                  style: YFont.caption(),
-                ),
-              ],
-            ),
-          ),
-          // Search
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              onChanged: onSearch,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search, size: 18),
-                hintText: 'Search by name, role, PIN…',
-                hintStyle:
-                    YFont.body().copyWith(color: YColor.inkSubtle),
-                filled: true,
-                fillColor: YColor.surface2,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md),
-                  borderSide: BorderSide.none,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(children: [
+              Expanded(
+                child: KeyboardAccessoryField(
+                  controller: searchController,
+                  accessoryLabel: 'SEARCH',
+                  hint: 'Search by name, role, PIN…',
+                  fillColor: YColor.surface2,
+                  borderColor: YColor.hairline,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 11),
+                  onChanged: onSearch,
+                  suffix: query.isEmpty
+                      ? null
+                      : GestureDetector(
+                          onTap: () {
+                            searchController.clear();
+                            onSearch('');
+                          },
+                          child: const Icon(Icons.close_rounded,
+                              size: 17, color: YColor.inkMuted),
+                        ),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: YColor.brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md)),
+                  ),
+                ),
+              ),
+            ]),
           ),
           // Role chips — only roles in use
           if (availableRoles.isNotEmpty)

@@ -59,6 +59,10 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   String? _roleId;
   Gender _gender = Gender.male;
   late EmployeeStatus _status;
+
+  /// Wizard step (0 = Profile, 1 = Access & pay, 2 = Schedule & docs).
+  int _step = 0;
+  static const _stepTitles = ['Profile', 'Access & pay', 'Schedule & docs'];
   late EmploymentType _employmentType;
   late CompensationType _compensationType;
   late DateTime _hireDate;
@@ -194,6 +198,15 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   bool get _canSave =>
       _name.text.trim().isNotEmpty && _roleId != null && _pinValid;
 
+  /// Per-step gates for the Next button.
+  bool get _step1Valid => _name.text.trim().isNotEmpty;
+  bool get _step2Valid => _roleId != null && _pinValid;
+  bool _stepValid(int i) => switch (i) {
+        0 => _step1Valid,
+        1 => _step2Valid,
+        _ => true,
+      };
+
   void _save() {
     final role = _selectedRole;
     final saved = Employee(
@@ -256,63 +269,70 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
+          _stepBar(),
+          Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _section('Profile', [
-                    _row(
-                      _field(
-                          label: 'Full name',
-                          controller: _name,
-                          required: true,
-                          hint: 'e.g., Maria Santos'),
-                      _statusDropdown(),
-                    ),
-                    const SizedBox(height: 12),
-                    _row(
-                      _field(
-                          label: 'Email',
-                          controller: _email,
-                          keyboardType: TextInputType.emailAddress,
-                          hint: 'name@example.com'),
-                      _field(
-                          label: 'Phone',
-                          controller: _phone,
-                          keyboardType: TextInputType.phone,
-                          hint: '+63 9XX XXX XXXX'),
-                    ),
-                    const SizedBox(height: 12),
-                    _genderPicker(),
-                    const SizedBox(height: 12),
-                    _hireDatePicker(),
-                  ]),
-                  const SizedBox(height: 18),
-                  _section('Access & role', [
-                    _needsPin
-                        ? _row(_roleDropdown(), _pinField())
-                        : _roleDropdown(),
-                  ]),
-                  const SizedBox(height: 18),
-                  _lockedPortalSection(),
-                  const SizedBox(height: 18),
-                  _section('Pay & employment', [
-                    _row(_employmentTypeDropdown(), _compensationDropdown()),
-                    const SizedBox(height: 12),
-                    _rateFieldForCompType(),
-                    if (_templateForType != null) ...[
-                      const SizedBox(height: 6),
-                      _templateHint(),
-                    ],
-                  ]),
-                  const SizedBox(height: 18),
-                  _section('Weekly schedule', [_scheduleEditor()]),
-                  const SizedBox(height: 18),
-                  _section('Requirements', [_documentsEditor()]),
-                  const SizedBox(height: 18),
-                  _section('Notes', [_notesField()]),
+                  if (_step == 0) ...[
+                    _section('Profile', [
+                      _row(
+                        _field(
+                            label: 'Full name',
+                            controller: _name,
+                            required: true,
+                            hint: 'e.g., Maria Santos'),
+                        _statusDropdown(),
+                      ),
+                      const SizedBox(height: 12),
+                      _row(
+                        _field(
+                            label: 'Email',
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            hint: 'name@example.com'),
+                        _field(
+                            label: 'Phone',
+                            controller: _phone,
+                            keyboardType: TextInputType.phone,
+                            hint: '+63 9XX XXX XXXX'),
+                      ),
+                      const SizedBox(height: 12),
+                      _genderPicker(),
+                      const SizedBox(height: 12),
+                      _hireDatePicker(),
+                    ]),
+                  ],
+                  if (_step == 1) ...[
+                    _section('Access & role', [
+                      _needsPin
+                          ? _row(_roleDropdown(), _pinField())
+                          : _roleDropdown(),
+                    ]),
+                    const SizedBox(height: 18),
+                    _lockedPortalSection(),
+                    const SizedBox(height: 18),
+                    _section('Pay & employment', [
+                      _row(_employmentTypeDropdown(),
+                          _compensationDropdown()),
+                      const SizedBox(height: 12),
+                      _rateFieldForCompType(),
+                      if (_templateForType != null) ...[
+                        const SizedBox(height: 6),
+                        _templateHint(),
+                      ],
+                    ]),
+                  ],
+                  if (_step == 2) ...[
+                    _section('Weekly schedule', [_scheduleEditor()]),
+                    const SizedBox(height: 18),
+                    _section('Requirements', [_documentsEditor()]),
+                    const SizedBox(height: 18),
+                    _section('Notes', [_notesField()]),
+                  ],
                 ],
               ),
             ),
@@ -321,27 +341,29 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(children: [
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _canSave ? _save : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
+              if (_step > 0)
+                TextButton.icon(
+                  onPressed: () => setState(() => _step--),
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Back'),
                 ),
-                child: Text(widget.initial == null
-                    ? 'Add employee'
-                    : 'Save changes'),
-              ),
+              const Spacer(),
+              if (_step < _stepTitles.length - 1)
+                ElevatedButton(
+                  onPressed: _stepValid(_step)
+                      ? () => setState(() => _step++)
+                      : null,
+                  style: _primaryBtnStyle(),
+                  child: const Text('Next'),
+                )
+              else
+                ElevatedButton(
+                  onPressed: _canSave ? _save : null,
+                  style: _primaryBtnStyle(),
+                  child: Text(widget.initial == null
+                      ? 'Add employee'
+                      : 'Save changes'),
+                ),
             ]),
           ),
         ]),
@@ -350,6 +372,71 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   }
 
   // ── pieces ─────────────────────────────────────────────────────────
+
+  ButtonStyle _primaryBtnStyle() => ElevatedButton.styleFrom(
+        backgroundColor: YColor.brand,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YRadius.md)),
+      );
+
+  /// Step indicator — number above label, connector line between steps.
+  Widget _stepBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(40, 12, 40, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < _stepTitles.length; i++) ...[
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 2,
+                  margin: const EdgeInsets.only(top: 11, left: 10, right: 10),
+                  color: i <= _step ? YColor.brand : YColor.hairline,
+                ),
+              ),
+            GestureDetector(
+              onTap: () => setState(() {
+                if (i <= _step || _stepValid(_step)) _step = i;
+              }),
+              behavior: HitTestBehavior.opaque,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: i <= _step ? YColor.brand : YColor.surface2,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: i <= _step ? YColor.brand : YColor.hairline),
+                  ),
+                  child: i < _step
+                      ? const Icon(Icons.check, size: 14, color: Colors.white)
+                      : Text('${i + 1}',
+                          style: YFont.bodyStrong().copyWith(
+                            fontSize: 12,
+                            color:
+                                i <= _step ? Colors.white : YColor.inkMuted,
+                          )),
+                ),
+                const SizedBox(height: 3),
+                Text(_stepTitles[i],
+                    style: YFont.caption().copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: i == _step ? YColor.brandDeep : YColor.inkMuted,
+                    )),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _section(String title, List<Widget> children) {
     return Container(
