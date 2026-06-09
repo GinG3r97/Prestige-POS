@@ -728,16 +728,32 @@ class _DetailPaneState extends State<_DetailPane> {
       title: 'Access',
       icon: Icons.lock_outline,
       children: [
-        _DetailRow(
-          icon: Icons.work_outline,
-          label: 'Role',
-          value: e.role.isEmpty ? '—' : e.role,
-        ),
         if (hasPin)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _DetailRow(
+                  icon: Icons.work_outline,
+                  label: 'Role',
+                  value: e.role.isEmpty ? '—' : e.role,
+                ),
+              ),
+              Container(width: 0.5, height: 46, color: YColor.hairline),
+              Expanded(
+                child: _DetailRow(
+                  icon: Icons.pin_outlined,
+                  label: 'Cashier PIN',
+                  value: '••••',
+                ),
+              ),
+            ],
+          )
+        else
           _DetailRow(
-            icon: Icons.pin_outlined,
-            label: 'Cashier PIN',
-            value: 'Encrypted — set in the Edit form',
+            icon: Icons.work_outline,
+            label: 'Role',
+            value: e.role.isEmpty ? '—' : e.role,
           ),
       ],
     );
