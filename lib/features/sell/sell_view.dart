@@ -99,12 +99,20 @@ class _SellViewState extends State<SellView> {
           id: _kOtherType, name: 'Other', isOther: true));
     }
 
-    // Auto-select / validate the active type box.
-    if (typeBoxes.isEmpty) {
+    // Auto-select / validate the active type box. In edit (Customize) mode ANY
+    // product type is selectable — even empty ones — so the owner can open an
+    // empty type to add categories to it (without the selection bouncing back).
+    final selectableTypeIds = <String>{
+      ...typeBoxes.map((t) => t.id),
+      if (_editMode) ...state.productTypes.map((t) => t.id),
+    };
+    if (selectableTypeIds.isEmpty) {
       _filterTypeId = null;
     } else if (_filterTypeId == null ||
-        !typeBoxes.any((t) => t.id == _filterTypeId)) {
-      _filterTypeId = typeBoxes.first.id;
+        !selectableTypeIds.contains(_filterTypeId)) {
+      _filterTypeId = typeBoxes.isNotEmpty
+          ? typeBoxes.first.id
+          : state.productTypes.first.id;
       _filterCategoryId = null;
     }
 
@@ -136,10 +144,14 @@ class _SellViewState extends State<SellView> {
           .where((c) => present.contains(c.id)));
     }
 
-    // Validate the selected sub-type chip against what's actually present.
+    // Validate the selected sub-type chip against what's actually present. In
+    // edit mode also allow any (even empty) category of the selected type, so
+    // tapping an empty category sticks and you can add products to it.
     final validCatIds = <String>{
       ...subTypes.map((c) => c.id),
       if (hasOrphanCats) _kOtherCat,
+      if (_editMode && _realTypeSelected)
+        ...state.categoriesForType(_filterTypeId).map((c) => c.id),
     };
     if (_filterCategoryId != null && !validCatIds.contains(_filterCategoryId)) {
       _filterCategoryId = null;
@@ -284,7 +296,7 @@ class _SellViewState extends State<SellView> {
               // instead of stretching to the row height.
               itemBuilder: (i) => Center(
                 child: Opacity(
-                  opacity: nonEmpty.contains(types[i].id) ? 1 : 0.45,
+                  opacity: nonEmpty.contains(types[i].id) ? 1 : 0.6,
                   child: _editChrome(
                     child: _TypeBox(
                       label: types[i].name,
@@ -429,7 +441,7 @@ class _SellViewState extends State<SellView> {
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                 onReorder: (from, to) => _onReorderSubTypes(all, from, to),
                 itemBuilder: (i) => Opacity(
-                  opacity: nonEmpty.contains(all[i].id) ? 1 : 0.45,
+                  opacity: nonEmpty.contains(all[i].id) ? 1 : 0.6,
                   child: _editChrome(
                     child: _railBox(
                       label: all[i].name,
