@@ -79,12 +79,7 @@ class _ProductsViewState extends State<ProductsView> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 16, 10),
-                    child: Text('Products',
-                        style: YFont.titleLG().copyWith(fontSize: 22)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                     child: Row(children: [
                       Expanded(
                         child: KeyboardAccessoryField(
@@ -156,6 +151,7 @@ class _ProductsViewState extends State<ProductsView> {
                             ),
                           )
                         : ListView.separated(
+                            padding: EdgeInsets.zero,
                             itemCount: filtered.length,
                             separatorBuilder: (_, __) => Container(
                                 height: 0.5, color: YColor.hairline),
