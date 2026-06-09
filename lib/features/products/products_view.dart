@@ -16,6 +16,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/typography.dart';
 import '../../models/catalog.dart';
+import '../../models/category.dart' as cat;
 import '../../models/inventory.dart';
 import '../../models/money.dart';
 import '../widgets/keyboard_accessory_field.dart';
@@ -1444,7 +1445,15 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     super.dispose();
   }
 
-  bool get _canSave => _name.text.trim().isNotEmpty && !_saving;
+  /// Basics step is complete — name, price, type and category are all set
+  /// (everything required except the subtitle).
+  bool get _basicsValid =>
+      _name.text.trim().isNotEmpty &&
+      (double.tryParse(_price.text.trim()) ?? 0) > 0 &&
+      _typeId != null &&
+      _categoryId != null;
+
+  bool get _canSave => _basicsValid && !_saving;
 
   /// The currently-picked category's icon key (from the "Pick an icon"
   /// modal) — used as the product's default icon in the preview + on save.
@@ -1472,7 +1481,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     // Products inherit their category's picked icon (from the "Pick an icon"
     // modal) when they don't have their own. Image upload is disabled, so
     // every item shows a themed outlined icon consistently across the app.
-    final resolvedIconName = widget.initial?.iconName ?? cat?.iconName;
+    // Product icon follows its category's icon (auto), keeping any prior
+    // custom icon only as a fallback.
+    final resolvedIconName = cat?.iconName ?? widget.initial?.iconName;
 
     // Upload pending image bytes first so the saved CafeItem already carries
     // the public URL. Failure here aborts the save and surfaces a toast —
@@ -1559,86 +1570,87 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 children: [
                   if (_step == 0)
                     _section('Product details', [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Image upload disabled — products use icons only.
-                        // Coffee items show the cafe glyph by default.
-                        Container(
-                          width: 84,
-                          height: 84,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: YColor.surface1,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: YColor.hairline),
+                      // Icon (auto from category) · Name · Subtitle (wider) ·
+                      // Price — one line.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: YColor.surface1,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: YColor.hairline),
+                            ),
+                            child: NameIconOrEmoji(
+                              name: _name.text,
+                              iconName:
+                                  _categoryIconName() ?? widget.initial?.iconName,
+                              iconSize: 32,
+                            ),
                           ),
-                          child: NameIconOrEmoji(
-                            name: _name.text,
-                            iconName:
-                                widget.initial?.iconName ?? _categoryIconName(),
-                            iconSize: 38,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 3,
+                            child: KeyboardAccessoryField(
+                              controller: _name,
+                              label: 'Name',
+                              accessoryLabel: 'NAME',
+                              hint: 'e.g., Latte',
+                              fillColor: YColor.surface1,
+                              borderColor: YColor.hairline,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              onChanged: (_) => setState(() {}),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              KeyboardAccessoryField(
-                                controller: _name,
-                                label: 'Name',
-                                accessoryLabel: 'NAME',
-                                hint: 'e.g., Caramel Macchiato',
-                                fillColor: YColor.surface1,
-                                borderColor: YColor.hairline,
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                              const SizedBox(height: 10),
-                              KeyboardAccessoryField(
-                                controller: _subtitle,
-                                label: 'Subtitle',
-                                accessoryLabel: 'SUBTITLE',
-                                hint: 'Short description (1 line)',
-                                fillColor: YColor.surface1,
-                                borderColor: YColor.hairline,
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 4,
+                            child: KeyboardAccessoryField(
+                              controller: _subtitle,
+                              label: 'Subtitle (optional)',
+                              accessoryLabel: 'SUBTITLE',
+                              hint: 'Short description',
+                              fillColor: YColor.surface1,
+                              borderColor: YColor.hairline,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              onChanged: (_) => setState(() {}),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(children: [
-                      Expanded(child: _categoryDropdown()),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: KeyboardAccessoryField(
-                          controller: _price,
-                          label: 'Base price (₱)',
-                          accessoryLabel: 'PRICE',
-                          hint: '0',
-                          keyboardType: TextInputType.number,
-                          formatPreview: (raw) {
-                            final n = double.tryParse(raw) ?? 0;
-                            return '₱${n.toStringAsFixed(0)}';
-                          },
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                          onChanged: (_) => setState(() {}),
-                        ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: KeyboardAccessoryField(
+                              controller: _price,
+                              label: 'Price (₱)',
+                              accessoryLabel: 'PRICE',
+                              hint: '0',
+                              keyboardType: TextInputType.number,
+                              formatPreview: (raw) {
+                                final n = double.tryParse(raw) ?? 0;
+                                return '₱${n.toStringAsFixed(0)}';
+                              },
+                              fillColor: YColor.surface1,
+                              borderColor: YColor.hairline,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 14),
+                      // Product Type · Category — both dropdowns, blank default.
+                      Row(children: [
+                        Expanded(child: _typeDropdown()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _categoryDropdown()),
+                      ]),
                     ]),
-                    const SizedBox(height: 14),
-                    _itemTypeSelector(),
-                  ]),
                   if (_step == 1) _modifierGroupsSection(),
                   if (_step == 2) _recipeSection(),
                   if (_step == 3) _optionsSection(),
@@ -1659,8 +1671,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               const Spacer(),
               if (_step < 3)
                 ElevatedButton(
-                  // Can't leave Basics without a name.
-                  onPressed: (_step == 0 && _name.text.trim().isEmpty)
+                  // Can't leave Basics until name/price/type/category are set.
+                  onPressed: (_step == 0 && !_basicsValid)
                       ? null
                       : () => setState(() => _step++),
                   style: _primaryBtnStyle(),
@@ -1836,10 +1848,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   Widget _categoryDropdown() {
     return Builder(builder: (ctx) {
       final state = ctx.watch<AppState>();
-      // Scope to the chosen Product Type's categories (all of them until a type
-      // is picked) so you can't mismatch a category to the wrong type.
+      // ONLY the chosen Product Type's categories — empty until a type is
+      // picked, so you can't mismatch a category to the wrong type.
       final cats = _typeId == null
-          ? state.categories
+          ? const <cat.Category>[]
           : state.categoriesForType(_typeId);
       return ThemedDropdown<String>(
         label: 'Category',
@@ -1856,76 +1868,42 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               materialIconForName(c.name) ??
               Icons.label_outline;
         },
-        hint: cats.isEmpty
-            ? 'Add a category in Maintenance first'
-            : 'Pick a category',
+        hint: _typeId == null
+            ? 'Pick a Product Type first'
+            : cats.isEmpty
+                ? 'No categories — add one in Maintenance'
+                : 'Pick a category',
         onChanged: (v) => setState(() => _categoryId = v),
       );
     });
   }
 
-  Widget _itemTypeSelector() {
+  Widget _typeDropdown() {
     return Builder(builder: (ctx) {
       final state = ctx.watch<AppState>();
       final types = state.productTypes;
-      final picked = state.productTypeById(_typeId);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Product type',
-              style: YFont.bodyStrong().copyWith(fontSize: 13)),
-          const SizedBox(height: 6),
-          if (types.isEmpty)
-            Text(
-              'Add product types in Maintenance → Product types first.',
-              style: YFont.caption().copyWith(color: YColor.inkMuted),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: types.map((t) {
-                final selected = _typeId == t.id;
-                final icon =
-                    iconFromKey(t.iconName) ?? Icons.label_outline;
-                return GestureDetector(
-                  onTap: () => setState(() {
-                    _typeId = t.id;
-                    // Drop the category if it doesn't belong to the new type.
-                    final ok = state
-                        .categoriesForType(t.id)
-                        .any((c) => c.id == _categoryId);
-                    if (!ok) _categoryId = null;
-                  }),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: selected ? YColor.brand : YColor.surface1,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: selected ? YColor.brand : YColor.hairline,
-                      ),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(icon,
-                          size: 14,
-                          color: selected ? Colors.white : YColor.brandDeep),
-                      const SizedBox(width: 6),
-                      Text(
-                        t.name,
-                        style: YFont.bodyStrong().copyWith(
-                          fontSize: 12,
-                          color: selected ? Colors.white : YColor.ink,
-                        ),
-                      ),
-                    ]),
-                  ),
-                );
-              }).toList(),
-            ),
-        ],
+      return ThemedDropdown<String>(
+        label: 'Product type',
+        value: _typeId,
+        items: types.map((t) => t.id).toList(),
+        labelOf: (id) =>
+            types.where((t) => t.id == id).firstOrNull?.name ?? 'Unknown',
+        iconOf: (id) {
+          final t = types.where((x) => x.id == id).firstOrNull;
+          return iconFromKey(t?.iconName) ??
+              materialIconForName(t?.name ?? '') ??
+              Icons.label_outline;
+        },
+        hint: types.isEmpty
+            ? 'Add a type in Maintenance'
+            : 'Pick a product type',
+        onChanged: (v) => setState(() {
+          _typeId = v;
+          // Drop the category if it no longer belongs to the new type.
+          final ok = v != null &&
+              state.categoriesForType(v).any((c) => c.id == _categoryId);
+          if (!ok) _categoryId = null;
+        }),
       );
     });
   }
