@@ -1248,6 +1248,11 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   String? _categoryId;
   late bool _available;
   late bool _openPrice;
+  late bool _trackInventory;
+
+  /// Wizard step (0=Basics, 1=Modifiers, 2=Recipe, 3=Options).
+  int _step = 0;
+  static const _stepTitles = ['Basics', 'Modifiers', 'Recipe', 'Options'];
   // Image upload state. _imageUrl is the public URL already saved on the
   // product row (when editing). _pendingImageBytes is set when the user
   // picks a fresh photo — on Save we upload it, swap the URL, and clear.
@@ -1285,6 +1290,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     _categoryId = p?.categoryId ?? widget.presetCategoryId;
     _available = p?.available ?? true;
     _openPrice = p?.openPrice ?? false;
+    _trackInventory = p?.trackInventory ?? true;
     _imageUrl = p?.imageUrl;
     _emojiFallback = (p?.emoji.isNotEmpty ?? false) ? p!.emoji : '☕';
     _modifierGroups = p?.modifierGroups ?? const [];
@@ -1508,6 +1514,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       modifierAdjustments: _adjustments,
       available: _available,
       openPrice: _openPrice,
+      trackInventory: _trackInventory,
       recipe: _recipe,
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
@@ -1543,13 +1550,15 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
+          _stepBar(),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _section('Product details', [
+                  if (_step == 0)
+                    _section('Product details', [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1629,45 +1638,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     ]),
                     const SizedBox(height: 14),
                     _itemTypeSelector(),
-                    const SizedBox(height: 14),
-                    Row(children: [
-                      Switch(
-                        value: _available,
-                        onChanged: (v) => setState(() => _available = v),
-                        activeThumbColor: YColor.brand,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _available
-                              ? 'Available — shows on the Cafe menu'
-                              : 'Hidden — sold out / off menu',
-                          style: YFont.caption(),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Switch(
-                        value: _openPrice,
-                        onChanged: (v) => setState(() => _openPrice = v),
-                        activeThumbColor: YColor.brand,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _openPrice
-                              ? 'Custom price — cashier types the price at checkout (the price above is just a suggestion)'
-                              : 'Custom price — let the cashier enter the price at checkout (e.g. items sold by the kilo)',
-                          style: YFont.caption(),
-                        ),
-                      ),
-                    ]),
                   ]),
-                  const SizedBox(height: 18),
-                  _modifierGroupsSection(),
-                  const SizedBox(height: 18),
-                  _recipeSection(),
+                  if (_step == 1) _modifierGroupsSection(),
+                  if (_step == 2) _recipeSection(),
+                  if (_step == 3) _optionsSection(),
                 ],
               ),
             ),
@@ -1676,31 +1650,155 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(children: [
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _canSave ? _save : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
+              if (_step > 0)
+                TextButton.icon(
+                  onPressed: () => setState(() => _step--),
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Back'),
                 ),
-                child: Text(widget.initial == null
-                    ? 'Add product'
-                    : 'Save changes'),
-              ),
+              const Spacer(),
+              if (_step < 3)
+                ElevatedButton(
+                  // Can't leave Basics without a name.
+                  onPressed: (_step == 0 && _name.text.trim().isEmpty)
+                      ? null
+                      : () => setState(() => _step++),
+                  style: _primaryBtnStyle(),
+                  child: const Text('Next'),
+                )
+              else
+                ElevatedButton(
+                  onPressed: _canSave ? _save : null,
+                  style: _primaryBtnStyle(),
+                  child: Text(widget.initial == null
+                      ? 'Create product'
+                      : 'Save changes'),
+                ),
             ]),
           ),
         ]),
       ),
+    );
+  }
+
+  ButtonStyle _primaryBtnStyle() => ElevatedButton.styleFrom(
+        backgroundColor: YColor.brand,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YRadius.md)),
+      );
+
+  /// Tappable progress header — jump to any step.
+  Widget _stepBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Row(children: [
+        for (var i = 0; i < _stepTitles.length; i++) ...[
+          if (i > 0)
+            Expanded(
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: i <= _step ? YColor.brand : YColor.hairline,
+              ),
+            ),
+          _stepPill(i),
+        ],
+      ]),
+    );
+  }
+
+  Widget _stepPill(int i) {
+    final active = i == _step;
+    final reached = i <= _step;
+    return GestureDetector(
+      onTap: () => setState(() => _step = i),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: reached ? YColor.brand : YColor.surface2,
+            shape: BoxShape.circle,
+            border:
+                Border.all(color: reached ? YColor.brand : YColor.hairline),
+          ),
+          child: i < _step
+              ? const Icon(Icons.check, size: 15, color: Colors.white)
+              : Text('${i + 1}',
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 13,
+                      color: reached ? Colors.white : YColor.inkMuted)),
+        ),
+        const SizedBox(width: 8),
+        Text(_stepTitles[i],
+            style: YFont.bodyStrong().copyWith(
+              fontSize: 13.5,
+              color: active ? YColor.brandDeep : YColor.inkMuted,
+            )),
+      ]),
+    );
+  }
+
+  /// Step 4 — Options: the three behaviour toggles.
+  Widget _optionsSection() {
+    return _section('Options', [
+      _toggleRow(
+        value: _available,
+        onChanged: (v) => setState(() => _available = v),
+        title: 'Available',
+        subtitle: _available
+            ? 'Shows on the Sell menu.'
+            : 'Hidden — sold out / off menu.',
+      ),
+      const Divider(height: 1, color: YColor.hairline),
+      _toggleRow(
+        value: _openPrice,
+        onChanged: (v) => setState(() => _openPrice = v),
+        title: 'Custom price',
+        subtitle:
+            'Cashier types the price at checkout (e.g. items sold by the kilo). The base price becomes a suggestion.',
+      ),
+      const Divider(height: 1, color: YColor.hairline),
+      _toggleRow(
+        value: _trackInventory,
+        onChanged: (v) => setState(() => _trackInventory = v),
+        title: 'Track inventory',
+        subtitle:
+            'Deducts the recipe from stock and blocks the sale when an ingredient runs out.',
+      ),
+    ]);
+  }
+
+  Widget _toggleRow({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: YFont.bodyStrong().copyWith(fontSize: 14)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: YFont.caption()),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeThumbColor: YColor.brand,
+        ),
+      ]),
     );
   }
 
@@ -1738,7 +1836,11 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   Widget _categoryDropdown() {
     return Builder(builder: (ctx) {
       final state = ctx.watch<AppState>();
-      final cats = state.categories;
+      // Scope to the chosen Product Type's categories (all of them until a type
+      // is picked) so you can't mismatch a category to the wrong type.
+      final cats = _typeId == null
+          ? state.categories
+          : state.categoriesForType(_typeId);
       return ThemedDropdown<String>(
         label: 'Category',
         value: _categoryId,
@@ -1787,7 +1889,14 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 final icon =
                     iconFromKey(t.iconName) ?? Icons.label_outline;
                 return GestureDetector(
-                  onTap: () => setState(() => _typeId = t.id),
+                  onTap: () => setState(() {
+                    _typeId = t.id;
+                    // Drop the category if it doesn't belong to the new type.
+                    final ok = state
+                        .categoriesForType(t.id)
+                        .any((c) => c.id == _categoryId);
+                    if (!ok) _categoryId = null;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     padding: const EdgeInsets.symmetric(
