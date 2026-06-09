@@ -79,7 +79,12 @@ class _ProductsViewState extends State<ProductsView> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 16, 10),
+                    child: Text('Products',
+                        style: YFont.titleLG().copyWith(fontSize: 22)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Row(children: [
                       Expanded(
                         child: KeyboardAccessoryField(
@@ -128,7 +133,7 @@ class _ProductsViewState extends State<ProductsView> {
                   ),
                   // Category + Status filters — boxes matching the search.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
                     child: Row(children: [
                       Expanded(child: _categoryFilterDropdown(state)),
                       const SizedBox(width: 8),
