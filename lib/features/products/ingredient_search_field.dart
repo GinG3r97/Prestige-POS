@@ -365,7 +365,6 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
                 color: item == null ? YColor.inkSubtle : YColor.ink),
           ),
         ),
-        const Icon(Icons.search, size: 16, color: YColor.inkSubtle),
       ]),
     );
   }

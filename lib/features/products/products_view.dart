@@ -2433,18 +2433,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10, left: 4),
-          child: Text(
-            'RECIPE — AUTO-DEDUCTS ON EACH SALE',
-            style: YFont.caption().copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-              color: YColor.brandDeep,
-            ),
-          ),
-        ),
         DefaultTabController(
           length: 1 + groups.length,
           child: Container(
@@ -2508,10 +2496,33 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Default ingredients used when no modifiers change them',
-            style: YFont.caption(),
-          ),
+          // Caption + Add ingredient anchored right.
+          Row(children: [
+            Expanded(
+              child: Text(
+                'Default ingredients used when no modifiers change them',
+                style: YFont.caption(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => setState(() {
+                _recipe.add(RecipeLine(inventoryItemId: '', quantity: 1));
+              }),
+              icon: const Icon(Icons.add, size: 15),
+              label: const Text('Add ingredient'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: YColor.brand,
+                side: const BorderSide(color: YColor.hairline),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                textStyle: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+          ]),
           const SizedBox(height: 10),
           Expanded(
             child: _recipe.isEmpty
@@ -2550,23 +2561,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       ],
                     ),
                   ),
-          ),
-          const SizedBox(height: 6),
-          OutlinedButton.icon(
-            onPressed: () => setState(() {
-              // Empty line — shows "Click to add ingredient" until one is
-              // picked via the search.
-              _recipe.add(RecipeLine(inventoryItemId: '', quantity: 1));
-            }),
-            icon: const Icon(Icons.add, size: 14),
-            label: const Text('Add ingredient'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: YColor.brand,
-              side: const BorderSide(color: YColor.hairline),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
           ),
         ],
       ),
@@ -2962,16 +2956,33 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final unit = item?.displayUnit ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(7),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
       decoration: BoxDecoration(
         color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.md),
         border: Border.all(color: YColor.hairline),
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Remove anchored top-right.
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() {
+                final removed = _recipe.removeAt(index);
+                _qtyCtrls.remove(removed.id)?.dispose();
+              }),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4, left: 8),
+                child: Text('Remove',
+                    style: YFont.caption().copyWith(
+                        color: YColor.danger, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+          Row(children: [
             // Sell-style search picker (glass card above the keyboard).
             Expanded(
               child: IngredientSearchField(
@@ -2982,10 +2993,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     setState(() => line.inventoryItemId = id),
               ),
             ),
-            const SizedBox(width: 6),
-            // Quantity
+            const SizedBox(width: 8),
+            // Quantity with the unit shown inside the input.
             SizedBox(
-              width: 86,
+              width: 128,
               child: KeyboardAccessoryField(
                 controller: _qtyCtrl(line),
                 accessoryLabel: 'QUANTITY',
@@ -2995,34 +3006,23 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 borderColor: YColor.hairline,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 12),
+                suffix: unit.isEmpty
+                    ? null
+                    : Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(unit,
+                            style: YFont.bodyStrong().copyWith(
+                                color: YColor.inkMuted, fontSize: 13)),
+                      ),
                 onChanged: (v) {
                   line.quantity = double.tryParse(v) ?? 0;
                   setState(() {});
                 },
               ),
             ),
-            // Unit display
-            SizedBox(
-              width: 38,
-              child: Center(
-                child: Text(unit,
-                    style: YFont.caption().copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: YColor.inkMuted)),
-              ),
-            ),
-            // Remove
-            IconButton(
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              onPressed: () => setState(() {
-                final removed = _recipe.removeAt(index);
-                _qtyCtrls.remove(removed.id)?.dispose();
-              }),
-              icon: const Icon(Icons.delete_outline, color: YColor.danger),
-            ),
-          ],
-        ),
+          ]),
+        ],
       ),
     );
   }
