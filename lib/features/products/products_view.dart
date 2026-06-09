@@ -1455,17 +1455,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
   bool get _canSave => _basicsValid && !_saving;
 
-  /// The currently-picked category's icon key (from the "Pick an icon"
-  /// modal) — used as the product's default icon in the preview + on save.
-  String? _categoryIconName() {
-    final cat = context
-        .read<AppState>()
-        .categories
-        .where((c) => c.id == _categoryId)
-        .firstOrNull;
-    return cat?.iconName;
-  }
-
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
@@ -1525,7 +1514,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       modifierAdjustments: _adjustments,
       available: _available,
       openPrice: _openPrice,
-      trackInventory: _trackInventory,
+      // No recipe → nothing to deduct, so tracking is forced off.
+      trackInventory: _recipe.isNotEmpty && _trackInventory,
       recipe: _recipe,
       sortOrder: widget.initial?.sortOrder ?? 0,
     );
@@ -1570,8 +1560,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 children: [
                   if (_step == 0)
                     _section('Product details', [
-                      // Icon (auto from category) · Name · Subtitle (wider) ·
-                      // Price — one line.
+                      // Icon (auto from category) · Name (wide) · Price.
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -1584,36 +1573,31 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: YColor.hairline),
                             ),
-                            child: NameIconOrEmoji(
-                              name: _name.text,
-                              iconName:
-                                  _categoryIconName() ?? widget.initial?.iconName,
-                              iconSize: 32,
-                            ),
+                            child: Builder(builder: (_) {
+                              // Mirror the chosen category's icon — resolve from
+                              // the category's name + icon (so a name-based
+                              // category icon still shows), falling back to the
+                              // product name when no category is picked.
+                              final c = context
+                                  .read<AppState>()
+                                  .categories
+                                  .where((x) => x.id == _categoryId)
+                                  .firstOrNull;
+                              return NameIconOrEmoji(
+                                name: c?.name ?? _name.text,
+                                iconName: c?.iconName,
+                                iconSize: 32,
+                              );
+                            }),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            flex: 3,
+                            flex: 5,
                             child: KeyboardAccessoryField(
                               controller: _name,
                               label: 'Name',
                               accessoryLabel: 'NAME',
-                              hint: 'e.g., Latte',
-                              fillColor: YColor.surface1,
-                              borderColor: YColor.hairline,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 4,
-                            child: KeyboardAccessoryField(
-                              controller: _subtitle,
-                              label: 'Subtitle (optional)',
-                              accessoryLabel: 'SUBTITLE',
-                              hint: 'Short description',
+                              hint: 'e.g., Caramel Macchiato',
                               fillColor: YColor.surface1,
                               borderColor: YColor.hairline,
                               contentPadding: const EdgeInsets.symmetric(
@@ -1650,6 +1634,19 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                         const SizedBox(width: 10),
                         Expanded(child: _categoryDropdown()),
                       ]),
+                      const SizedBox(height: 14),
+                      // Subtitle (optional) — below type + category.
+                      KeyboardAccessoryField(
+                        controller: _subtitle,
+                        label: 'Subtitle (optional)',
+                        accessoryLabel: 'SUBTITLE',
+                        hint: 'Short description shown under the name',
+                        fillColor: YColor.surface1,
+                        borderColor: YColor.hairline,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
+                        onChanged: (_) => setState(() {}),
+                      ),
                     ]),
                   if (_step == 1) _modifierGroupsSection(),
                   if (_step == 2) _recipeSection(),
@@ -1776,11 +1773,13 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ),
       const Divider(height: 1, color: YColor.hairline),
       _toggleRow(
-        value: _trackInventory,
+        value: _trackInventory && _recipe.isNotEmpty,
         onChanged: (v) => setState(() => _trackInventory = v),
+        enabled: _recipe.isNotEmpty,
         title: 'Track inventory',
-        subtitle:
-            'Deducts the recipe from stock and blocks the sale when an ingredient runs out.',
+        subtitle: _recipe.isEmpty
+            ? 'Add a recipe (step 3) first — tracking needs ingredients to deduct.'
+            : 'Deducts the recipe from stock and blocks the sale when an ingredient runs out.',
       ),
     ]);
   }
@@ -1790,8 +1789,11 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     required ValueChanged<bool> onChanged,
     required String title,
     required String subtitle,
+    bool enabled = true,
   }) {
-    return Padding(
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Row(children: [
         Expanded(
@@ -1807,10 +1809,11 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         const SizedBox(width: 12),
         Switch(
           value: value,
-          onChanged: onChanged,
+          onChanged: enabled ? onChanged : null,
           activeThumbColor: YColor.brand,
         ),
       ]),
+    ),
     );
   }
 
@@ -1931,9 +1934,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           )
         else ...[
           Text(
-            'Tap to toggle. Opted-in groups appear on the cashier\'s product '
-            'detail sheet. Set per-option price + recipe adjustments in the '
-            'Recipe section below.',
+            'Tap a group to opt this product in. Opted-in groups show their '
+            'options below — set a per-product price for any option, or leave '
+            'it blank to use the default. Recipe scaling stays in the Recipe step.',
             style: YFont.caption(),
           ),
           const SizedBox(height: 12),
@@ -2010,6 +2013,79 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               );
             }).toList(),
           ),
+          // For each opted-in group — list its options with a per-product
+          // price field (blank = use the option's default price).
+          for (final g
+              in groups.where((x) => _modifierGroupIds.contains(x.id))) ...[
+            const SizedBox(height: 18),
+            Row(children: [
+              Icon(
+                  iconFromKey(g.iconName) ??
+                      materialIconForName(g.name) ??
+                      Icons.tune_outlined,
+                  size: 16,
+                  color: YColor.brandDeep),
+              const SizedBox(width: 6),
+              Text(g.name,
+                  style: YFont.bodyStrong().copyWith(fontSize: 14)),
+              const SizedBox(width: 8),
+              Text('${g.options.length} options', style: YFont.caption()),
+            ]),
+            const SizedBox(height: 8),
+            for (final o in g.options)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Expanded(
+                    child: Row(children: [
+                      Flexible(
+                        child: Text(o.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                      ),
+                      if (o.priceDelta.centavos > 0) ...[
+                        const SizedBox(width: 8),
+                        Text('default +${o.priceDelta.compact}',
+                            style: YFont.caption()
+                                .copyWith(color: YColor.inkMuted)),
+                      ],
+                    ]),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 170,
+                    child: KeyboardAccessoryField(
+                      controller: _priceDeltaCtrl('${g.id}_${o.id}',
+                          _adjFor(g.id, o.id)?.priceDelta ?? Money.zero),
+                      accessoryLabel: '${o.name.toUpperCase()} — EXTRA (₱)',
+                      hint: '+0',
+                      keyboardType: TextInputType.number,
+                      fillColor: YColor.surface1,
+                      borderColor: YColor.hairline,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                      formatPreview: (raw) {
+                        final n = double.tryParse(raw) ?? 0;
+                        return n == 0
+                            ? 'default price'
+                            : '+₱${n.toStringAsFixed(0)} on this product';
+                      },
+                      onChanged: (v) {
+                        final pesos = double.tryParse(v) ?? 0;
+                        _setAdjustment(
+                          groupId: g.id,
+                          optionId: o.id,
+                          kind: _adjFor(g.id, o.id)?.kind ??
+                              AdjustmentKind.addLines,
+                          priceDelta: Money((pesos * 100).round()),
+                        );
+                      },
+                    ),
+                  ),
+                ]),
+              ),
+          ],
         ],
       ]);
     });
@@ -2244,52 +2320,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           ]),
           const SizedBox(height: 10),
 
-          // Per-product price bump for this option. Independent of any
-          // global priceDelta set on the master modifier group — the two
-          // add together at sale time. Visible in every mode (multiplier
-          // and addLines) because pricing is orthogonal to recipe shape.
-          Row(children: [
-            SizedBox(
-              width: 130,
-              child: KeyboardAccessoryField(
-                controller: _priceDeltaCtrl(
-                    '${group.id}_${option.id}',
-                    adj?.priceDelta ?? Money.zero),
-                accessoryLabel: '${option.name.toUpperCase()} PRICE (₱)',
-                hint: '+0',
-                keyboardType: TextInputType.number,
-                fillColor: YColor.surface2,
-                borderColor: YColor.hairline,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 10),
-                formatPreview: (raw) {
-                  final n = double.tryParse(raw) ?? 0;
-                  if (n == 0) return 'no extra charge';
-                  return '+₱${n.toStringAsFixed(0)} on this product';
-                },
-                onChanged: (v) {
-                  final pesos = double.tryParse(v) ?? 0;
-                  _setAdjustment(
-                    groupId: group.id,
-                    optionId: option.id,
-                    kind: isMul
-                        ? AdjustmentKind.multiplier
-                        : AdjustmentKind.addLines,
-                    priceDelta: Money((pesos * 100).round()),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Charges +₱ on top of the base price when "${option.name}" is picked. '
-                'Recipe-side scaling is separate — set it below.',
-                style: YFont.caption(),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
+          // (Per-option price lives in the Modifiers step now — this card is
+          // recipe-only.)
 
           // Body — recipe behaviour. Multiplier scales all base lines,
           // addLines tacks on extras.
