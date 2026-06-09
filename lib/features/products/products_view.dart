@@ -29,11 +29,30 @@ class ProductsView extends StatefulWidget {
   State<ProductsView> createState() => _ProductsViewState();
 }
 
+enum _ProdStatus { all, active, inactive, custom }
+
+extension _ProdStatusX on _ProdStatus {
+  String get label => switch (this) {
+        _ProdStatus.all => 'All status',
+        _ProdStatus.active => 'Active',
+        _ProdStatus.inactive => 'Inactive',
+        _ProdStatus.custom => 'Custom price',
+      };
+}
+
 class _ProductsViewState extends State<ProductsView> {
   String? _selectedId;
   String _query = '';
   /// Selected category id (real DB FK). null = "All".
   String? _categoryId;
+  _ProdStatus _status = _ProdStatus.all;
+  final TextEditingController _searchC = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,58 +105,41 @@ class _ProductsViewState extends State<ProductsView> {
                             ),
                           ),
                         ]),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${products.length} item${products.length == 1 ? '' : 's'} · ${products.where((p) => p.available).length} active',
-                          style: YFont.caption(),
-                        ),
                       ],
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: TextField(
+                    child: KeyboardAccessoryField(
+                      controller: _searchC,
+                      accessoryLabel: 'SEARCH',
+                      hint: 'Search by name…',
+                      fillColor: YColor.surface2,
+                      borderColor: YColor.hairline,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 11),
                       onChanged: (v) => setState(() => _query = v),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        hintText: 'Search by name…',
-                        hintStyle: YFont.body()
-                            .copyWith(color: YColor.inkSubtle),
-                        filled: true,
-                        fillColor: YColor.surface2,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(YRadius.md),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
+                      suffix: _query.isEmpty
+                          ? null
+                          : GestureDetector(
+                              onTap: () => setState(() {
+                                _searchC.clear();
+                                _query = '';
+                              }),
+                              child: const Icon(Icons.close_rounded,
+                                  size: 17, color: YColor.inkMuted),
+                            ),
                     ),
                   ),
-                  Builder(builder: (ctx) {
-                    // Source chips from real DB categories so book / coffee /
-                    // tea / etc. are first-class filters here, same as Sell.
-                    final usedIds = products
-                        .map((p) => p.categoryId)
-                        .where((id) => id != null && id.isNotEmpty)
-                        .cast<String>()
-                        .toSet();
-                    final usedCats = state.categories
-                        .where((c) => usedIds.contains(c.id))
-                        .toList()
-                      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-                    // Chips size to their own height (no fixed-height box) so
-                    // there's no dead space between the chips and the list.
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                      child: Row(children: [
-                        _catChip(null, 'All'),
-                        for (final c in usedCats) _catChip(c.id, c.name),
-                      ]),
-                    );
-                  }),
+                  // Category + Status filters — boxes matching the search.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: Row(children: [
+                      Expanded(child: _categoryFilterDropdown(state)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _statusFilterDropdown()),
+                    ]),
+                  ),
                   Container(height: 0.5, color: YColor.hairline),
                   Expanded(
                     child: filtered.isEmpty
@@ -294,6 +296,12 @@ class _ProductsViewState extends State<ProductsView> {
     if (_categoryId != null) {
       result = result.where((p) => p.categoryId == _categoryId).toList();
     }
+    result = switch (_status) {
+      _ProdStatus.all => result,
+      _ProdStatus.active => result.where((p) => p.available).toList(),
+      _ProdStatus.inactive => result.where((p) => !p.available).toList(),
+      _ProdStatus.custom => result.where((p) => p.openPrice).toList(),
+    };
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
       result = result
@@ -305,29 +313,49 @@ class _ProductsViewState extends State<ProductsView> {
     return result;
   }
 
-  Widget _catChip(String? id, String label) {
-    final selected = _categoryId == id;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: GestureDetector(
-        onTap: () => setState(() => _categoryId = id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? YColor.brand : YColor.surface2,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: YFont.bodyStrong().copyWith(
-              fontSize: 12,
-              color: selected ? Colors.white : YColor.ink,
-            ),
-          ),
-        ),
-      ),
+  Widget _categoryFilterDropdown(AppState state) {
+    final usedIds = state.products
+        .map((p) => p.categoryId)
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toSet();
+    final cats = state.categories
+        .where((c) => usedIds.contains(c.id))
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    const allKey = '__all__';
+    return ThemedDropdown<String>(
+      label: 'Category',
+      value: _categoryId ?? allKey,
+      items: [allKey, ...cats.map((c) => c.id)],
+      labelOf: (id) => id == allKey
+          ? 'All'
+          : (cats.where((c) => c.id == id).firstOrNull?.name ?? 'Unknown'),
+      iconOf: (id) {
+        if (id == allKey) return Icons.apps;
+        final c = cats.where((x) => x.id == id).firstOrNull;
+        return iconFromKey(c?.iconName) ??
+            materialIconForName(c?.name ?? '') ??
+            Icons.label_outline;
+      },
+      onChanged: (id) => setState(
+          () => _categoryId = (id == null || id == allKey) ? null : id),
+    );
+  }
+
+  Widget _statusFilterDropdown() {
+    return ThemedDropdown<_ProdStatus>(
+      label: 'Status',
+      value: _status,
+      items: _ProdStatus.values.toList(),
+      labelOf: (s) => s.label,
+      iconOf: (s) => switch (s) {
+        _ProdStatus.all => Icons.tune,
+        _ProdStatus.active => Icons.check_circle_outline,
+        _ProdStatus.inactive => Icons.visibility_off_outlined,
+        _ProdStatus.custom => Icons.edit_outlined,
+      },
+      onChanged: (s) => setState(() => _status = s ?? _ProdStatus.all),
     );
   }
 
