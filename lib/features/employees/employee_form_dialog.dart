@@ -63,7 +63,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
 
   /// Wizard step (0 = Profile, 1 = Access & pay, 2 = Schedule & docs).
   int _step = 0;
-  static const _stepTitles = ['Profile', 'Access & pay', 'Schedule & docs'];
+  static const _stepTitles = ['Profile', 'Access & Salary', 'Schedule & docs'];
   final ScrollController _scrollC = ScrollController();
 
   /// Name of the account already using the typed PIN (null = free).
@@ -74,7 +74,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   late DateTime _hireDate;
   late List<WorkShift> _schedule;
   late List<EmployeeDocument> _documents;
-  bool _showPin = false;
+  bool _showPin = true;
 
   @override
   void initState() {
@@ -83,7 +83,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     _name = TextEditingController(text: e?.name ?? '');
     _email = TextEditingController(text: e?.email ?? '');
     _phone = TextEditingController(text: e?.phone ?? '');
-    _pin = TextEditingController();
+    // Pre-fill with the existing PIN so the owner can see / tweak it.
+    _pin = TextEditingController(text: e?.cashierPin ?? '');
     _hourlyRate = TextEditingController(
         text: e == null || e.hourlyRate == 0
             ? ''
@@ -387,7 +388,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           ),
           Container(height: 0.5, color: YColor.hairline),
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Row(children: [
               if (_step > 0)
                 TextButton.icon(
@@ -425,7 +426,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         backgroundColor: YColor.brand,
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(YRadius.md)),
       );
@@ -433,10 +434,13 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// Step indicator — number above label, connector line between steps.
   Widget _stepBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(40, 12, 40, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           for (var i = 0; i < _stepTitles.length; i++) ...[
             if (i > 0)
               Expanded(
@@ -481,7 +485,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
               ]),
             ),
           ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -721,7 +727,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       children: [
         KeyboardAccessoryField(
           controller: _pin,
-          label: isEdit ? 'PIN (leave blank to keep)' : 'PIN *',
+          label: isEdit ? 'PIN' : 'PIN *',
           accessoryLabel: 'PIN',
           hint: '4 digits',
           obscure: !_showPin,

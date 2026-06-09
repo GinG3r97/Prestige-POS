@@ -620,35 +620,33 @@ class _DetailPaneState extends State<_DetailPane> {
           const SizedBox(width: 12),
           // Update / Remove moved into the header — side by side to keep the
           // banner short.
-          OutlinedButton.icon(
+          OutlinedButton(
             onPressed: widget.onRemove,
-            icon: const Icon(Icons.delete_outline, size: 15),
-            label: const Text('Remove'),
             style: OutlinedButton.styleFrom(
               foregroundColor: YColor.danger,
               side: const BorderSide(color: YColor.hairline),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               textStyle:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(YRadius.md)),
             ),
+            child: const Text('Remove'),
           ),
           const SizedBox(width: 8),
-          ElevatedButton.icon(
+          ElevatedButton(
             onPressed: widget.onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 15),
-            label: const Text('Update'),
             style: ElevatedButton.styleFrom(
               backgroundColor: YColor.brand,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               textStyle:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(YRadius.md)),
             ),
+            child: const Text('Update'),
           ),
         ],
       ),
