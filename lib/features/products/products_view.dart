@@ -1608,48 +1608,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Expanded(
-                            flex: 2,
-                            child: _openPrice
-                                ? _customPriceSlot()
-                                : KeyboardAccessoryField(
-                                    controller: _price,
-                                    label: 'Price (₱)',
-                                    accessoryLabel: 'PRICE',
-                                    hint: '0',
-                                    keyboardType: TextInputType.number,
-                                    formatPreview: (raw) {
-                                      final n = double.tryParse(raw) ?? 0;
-                                      return '₱${n.toStringAsFixed(0)}';
-                                    },
-                                    fillColor: YColor.surface1,
-                                    borderColor: YColor.hairline,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 12),
-                                    onChanged: (_) => setState(() {}),
-                                  ),
-                          ),
+                          Expanded(flex: 2, child: _priceSlot()),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      // Custom price — hides the price field; cashier types it
-                      // at checkout (e.g. items sold by the kilo).
-                      GestureDetector(
-                        onTap: () => setState(() => _openPrice = !_openPrice),
-                        behavior: HitTestBehavior.opaque,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(
-                              _openPrice
-                                  ? Icons.check_box
-                                  : Icons.check_box_outline_blank,
-                              size: 19,
-                              color:
-                                  _openPrice ? YColor.brand : YColor.inkMuted),
-                          const SizedBox(width: 8),
-                          Text(
-                              'Custom price — cashier enters it at checkout (no fixed price)',
-                              style: YFont.caption()),
-                        ]),
                       ),
                       const SizedBox(height: 14),
                       // Product Type · Category — both dropdowns, blank default.
@@ -1933,29 +1893,70 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  /// Price slot shown when "Custom price" is ticked — keeps the row layout but
-  /// makes it clear the cashier sets the price at checkout.
-  Widget _customPriceSlot() {
+  /// Price field with an inline Custom switch on its label. When Custom is on
+  /// the input is hidden and shows "Price is custom — set at checkout".
+  Widget _priceSlot() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Price (₱)', style: YFont.bodyStrong()),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-          decoration: BoxDecoration(
-            color: YColor.surface2,
-            borderRadius: BorderRadius.circular(YRadius.md),
-            border: Border.all(color: YColor.hairline),
+        Row(children: [
+          Text('Price (₱)', style: YFont.bodyStrong()),
+          const Spacer(),
+          Text('Custom',
+              style: YFont.caption().copyWith(
+                  color: _openPrice ? YColor.brand : YColor.inkMuted)),
+          const SizedBox(width: 2),
+          SizedBox(
+            height: 22,
+            child: Transform.scale(
+              scale: 0.78,
+              child: Switch(
+                value: _openPrice,
+                onChanged: (v) => setState(() => _openPrice = v),
+                activeThumbColor: YColor.brand,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
           ),
-          child: Row(children: [
-            const Icon(Icons.edit_outlined, size: 15, color: YColor.inkMuted),
-            const SizedBox(width: 6),
-            Text('Custom',
-                style: YFont.body().copyWith(color: YColor.inkMuted)),
-          ]),
-        ),
+        ]),
+        const SizedBox(height: 6),
+        if (_openPrice)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            decoration: BoxDecoration(
+              color: YColor.surface2,
+              borderRadius: BorderRadius.circular(YRadius.md),
+              border: Border.all(color: YColor.hairline),
+            ),
+            child: Row(children: [
+              const Icon(Icons.edit_outlined,
+                  size: 15, color: YColor.inkMuted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text('Price is custom — set at checkout',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.body().copyWith(color: YColor.inkMuted)),
+              ),
+            ]),
+          )
+        else
+          KeyboardAccessoryField(
+            controller: _price,
+            accessoryLabel: 'PRICE',
+            hint: '0',
+            keyboardType: TextInputType.number,
+            formatPreview: (raw) {
+              final n = double.tryParse(raw) ?? 0;
+              return '₱${n.toStringAsFixed(0)}';
+            },
+            fillColor: YColor.surface1,
+            borderColor: YColor.hairline,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            onChanged: (_) => setState(() {}),
+          ),
       ],
     );
   }
