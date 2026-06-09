@@ -376,9 +376,21 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                     ]),
                   ],
                   if (_step == 2) ...[
-                    _section('Weekly schedule', [_scheduleEditor()]),
-                    const SizedBox(height: 18),
-                    _section('Requirements', [_documentsEditor()]),
+                    // Weekly schedule + Requirements side by side.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child:
+                              _section('Weekly schedule', [_scheduleEditor()]),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child:
+                              _section('Requirements', [_documentsEditor()]),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 18),
                     _section('Notes', [_notesField()]),
                   ],
