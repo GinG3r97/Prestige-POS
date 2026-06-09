@@ -6,6 +6,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'inventory_form_dialog.dart';
 import 'inventory_action_dialogs.dart';
@@ -23,6 +24,13 @@ class _InventoryViewState extends State<InventoryView> {
   _Filter _filter = _Filter.all;
   String? _category;
   String _query = '';
+  final TextEditingController _searchC = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,41 +76,15 @@ class _InventoryViewState extends State<InventoryView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 14, 16, 12),
-            child: Row(
-              children: [
-                Text('Inventory',
-                    style: YFont.titleLG()
-                        .copyWith(fontSize: 22, letterSpacing: -0.4)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '${all.length} items · ₱${totalValue.toStringAsFixed(0)} value',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        YFont.caption().copyWith(color: YColor.inkMuted),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _openForm(context, state, null),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add item'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: YColor.brand,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    textStyle: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
+            child: Row(children: [
+              Text('Inventory',
+                  style: YFont.titleLG()
+                      .copyWith(fontSize: 22, letterSpacing: -0.4)),
+              const SizedBox(width: 12),
+              Text('${all.length} items',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+            ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
           Expanded(
@@ -179,30 +161,57 @@ class _InventoryViewState extends State<InventoryView> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
-                        child: TextField(
-                          onChanged: (v) => setState(() => _query = v),
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search, size: 18),
-                            hintText: 'Search by name, SKU, supplier…',
-                            hintStyle: YFont.body()
-                                .copyWith(color: YColor.inkSubtle),
-                            filled: true,
-                            fillColor: YColor.surface1,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(YRadius.md),
-                              borderSide:
-                                  const BorderSide(color: YColor.hairline),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(YRadius.md),
-                              borderSide:
-                                  const BorderSide(color: YColor.hairline),
+                        child: Row(children: [
+                          // Same keyboard-accessory search as the Sell page.
+                          Expanded(
+                            child: KeyboardAccessoryField(
+                              controller: _searchC,
+                              accessoryLabel: 'SEARCH',
+                              hint: 'Search by name, SKU, supplier…',
+                              fillColor: YColor.surface1,
+                              borderColor: YColor.hairline,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 11),
+                              onChanged: (v) => setState(() => _query = v),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          // Overall stock value.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: YColor.brandTint.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(YRadius.md),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Icons.payments_outlined,
+                                  size: 15, color: YColor.brandDeep),
+                              const SizedBox(width: 6),
+                              Text('₱${totalValue.toStringAsFixed(0)}',
+                                  style: YFont.bodyStrong().copyWith(
+                                      fontSize: 13, color: YColor.brandDeep)),
+                            ]),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () => _openForm(context, state, null),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add item'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: YColor.brand,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              textStyle: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(YRadius.md)),
+                            ),
+                          ),
+                        ]),
                       ),
                       Container(height: 0.5, color: YColor.hairline),
                       Expanded(
