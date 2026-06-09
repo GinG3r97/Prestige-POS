@@ -77,14 +77,9 @@ class _InventoryViewState extends State<InventoryView> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
-            child: Row(children: [
-              Text('Inventory',
-                  style: YFont.titleLG()
-                      .copyWith(fontSize: 22, letterSpacing: -0.4)),
-              const SizedBox(width: 12),
-              Text('${all.length} items',
-                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
-            ]),
+            child: Text('Inventory',
+                style: YFont.titleLG()
+                    .copyWith(fontSize: 22, letterSpacing: -0.4)),
           ),
           Container(height: 0.5, color: YColor.hairline),
           Expanded(
