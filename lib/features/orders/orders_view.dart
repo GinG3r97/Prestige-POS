@@ -6,6 +6,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../printing/print_jobs.dart';
 import '../sell/shift_bar.dart';
+import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
@@ -27,6 +28,7 @@ class OrdersView extends StatefulWidget {
 
 class _OrdersViewState extends State<OrdersView> {
   String _query = '';
+  final TextEditingController _searchC = TextEditingController();
   _DateFilter _date = _DateFilter.today;
   DateTimeRange? _pickedRange;
   String? _selectedId;
@@ -36,6 +38,12 @@ class _OrdersViewState extends State<OrdersView> {
   // order list changes — not on every keystroke / filter rebuild.
   List<db.Order>? _adaptedSource;
   List<MockOrder> _adaptedCache = const [];
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -179,47 +187,47 @@ class _OrdersViewState extends State<OrdersView> {
   Widget _header(List<MockOrder> filtered, List<MockOrder> all) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Text('Orders',
-                style: YFont.titleLG().copyWith(fontSize: 22)),
-            const Spacer(),
-            OutlinedButton.icon(
-              onPressed: () => showShiftsSheet(context),
-              icon: const Icon(Icons.summarize_outlined, size: 16),
-              label: const Text('Shifts'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: YColor.brandDeep,
-                side: const BorderSide(color: YColor.hairline),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md)),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          TextField(
+      child: Row(children: [
+        // Same keyboard-accessory search as Sell / Inventory.
+        Expanded(
+          child: KeyboardAccessoryField(
+            controller: _searchC,
+            accessoryLabel: 'SEARCH',
+            hint: 'Search order #, item, staff…',
+            fillColor: YColor.surface2,
+            borderColor: YColor.hairline,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search, size: 18),
-              hintText: 'Search order #, item, staff…',
-              hintStyle: YFont.body().copyWith(color: YColor.inkSubtle),
-              filled: true,
-              fillColor: YColor.surface2,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(YRadius.md),
-                borderSide: BorderSide.none,
-              ),
+            suffix: _query.isEmpty
+                ? null
+                : GestureDetector(
+                    onTap: () => setState(() {
+                      _searchC.clear();
+                      _query = '';
+                    }),
+                    child: const Icon(Icons.close_rounded,
+                        size: 17, color: YColor.inkMuted),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          height: 46,
+          child: OutlinedButton.icon(
+            onPressed: () => showShiftsSheet(context),
+            icon: const Icon(Icons.summarize_outlined, size: 16),
+            label: const Text('Shifts'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: YColor.brandDeep,
+              side: const BorderSide(color: YColor.hairline),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md)),
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 
