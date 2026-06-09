@@ -230,13 +230,27 @@ class _ProductsViewState extends State<ProductsView> {
                                             ]),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '${p.categoryName.isNotEmpty ? p.categoryName : p.category.title} · ${p.openPrice ? 'Custom price' : p.basePrice.formatted}',
+                                              p.categoryName.isNotEmpty
+                                                  ? p.categoryName
+                                                  : p.category.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: YFont.caption(),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(width: 10),
+                                      // Price as a trailing accent — scannable.
+                                      Text(
+                                        p.openPrice
+                                            ? 'Custom'
+                                            : p.basePrice.formatted,
+                                        style: YFont.bodyStrong().copyWith(
+                                            fontSize: 13,
+                                            color: YColor.brandDeep),
+                                      ),
+                                      const SizedBox(width: 6),
                                       Icon(Icons.chevron_right,
                                           size: 18,
                                           color: selected
