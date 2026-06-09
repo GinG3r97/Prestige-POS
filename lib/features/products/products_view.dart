@@ -1254,6 +1254,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   /// Wizard step (0=Basics, 1=Modifiers, 2=Recipe, 3=Options).
   int _step = 0;
   static const _stepTitles = ['Basics', 'Modifiers', 'Recipe', 'Options'];
+
+  /// Modifiers step — which group is shown in the right pane.
+  String? _modGroupSel;
   // Image upload state. _imageUrl is the public URL already saved on the
   // product row (when editing). _pendingImageBytes is set when the user
   // picks a fresh photo — on Save we upload it, swap the URL, and clear.
@@ -1921,174 +1924,247 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       // Per-product: any product can opt into modifier groups (a product
       // "supports modifiers" simply when groups are toggled on here).
       final groups = state.modifierGroups;
-      return _section('Modifier groups — what choices customers pick on Sell', [
-        if (groups.isEmpty)
+      if (groups.isEmpty) {
+        return _section('Modifiers', [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
               'No modifier groups yet. Add Size / Temperature / Strength in '
-              'Maintenance → Modifier groups, then come back here to opt this '
+              'Maintenance → Modifier groups, then come back to opt this '
               'product in.',
               style: YFont.caption(),
             ),
-          )
-        else ...[
-          Text(
-            'Tap a group to opt this product in. Opted-in groups show their '
-            'options below — set a per-product price for any option, or leave '
-            'it blank to use the default. Recipe scaling stays in the Recipe step.',
-            style: YFont.caption(),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: groups.map((g) {
-              final on = _modifierGroupIds.contains(g.id);
-              final icon = iconFromKey(g.iconName) ??
-                  materialIconForName(g.name) ??
-                  Icons.tune_outlined;
-              return GestureDetector(
-                onTap: () => setState(() {
-                  if (on) {
-                    _modifierGroupIds.remove(g.id);
-                    _modifierGroups =
-                        _modifierGroups.where((m) => m.id != g.id).toList();
-                  } else {
-                    _modifierGroupIds.add(g.id);
-                    _modifierGroups = [
-                      ..._modifierGroups,
-                      ModifierGroup(
-                        id: g.id,
-                        name: g.name,
-                        required: g.required,
-                        defaultIndex: g.defaultIndex,
-                        options: g.options
-                            .map((o) => ModifierOption(
-                                  id: o.id,
-                                  name: o.name,
-                                  priceDelta: o.priceDelta,
-                                ))
-                            .toList(),
-                      ),
-                    ];
-                  }
-                }),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 130),
-                  padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
-                  decoration: BoxDecoration(
-                    color: on ? YColor.brand : YColor.surface1,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: on ? YColor.brand : YColor.hairline,
+        ]);
+      }
+      // Default / validate the right-pane selection.
+      if (_modGroupSel == null || !groups.any((g) => g.id == _modGroupSel)) {
+        _modGroupSel = groups.first.id;
+      }
+      final sel = groups.firstWhere((g) => g.id == _modGroupSel);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6, left: 4),
+            child: Text('MODIFIERS',
+                style: YFont.caption().copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: YColor.brandDeep,
+                )),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12),
+            child: Text(
+              'Tick the groups that apply to this product, then set each '
+              'option\'s price on the right (blank = use the default).',
+              style: YFont.caption(),
+            ),
+          ),
+          SizedBox(
+            height: 360,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: YColor.surface2,
+                borderRadius: BorderRadius.circular(YRadius.lg),
+                border: Border.all(color: YColor.hairline),
+              ),
+              child: Row(children: [
+                // Left rail — group checklist.
+                SizedBox(
+                  width: 190,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      border: Border(
+                          right: BorderSide(color: YColor.hairline)),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon,
-                          size: 16,
-                          color: on ? Colors.white : YColor.brandDeep),
-                      const SizedBox(width: 6),
-                      Text(
-                        g.name,
-                        style: YFont.bodyStrong().copyWith(
-                          fontSize: 12,
-                          color: on ? Colors.white : YColor.ink,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${g.options.length}',
-                        style: YFont.caption().copyWith(
-                          color: on
-                              ? Colors.white.withValues(alpha: 0.85)
-                              : YColor.inkMuted,
-                        ),
-                      ),
-                    ],
+                    child: ListView(
+                      padding: const EdgeInsets.all(8),
+                      children: [
+                        for (final g in groups)
+                          _modRailRow(g, g.id == _modGroupSel),
+                      ],
+                    ),
                   ),
                 ),
-              );
-            }).toList(),
+                // Right pane — selected group's options.
+                Expanded(child: _modRightPane(sel)),
+              ]),
+            ),
           ),
-          // For each opted-in group — list its options with a per-product
-          // price field (blank = use the option's default price).
-          for (final g
-              in groups.where((x) => _modifierGroupIds.contains(x.id))) ...[
-            const SizedBox(height: 18),
-            Row(children: [
-              Icon(
-                  iconFromKey(g.iconName) ??
-                      materialIconForName(g.name) ??
-                      Icons.tune_outlined,
-                  size: 16,
-                  color: YColor.brandDeep),
-              const SizedBox(width: 6),
-              Text(g.name,
-                  style: YFont.bodyStrong().copyWith(fontSize: 14)),
-              const SizedBox(width: 8),
-              Text('${g.options.length} options', style: YFont.caption()),
-            ]),
-            const SizedBox(height: 8),
-            for (final o in g.options)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  Expanded(
-                    child: Row(children: [
-                      Flexible(
-                        child: Text(o.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: YFont.bodyStrong().copyWith(fontSize: 13)),
-                      ),
-                      if (o.priceDelta.centavos > 0) ...[
-                        const SizedBox(width: 8),
-                        Text('default +${o.priceDelta.compact}',
-                            style: YFont.caption()
-                                .copyWith(color: YColor.inkMuted)),
-                      ],
-                    ]),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 170,
-                    child: KeyboardAccessoryField(
-                      controller: _priceDeltaCtrl('${g.id}_${o.id}',
-                          _adjFor(g.id, o.id)?.priceDelta ?? Money.zero),
-                      accessoryLabel: '${o.name.toUpperCase()} — EXTRA (₱)',
-                      hint: '+0',
-                      keyboardType: TextInputType.number,
-                      fillColor: YColor.surface1,
-                      borderColor: YColor.hairline,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                      formatPreview: (raw) {
-                        final n = double.tryParse(raw) ?? 0;
-                        return n == 0
-                            ? 'default price'
-                            : '+₱${n.toStringAsFixed(0)} on this product';
-                      },
-                      onChanged: (v) {
-                        final pesos = double.tryParse(v) ?? 0;
-                        _setAdjustment(
-                          groupId: g.id,
-                          optionId: o.id,
-                          kind: _adjFor(g.id, o.id)?.kind ??
-                              AdjustmentKind.addLines,
-                          priceDelta: Money((pesos * 100).round()),
-                        );
-                      },
+        ],
+      );
+    });
+  }
+
+  void _toggleModGroup(MasterModifierGroup g) {
+    setState(() {
+      if (_modifierGroupIds.contains(g.id)) {
+        _modifierGroupIds.remove(g.id);
+        _modifierGroups =
+            _modifierGroups.where((m) => m.id != g.id).toList();
+      } else {
+        _modifierGroupIds.add(g.id);
+        _modifierGroups = [
+          ..._modifierGroups,
+          ModifierGroup(
+            id: g.id,
+            name: g.name,
+            required: g.required,
+            defaultIndex: g.defaultIndex,
+            options: g.options
+                .map((o) => ModifierOption(
+                    id: o.id, name: o.name, priceDelta: o.priceDelta))
+                .toList(),
+          ),
+        ];
+      }
+    });
+  }
+
+  Widget _modRailRow(MasterModifierGroup g, bool selected) {
+    final on = _modifierGroupIds.contains(g.id);
+    final icon = iconFromKey(g.iconName) ??
+        materialIconForName(g.name) ??
+        Icons.tune_outlined;
+    return GestureDetector(
+      onTap: () => setState(() => _modGroupSel = g.id),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? YColor.brandTint : Colors.transparent,
+          borderRadius: BorderRadius.circular(YRadius.md),
+        ),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () => _toggleModGroup(g),
+            behavior: HitTestBehavior.opaque,
+            child: Icon(
+              on ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 20,
+              color: on ? YColor.brand : YColor.inkMuted,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(icon, size: 16, color: YColor.brandDeep),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(g.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.bodyStrong().copyWith(
+                  fontSize: 13,
+                  color: selected ? YColor.brandDeep : YColor.ink,
+                )),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _modRightPane(MasterModifierGroup g) {
+    final on = _modifierGroupIds.contains(g.id);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 10),
+          child: Row(children: [
+            Expanded(
+              child: Text(g.name,
+                  style: YFont.titleMD().copyWith(fontSize: 16)),
+            ),
+            Text(on ? 'Applied' : 'Off',
+                style: YFont.caption().copyWith(
+                    color: on ? YColor.brand : YColor.inkMuted)),
+            const SizedBox(width: 6),
+            Switch(
+              value: on,
+              onChanged: (_) => _toggleModGroup(g),
+              activeThumbColor: YColor.brand,
+            ),
+          ]),
+        ),
+        Container(height: 0.5, color: YColor.hairline),
+        Expanded(
+          child: on
+              ? ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                  children: [
+                    for (final o in g.options) _modOptionRow(g, o),
+                  ],
+                )
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'Turn on "${g.name}" to apply it to this product and set '
+                      'its option prices.',
+                      textAlign: TextAlign.center,
+                      style: YFont.caption()
+                          .copyWith(color: YColor.inkMuted),
                     ),
                   ),
-                ]),
-              ),
-          ],
-        ],
-      ]);
-    });
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _modOptionRow(MasterModifierGroup g, MasterOption o) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(o.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(fontSize: 13)),
+              if (o.priceDelta.centavos > 0)
+                Text('default +${o.priceDelta.compact}',
+                    style:
+                        YFont.caption().copyWith(color: YColor.inkMuted)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 150,
+          child: KeyboardAccessoryField(
+            controller: _priceDeltaCtrl('${g.id}_${o.id}',
+                _adjFor(g.id, o.id)?.priceDelta ?? Money.zero),
+            accessoryLabel: '${o.name.toUpperCase()} — EXTRA (₱)',
+            hint: '+0',
+            keyboardType: TextInputType.number,
+            fillColor: YColor.surface1,
+            borderColor: YColor.hairline,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            formatPreview: (raw) {
+              final n = double.tryParse(raw) ?? 0;
+              return n == 0 ? 'default' : '+₱${n.toStringAsFixed(0)}';
+            },
+            onChanged: (v) {
+              final pesos = double.tryParse(v) ?? 0;
+              _setAdjustment(
+                groupId: g.id,
+                optionId: o.id,
+                kind: _adjFor(g.id, o.id)?.kind ?? AdjustmentKind.addLines,
+                priceDelta: Money((pesos * 100).round()),
+              );
+            },
+          ),
+        ),
+      ]),
+    );
   }
 
   Widget _recipeSection() {
