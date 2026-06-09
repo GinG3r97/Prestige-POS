@@ -8,9 +8,9 @@ import '../../design_system/responsive.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
-import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'employee_form_dialog.dart';
+import 'employee_search_field.dart';
 
 class EmployeesView extends StatefulWidget {
   const EmployeesView({super.key});
@@ -23,7 +23,6 @@ class _EmployeesViewState extends State<EmployeesView> {
   String? _selectedId;
   String _query = '';
   String? _roleFilter;
-  bool _showSearch = false;
   final TextEditingController _searchC = TextEditingController();
 
   @override
@@ -68,21 +67,10 @@ class _EmployeesViewState extends State<EmployeesView> {
             width: panelWidth(context, fraction: 0.24, min: 248, max: 300),
             child: _ListPane(
               employees: filtered,
-              total: employees.length,
-              activeCount: employees
-                  .where((e) => e.status == EmployeeStatus.active)
-                  .length,
+              allEmployees: employees,
               selectedId: _selectedId,
               query: _query,
               searchController: _searchC,
-              showSearch: _showSearch,
-              onToggleSearch: () => setState(() {
-                _showSearch = !_showSearch;
-                if (!_showSearch) {
-                  _query = '';
-                  _searchC.clear();
-                }
-              }),
               roleFilter: _roleFilter,
               availableRoles: availableRoles,
               onSearch: (q) => setState(() => _query = q),
@@ -199,13 +187,10 @@ class _EmployeesViewState extends State<EmployeesView> {
 class _ListPane extends StatelessWidget {
   const _ListPane({
     required this.employees,
-    required this.total,
-    required this.activeCount,
+    required this.allEmployees,
     required this.selectedId,
     required this.query,
     required this.searchController,
-    required this.showSearch,
-    required this.onToggleSearch,
     required this.roleFilter,
     required this.availableRoles,
     required this.onSearch,
@@ -215,13 +200,10 @@ class _ListPane extends StatelessWidget {
   });
 
   final List<Employee> employees;
-  final int total;
-  final int activeCount;
+  final List<Employee> allEmployees;
   final String? selectedId;
   final String query;
   final TextEditingController searchController;
-  final bool showSearch;
-  final VoidCallback onToggleSearch;
   final String? roleFilter;
   final List<String> availableRoles;
   final ValueChanged<String> onSearch;
@@ -261,64 +243,43 @@ class _ListPane extends StatelessWidget {
       color: YColor.surface1,
       child: Column(
         children: [
-          // Search button + Add (search reveals the field, same as Sell)
+          // Role dropdown + search button + Add — one row.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(children: [
-              if (showSearch) ...[
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Expanded(
-                  child: KeyboardAccessoryField(
-                    controller: searchController,
-                    accessoryLabel: 'SEARCH',
-                    hint: 'Search by name, role, PIN…',
-                    fillColor: YColor.surface2,
-                    borderColor: YColor.hairline,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 11),
-                    onChanged: onSearch,
-                    suffix: query.isEmpty
-                        ? null
-                        : GestureDetector(
-                            onTap: () {
-                              searchController.clear();
-                              onSearch('');
-                            },
-                            child: const Icon(Icons.close_rounded,
-                                size: 17, color: YColor.inkMuted),
-                          ),
-                  ),
+                  child: availableRoles.isEmpty
+                      ? const SizedBox(height: 46)
+                      : ThemedDropdown<String>(
+                          label: 'Role',
+                          value: roleFilter ?? '__all__',
+                          items: ['__all__', ...availableRoles],
+                          labelOf: (r) =>
+                              r == '__all__' ? 'All roles' : r,
+                          iconOf: (r) => r == '__all__'
+                              ? Icons.groups_outlined
+                              : Icons.badge_outlined,
+                          onChanged: (r) => onRoleFilter(
+                              (r == null || r == '__all__') ? null : r),
+                        ),
                 ),
                 const SizedBox(width: 10),
-              ] else
-                const Spacer(),
-              _squareBtn(
-                icon: showSearch ? Icons.close : Icons.search,
-                onTap: onToggleSearch,
-                filled: false,
-              ),
-              const SizedBox(width: 10),
-              _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
-            ]),
-          ),
-          // Role filter — dropdown of roles in use
-          if (availableRoles.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: ThemedDropdown<String>(
-                label: 'Role',
-                value: roleFilter ?? '__all__',
-                items: ['__all__', ...availableRoles],
-                labelOf: (r) => r == '__all__' ? 'All roles' : r,
-                iconOf: (r) => r == '__all__'
-                    ? Icons.groups_outlined
-                    : Icons.badge_outlined,
-                onChanged: (r) => onRoleFilter(
-                    (r == null || r == '__all__') ? null : r),
-              ),
+                EmployeeSearchField(
+                  controller: searchController,
+                  employees: allEmployees,
+                  activeQuery: query,
+                  onSelect: (e) => onSelect(e.id),
+                  onShowMore: onSearch,
+                  onClear: () => onSearch(''),
+                ),
+                const SizedBox(width: 10),
+                _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
+              ],
             ),
-          const SizedBox(height: 6),
-          Container(height: 0.5, color: YColor.hairline),
-          // List
+          ),
+          // List — bordered card per staff member.
           Expanded(
             child: employees.isEmpty
                 ? Center(
@@ -333,17 +294,31 @@ class _ListPane extends StatelessWidget {
                       ),
                     ),
                   )
-                : ListView.separated(
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                     itemCount: employees.length,
-                    separatorBuilder: (_, __) =>
-                        Container(height: 0.5, color: YColor.hairline),
                     itemBuilder: (_, i) {
                       final e = employees[i];
                       final selected = e.id == selectedId;
-                      return _ListRow(
-                        employee: e,
-                        selected: selected,
-                        onTap: () => onSelect(e.id),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Container(
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(YRadius.md),
+                            border: Border.all(
+                              color: selected
+                                  ? YColor.brand
+                                  : YColor.hairline,
+                              width: selected ? 1.5 : 0.5,
+                            ),
+                          ),
+                          child: _ListRow(
+                            employee: e,
+                            selected: selected,
+                            onTap: () => onSelect(e.id),
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -352,7 +327,6 @@ class _ListPane extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _ListRow extends StatelessWidget {
