@@ -744,7 +744,7 @@ class _DetailPaneState extends State<_DetailPane> {
                 child: _DetailRow(
                   icon: Icons.pin_outlined,
                   label: 'Cashier PIN',
-                  value: '••••',
+                  value: e.cashierPin.isNotEmpty ? e.cashierPin : 'Set in Edit',
                 ),
               ),
             ],

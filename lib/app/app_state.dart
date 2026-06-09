@@ -4471,6 +4471,13 @@ class AppState extends ChangeNotifier {
         'p_employee_id': employeeId,
         'p_pin': p,
       });
+      // Keep an owner-visible plaintext copy in sync with the hash.
+      await supabase
+          .from('employees')
+          .update({'cashier_pin': p}).eq('id', employeeId);
+      final i = _employees.indexWhere((x) => x.id == employeeId);
+      if (i >= 0) _employees[i].cashierPin = p;
+      notifyListeners();
       return null;
     } on sb.PostgrestException catch (e) {
       // The server raises a `PIN_TAKEN:` prefixed error when the PIN

@@ -278,6 +278,9 @@ class Employee {
 
   String notes;
 
+  /// Plaintext cashier PIN (owner-visible). Empty when none / not loaded.
+  String cashierPin;
+
   Employee({
     String? id,
     required this.name,
@@ -302,6 +305,7 @@ class Employee {
     this.portalInvitedAt,
     this.portalLastLoginAt,
     this.notes = '',
+    this.cashierPin = '',
   })  : id = id ?? _uuid.v4(),
         hireDate = hireDate ?? DateTime.now(),
         branchIds = branchIds ?? <String>{},
@@ -362,6 +366,7 @@ class Employee {
           ? DateTime.tryParse(row['portal_last_login_at'] as String)
           : null,
       notes: (row['notes'] as String?) ?? '',
+      cashierPin: (row['cashier_pin'] as String?) ?? '',
     );
   }
 }
