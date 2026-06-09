@@ -1033,16 +1033,16 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       'Monday', 'Tuesday', 'Wednesday', 'Thursday',
       'Friday', 'Saturday', 'Sunday',
     ];
-    final has = shift != null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        SizedBox(
-          width: 100,
-          child: Text(dayNames[weekday - 1],
-              style: YFont.bodyStrong().copyWith(fontSize: 13)),
-        ),
-        if (!has) ...[
+    final day = dayNames[weekday - 1];
+    if (shift == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(children: [
+          SizedBox(
+            width: 100,
+            child: Text(day,
+                style: YFont.bodyStrong().copyWith(fontSize: 13)),
+          ),
           OutlinedButton.icon(
             onPressed: () {
               setState(() {
@@ -1055,32 +1055,50 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             style: OutlinedButton.styleFrom(
               foregroundColor: YColor.brand,
               side: const BorderSide(color: YColor.hairline),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(YRadius.md)),
             ),
           ),
-        ] else ...[
-          Expanded(child: _timeChip(weekday, 'start', shift.start)),
-          const SizedBox(width: 8),
-          Text('to', style: YFont.caption()),
-          const SizedBox(width: 8),
-          Expanded(child: _timeChip(weekday, 'end', shift.end)),
-          IconButton(
-            iconSize: 16,
-            color: YColor.inkMuted,
-            onPressed: () {
-              setState(() {
-                _schedule.removeWhere((s) => s.weekday == weekday);
-                _shiftCtrls.remove('${weekday}_start')?.dispose();
-                _shiftCtrls.remove('${weekday}_end')?.dispose();
-              });
-            },
-            icon: const Icon(Icons.delete_outline),
-          ),
+        ]),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Day name + Remove anchored top-right.
+          Row(children: [
+            Expanded(
+              child: Text(day,
+                  style: YFont.bodyStrong().copyWith(fontSize: 13)),
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() {
+                  _schedule.removeWhere((s) => s.weekday == weekday);
+                  _shiftCtrls.remove('${weekday}_start')?.dispose();
+                  _shiftCtrls.remove('${weekday}_end')?.dispose();
+                });
+              },
+              child: Text('Remove',
+                  style: YFont.caption().copyWith(
+                      color: YColor.danger, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: _timeChip(weekday, 'start', shift.start)),
+            const SizedBox(width: 8),
+            Text('to', style: YFont.caption()),
+            const SizedBox(width: 8),
+            Expanded(child: _timeChip(weekday, 'end', shift.end)),
+          ]),
         ],
-      ]),
+      ),
     );
   }
 
