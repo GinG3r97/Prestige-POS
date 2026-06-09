@@ -1184,47 +1184,62 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     final d = _documents[i];
     final ctrl = _docNameCtrl(d.id, d.name);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-          child: KeyboardAccessoryField(
-            controller: ctrl,
-            accessoryLabel: 'DOCUMENT NAME',
-            hint: 'e.g., Government ID',
-            fillColor: YColor.surface1,
-            borderColor: YColor.hairline,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            onChanged: (v) {
-              d.name = v;
-              setState(() {});
-            },
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Remove anchored top-right.
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() {
+                  _documents.removeAt(i);
+                  _docCtrls.remove(d.id)?.dispose();
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4, left: 8),
+                child: Text('Remove',
+                    style: YFont.caption().copyWith(
+                        color: YColor.danger, fontWeight: FontWeight.w700)),
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 180,
-          child: _themedDropdown<DocumentStatus>(
-            label: 'Status',
-            value: d.status,
-            items: DocumentStatus.values,
-            labelOf: (v) => v.label,
-            onChanged: (v) {
-              setState(() => d.status = v!);
-            },
-          ),
-        ),
-        IconButton(
-          onPressed: () {
-            setState(() {
-              _documents.removeAt(i);
-              _docCtrls.remove(d.id)?.dispose();
-            });
-          },
-          icon: const Icon(Icons.delete_outline,
-              size: 18, color: YColor.inkMuted),
-        ),
-      ]),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: KeyboardAccessoryField(
+                controller: ctrl,
+                label: 'Document',
+                accessoryLabel: 'DOCUMENT NAME',
+                hint: 'e.g., Government ID',
+                fillColor: YColor.surface1,
+                borderColor: YColor.hairline,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                onChanged: (v) {
+                  d.name = v;
+                  setState(() {});
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 150,
+              child: _themedDropdown<DocumentStatus>(
+                label: 'Status',
+                value: d.status,
+                items: DocumentStatus.values,
+                labelOf: (v) => v.label,
+                onChanged: (v) {
+                  setState(() => d.status = v!);
+                },
+              ),
+            ),
+          ]),
+        ],
+      ),
     );
   }
 }
