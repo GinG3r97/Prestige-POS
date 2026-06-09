@@ -78,39 +78,15 @@ class _ProductsViewState extends State<ProductsView> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Text('Products',
-                              style: YFont.titleLG().copyWith(fontSize: 22)),
-                          const Spacer(),
-                          ElevatedButton.icon(
-                            onPressed: () =>
-                                _openForm(context, state, null),
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Add'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: YColor.brand,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                              textStyle: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(YRadius.md)),
-                            ),
-                          ),
-                        ]),
-                      ],
-                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 16, 10),
+                    child: Text('Products',
+                        style: YFont.titleLG().copyWith(fontSize: 22)),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: KeyboardAccessoryField(
+                    child: Row(children: [
+                      Expanded(
+                        child: KeyboardAccessoryField(
                       controller: _searchC,
                       accessoryLabel: 'SEARCH',
                       hint: 'Search by name…',
@@ -129,7 +105,26 @@ class _ProductsViewState extends State<ProductsView> {
                               child: const Icon(Icons.close_rounded,
                                   size: 17, color: YColor.inkMuted),
                             ),
-                    ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => _openForm(context, state, null),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: YColor.brand,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 13),
+                          textStyle: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
+                        ),
+                      ),
+                    ]),
                   ),
                   // Category + Status filters — boxes matching the search.
                   Padding(

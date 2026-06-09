@@ -104,6 +104,10 @@ class _ThemedDropdownFieldState<T> extends State<_ThemedDropdownField<T>> {
   /// would inflate to the button width.
   Future<void> _open() async {
     if (!widget.enabled || widget.items.isEmpty) return;
+    // Drop any field focus first so the popup route has nothing to restore on
+    // close — otherwise it would re-focus the last text field and re-pop its
+    // KeyboardAccessoryField card (looked like "the search opening").
+    FocusManager.instance.primaryFocus?.unfocus();
     final renderBox = context.findRenderObject() as RenderBox?;
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
