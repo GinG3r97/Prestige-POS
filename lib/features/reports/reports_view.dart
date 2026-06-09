@@ -206,24 +206,41 @@ class _ReportsViewState extends State<ReportsView> {
       color: YColor.surface2,
       child: Column(
         children: [
-          _topBar(),
+          _compactHeader(),
+          Container(height: 0.5, color: YColor.hairline),
           if (_hadError) _errorBanner(),
           Expanded(
-            child: RefreshIndicator(
-              color: YColor.brand,
-              onRefresh: _refresh,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1240),
-                    child: _loading && data == null && _lens.needsOrders
-                        ? _skeleton()
-                        : _content(data),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _lensRail(),
+                Expanded(
+                  child: Column(
+                    children: [
+                      if (_lens.usesDateRange) ...[
+                        _rangeBar(),
+                        Container(height: 0.5, color: YColor.hairline),
+                      ],
+                      Expanded(
+                        child: RefreshIndicator(
+                          color: YColor.brand,
+                          onRefresh: _refresh,
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding:
+                                const EdgeInsets.fromLTRB(24, 16, 24, 120),
+                            child: _loading &&
+                                    data == null &&
+                                    _lens.needsOrders
+                                ? _skeleton()
+                                : _content(data),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -231,127 +248,120 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
-  Widget _topBar() {
+  Widget _compactHeader() {
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(28, 22, 28, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: YColor.brandTint,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.insights_outlined,
-                    color: YColor.brandDeep, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Reports',
-                        style: YFont.titleLG().copyWith(
-                            fontSize: 22, letterSpacing: -0.3)),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Live data from your orders — pick a range and '
-                      'every card below recalculates.',
-                      style: YFont.caption(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _loading ? null : _refresh,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+      padding: const EdgeInsets.fromLTRB(24, 14, 14, 12),
+      child: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint,
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 14),
-          // Lens chips — pick which report you want to see. "All"
-          // mode stacks every section; the focused lenses hide the
-          // irrelevant cards so the owner can drill in.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
+          child: const Icon(Icons.insights_outlined,
+              color: YColor.brandDeep, size: 19),
+        ),
+        const SizedBox(width: 12),
+        Text('Reports',
+            style: YFont.titleLG().copyWith(fontSize: 22, letterSpacing: -0.3)),
+        const Spacer(),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: _loading ? null : _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ]),
+    );
+  }
+
+  /// Left rail — pick which report to see (Sales / Products / …).
+  Widget _lensRail() {
+    return SizedBox(
+      width: 198,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: YColor.surface1,
+          border: Border(right: BorderSide(color: YColor.hairline)),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 24),
+          children: [
+            for (final l in _ReportLens.values)
               Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text('FOCUS',
-                    style: YFont.caption().copyWith(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: YColor.inkMuted,
-                    )),
-              ),
-              for (final l in _ReportLens.values) ...[
-                _chip(
-                  label: l.label,
-                  on: _lens == l,
+                padding: const EdgeInsets.only(bottom: 3),
+                child: GestureDetector(
                   onTap: () => _setLens(l),
-                  icon: l.icon,
-                ),
-                const SizedBox(width: 6),
-              ],
-            ]),
-          ),
-          // Date range + compare toggle only make sense for
-          // order-history-driven lenses. For inventory (point-in-
-          // time) we hide them so the controls match the data.
-          if (_lens.usesDateRange) ...[
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text('RANGE',
-                      style: YFont.caption().copyWith(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        color: YColor.inkMuted,
-                      )),
-                ),
-                for (final preset in _DateRange.presets()) ...[
-                  _chip(
-                    label: preset.label,
-                    on: _range.matchesPreset(preset),
-                    onTap: () => _setRange(preset),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: _lens == l ? YColor.brand : Colors.transparent,
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                    ),
+                    child: Row(children: [
+                      Icon(l.icon,
+                          size: 18,
+                          color: _lens == l
+                              ? Colors.white
+                              : YColor.brandDeep),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(l.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.bodyStrong().copyWith(
+                              fontSize: 13.5,
+                              color: _lens == l ? Colors.white : YColor.ink,
+                            )),
+                      ),
+                    ]),
                   ),
-                  const SizedBox(width: 6),
-                ],
-                _chip(
-                  label: _range.isCustom
-                      ? '${_fmtShort(_range.start)} → ${_fmtShort(_range.end.subtract(const Duration(seconds: 1)))}'
-                      : 'Custom…',
-                  on: _range.isCustom,
-                  onTap: _pickCustomRange,
-                  icon: Icons.calendar_month,
                 ),
-                const SizedBox(width: 14),
-                _toggle(
-                  label: 'Compare to previous',
-                  on: _comparePrior,
-                  onTap: () {
-                    setState(() => _comparePrior = !_comparePrior);
-                    _refresh();
-                  },
-                ),
-              ]),
-            ),
+              ),
           ],
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Right-pane top bar — date presets + custom + compare toggle.
+  Widget _rangeBar() {
+    return Container(
+      color: YColor.surface1,
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final preset in _DateRange.presets()) ...[
+            _chip(
+              label: preset.label,
+              on: _range.matchesPreset(preset),
+              onTap: () => _setRange(preset),
+            ),
+            const SizedBox(width: 6),
+          ],
+          _chip(
+            label: _range.isCustom
+                ? '${_fmtShort(_range.start)} → ${_fmtShort(_range.end.subtract(const Duration(seconds: 1)))}'
+                : 'Custom…',
+            on: _range.isCustom,
+            onTap: _pickCustomRange,
+            icon: Icons.calendar_month,
+          ),
+          const SizedBox(width: 14),
+          _toggle(
+            label: 'Compare to previous',
+            on: _comparePrior,
+            onTap: () {
+              setState(() => _comparePrior = !_comparePrior);
+              _refresh();
+            },
+          ),
+        ]),
       ),
     );
   }
