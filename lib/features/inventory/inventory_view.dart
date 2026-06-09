@@ -252,25 +252,36 @@ class _InventoryViewState extends State<InventoryView> {
                                   ],
                                 ),
                               )
-                            : ListView.separated(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
+                            : GridView.builder(
+                                padding: const EdgeInsets.all(14),
+                                gridDelegate:
+                                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 470,
+                                  mainAxisExtent: 80,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
                                 itemCount: filtered.length,
-                                separatorBuilder: (_, __) => Container(
-                                    height: 0.5,
-                                    color: YColor.hairline,
-                                    margin: const EdgeInsets.symmetric(
-                                        horizontal: 16)),
-                                itemBuilder: (_, i) => _ItemRow(
-                                  item: filtered[i],
-                                  onEdit: () =>
-                                      _openForm(context, state, filtered[i]),
-                                  onRestock: () => _openRestock(
-                                      context, state, filtered[i]),
-                                  onStockTake: () => _openStockTake(
-                                      context, state, filtered[i]),
-                                  onRemove: () => _confirmRemove(
-                                      context, state, filtered[i]),
+                                itemBuilder: (_, i) => Container(
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    color: YColor.surface1,
+                                    borderRadius:
+                                        BorderRadius.circular(YRadius.md),
+                                    border:
+                                        Border.all(color: YColor.hairline),
+                                  ),
+                                  child: _ItemRow(
+                                    item: filtered[i],
+                                    onEdit: () =>
+                                        _openForm(context, state, filtered[i]),
+                                    onRestock: () => _openRestock(
+                                        context, state, filtered[i]),
+                                    onStockTake: () => _openStockTake(
+                                        context, state, filtered[i]),
+                                    onRemove: () => _confirmRemove(
+                                        context, state, filtered[i]),
+                                  ),
                                 ),
                               ),
                       ),
