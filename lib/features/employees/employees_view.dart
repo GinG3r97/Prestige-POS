@@ -760,19 +760,19 @@ class _DetailPaneState extends State<_DetailPane> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'NOT SET UP',
+                  'COMING SOON',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.6,
-                    color: YColor.inkMuted,
+                    color: YColor.brandDeep,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'No portal access. Edit to create an account.',
+                  'Staff portal accounts are coming soon.',
                   style: YFont.caption(),
                 ),
               ),
