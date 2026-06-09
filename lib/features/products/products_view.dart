@@ -1788,20 +1788,16 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ]);
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-      child: Row(children: [
-        for (var i = 0; i < _stepTitles.length; i++) ...[
-          if (i > 0)
-            Expanded(
-              child: Container(
-                height: 2,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                color: i <= _step ? YColor.brand : YColor.hairline,
-              ),
-            ),
-          _stepPill(i),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < _stepTitles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 30),
+            _stepPill(i),
+          ],
         ],
-      ]),
+      ),
     );
   }
 
@@ -1838,10 +1834,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final reached = i <= _step;
     return GestureDetector(
       onTap: () => setState(() => _step = i),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+      behavior: HitTestBehavior.opaque,
+      // Number above the label — compact, centered.
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width: 26,
-          height: 26,
+          width: 24,
+          height: 24,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: reached ? YColor.brand : YColor.surface2,
@@ -1850,16 +1848,17 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 Border.all(color: reached ? YColor.brand : YColor.hairline),
           ),
           child: i < _step
-              ? const Icon(Icons.check, size: 15, color: Colors.white)
+              ? const Icon(Icons.check, size: 14, color: Colors.white)
               : Text('${i + 1}',
                   style: YFont.bodyStrong().copyWith(
-                      fontSize: 13,
+                      fontSize: 12,
                       color: reached ? Colors.white : YColor.inkMuted)),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(height: 3),
         Text(_stepTitles[i],
-            style: YFont.bodyStrong().copyWith(
-              fontSize: 13.5,
+            style: YFont.caption().copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
               color: active ? YColor.brandDeep : YColor.inkMuted,
             )),
       ]),

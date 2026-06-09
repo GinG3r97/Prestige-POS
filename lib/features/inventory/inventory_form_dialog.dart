@@ -350,57 +350,53 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
             borderRadius: BorderRadius.circular(YRadius.md)),
       );
 
-  /// Two-step tab bar — Details · Stock & cost.
+  /// Two-step indicator — number above the label, centered + compact.
   Widget _stepBar() {
-    return Row(children: [
-      for (var i = 0; i < _stepTitles.length; i++)
-        Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() {
-              if (i == 0 || _canSave) _step = i;
-            }),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: i == _step ? YColor.brand : YColor.hairline,
-                    width: i == _step ? 2.5 : 0.5,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < _stepTitles.length; i++) ...[
+            if (i > 0) const SizedBox(width: 34),
+            GestureDetector(
+              onTap: () => setState(() {
+                if (i == 0 || _canSave) _step = i;
+              }),
+              behavior: HitTestBehavior.opaque,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: i <= _step ? YColor.brand : YColor.surface2,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: i <= _step ? YColor.brand : YColor.hairline),
                   ),
+                  child: i < _step
+                      ? const Icon(Icons.check, size: 14, color: Colors.white)
+                      : Text('${i + 1}',
+                          style: YFont.bodyStrong().copyWith(
+                            fontSize: 12,
+                            color:
+                                i <= _step ? Colors.white : YColor.inkMuted,
+                          )),
                 ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: i <= _step ? YColor.brand : YColor.surface2,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text('${i + 1}',
-                        style: YFont.caption().copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color:
-                              i <= _step ? Colors.white : YColor.inkMuted,
-                        )),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(_stepTitles[i],
-                      style: YFont.bodyStrong().copyWith(
-                        fontSize: 13.5,
-                        color: i == _step ? YColor.brand : YColor.inkMuted,
-                      )),
-                ],
-              ),
+                const SizedBox(height: 3),
+                Text(_stepTitles[i],
+                    style: YFont.caption().copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: i == _step ? YColor.brandDeep : YColor.inkMuted,
+                    )),
+              ]),
             ),
-          ),
-        ),
-    ]);
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _section(String title, List<Widget> children) {
