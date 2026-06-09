@@ -19,6 +19,7 @@ import '../../models/catalog.dart';
 import '../../models/category.dart' as cat;
 import '../../models/inventory.dart';
 import '../../models/money.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -428,26 +429,16 @@ class _ProductsViewState extends State<ProductsView> {
 
   Future<void> _confirmRemove(
       BuildContext context, AppState state, CafeItem product) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${product.name}?'),
-        content: const Text(
-            'The product will be removed from the menu. Existing orders are unaffected.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${product.name}?',
+      message:
+          'The product will be removed from the menu. Existing orders are unaffected.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await state.removeProduct(product.id);
     if (!mounted) return;
     if (err != null) {
