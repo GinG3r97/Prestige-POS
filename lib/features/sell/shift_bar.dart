@@ -30,6 +30,22 @@ void showZReadingFor(BuildContext context, CashierShift shift) =>
 /// Big right-aligned amount display fed by the on-screen [OtpNumpad]. Digits
 /// accumulate as centavos (type 1·0·0·0·0·0 → ₱1,000.00) so no keyboard is
 /// raised — consistent with the OTP entry.
+/// Appends a numpad key ('.' or a digit) to a decimal peso amount string,
+/// capping at 2 decimal places so cashiers type "120" → ₱120 or "120.50".
+String _appendAmountKey(String current, String key) {
+  if (key == '.') {
+    if (current.contains('.')) return current;
+    return current.isEmpty ? '0.' : '$current.';
+  }
+  if (current.length >= 9) return current;
+  final dot = current.indexOf('.');
+  if (dot >= 0 && current.length - dot - 1 >= 2) return current;
+  return current == '0' ? key : current + key;
+}
+
+/// Cents value of a decimal amount string typed on the numpad.
+int _amountCents(String s) => ((double.tryParse(s) ?? 0) * 100).round();
+
 Widget _amountDisplay(int cents, {bool error = false}) {
   return Container(
     height: 60,
@@ -354,19 +370,21 @@ class _OpenShiftDialog extends StatefulWidget {
 }
 
 class _OpenShiftDialogState extends State<_OpenShiftDialog> {
-  int _cents = 0;
+  String _amount = '';
+  int get _cents => _amountCents(_amount);
   bool _busy = false;
   String? _error;
 
-  void _onDigit(String d) {
-    final v = _cents * 10 + int.parse(d);
-    if (v <= 99999999) setState(() {
-      _cents = v;
-      _error = null;
-    });
-  }
+  void _onDigit(String d) => setState(() {
+        _amount = _appendAmountKey(_amount, d);
+        _error = null;
+      });
 
-  void _onBackspace() => setState(() => _cents = _cents ~/ 10);
+  void _onBackspace() => setState(() {
+        if (_amount.isNotEmpty) {
+          _amount = _amount.substring(0, _amount.length - 1);
+        }
+      });
 
   Future<void> _confirm() async {
     setState(() {
@@ -449,6 +467,7 @@ class _OpenShiftDialogState extends State<_OpenShiftDialog> {
                         onDigit: _onDigit,
                         onBackspace: _onBackspace,
                         enabled: !_busy,
+                        decimalKey: true,
                         keyWidth: 62,
                         keyHeight: 46,
                       ),
@@ -494,7 +513,8 @@ class _CloseShiftDialog extends StatefulWidget {
 }
 
 class _CloseShiftDialogState extends State<_CloseShiftDialog> {
-  int _cents = 0;
+  String _amount = '';
+  int get _cents => _amountCents(_amount);
   ShiftTotals? _totals;
   bool _busy = false;
 
@@ -509,12 +529,14 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
     if (mounted) setState(() => _totals = t);
   }
 
-  void _onDigit(String d) {
-    final v = _cents * 10 + int.parse(d);
-    if (v <= 99999999) setState(() => _cents = v);
-  }
+  void _onDigit(String d) =>
+      setState(() => _amount = _appendAmountKey(_amount, d));
 
-  void _onBackspace() => setState(() => _cents = _cents ~/ 10);
+  void _onBackspace() => setState(() {
+        if (_amount.isNotEmpty) {
+          _amount = _amount.substring(0, _amount.length - 1);
+        }
+      });
 
   Future<void> _confirm() async {
     final state = context.read<AppState>();
@@ -628,6 +650,7 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
                               onDigit: _onDigit,
                               onBackspace: _onBackspace,
                               enabled: !_busy,
+                              decimalKey: true,
                               keyWidth: 62,
                               keyHeight: 46,
                             ),
