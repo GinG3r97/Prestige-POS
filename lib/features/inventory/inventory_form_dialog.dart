@@ -350,15 +350,22 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
             borderRadius: BorderRadius.circular(YRadius.md)),
       );
 
-  /// Two-step indicator — number above the label, centered + compact.
+  /// Two-step indicator — number above the label, with a connector line.
   Widget _stepBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      padding: const EdgeInsets.fromLTRB(80, 12, 80, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < _stepTitles.length; i++) ...[
-            if (i > 0) const SizedBox(width: 34),
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 2,
+                  margin: const EdgeInsets.only(top: 11, left: 10, right: 10),
+                  color: i <= _step ? YColor.brand : YColor.hairline,
+                ),
+              ),
             GestureDetector(
               onTap: () => setState(() {
                 if (i == 0 || _canSave) _step = i;

@@ -1788,12 +1788,20 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ]);
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+      padding: const EdgeInsets.fromLTRB(40, 12, 40, 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < _stepTitles.length; i++) ...[
-            if (i > 0) const SizedBox(width: 30),
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 2,
+                  // top ≈ circle centre so the line links the numbers.
+                  margin: const EdgeInsets.only(top: 11, left: 10, right: 10),
+                  color: i <= _step ? YColor.brand : YColor.hairline,
+                ),
+              ),
             _stepPill(i),
           ],
         ],
