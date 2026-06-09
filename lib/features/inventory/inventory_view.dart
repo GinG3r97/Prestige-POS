@@ -539,7 +539,7 @@ class _ItemRow extends StatelessWidget {
             const SizedBox(width: 12),
             // Name + meta
             Expanded(
-              flex: 6,
+              flex: 5,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -581,7 +581,7 @@ class _ItemRow extends StatelessWidget {
             const SizedBox(width: 16),
             // Stock amount + bar
             Expanded(
-              flex: 4,
+              flex: 6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -631,10 +631,10 @@ class _ItemRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             // Cost / value
             SizedBox(
-              width: 110,
+              width: 88,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -652,6 +652,7 @@ class _ItemRow extends StatelessWidget {
             // Actions — themed menu, Edit + Remove only
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_horiz, color: YColor.inkMuted),
+              padding: EdgeInsets.zero,
               color: YColor.surface1,
               elevation: 8,
               shadowColor: Colors.black.withValues(alpha: 0.18),
