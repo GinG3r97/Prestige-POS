@@ -570,26 +570,42 @@ class _DetailPaneState extends State<_DetailPane> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(e.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.titleLG().copyWith(
-                      fontSize: 21,
-                      letterSpacing: -0.3,
-                    )),
-                const SizedBox(height: 3),
+                // Name | Role on one line.
                 Row(children: [
-                  Text(
-                    '${e.role} · ${e.employmentType.label}',
-                    style: YFont.body().copyWith(color: YColor.inkMuted),
+                  Flexible(
+                    child: Text(e.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: YFont.titleLG().copyWith(
+                          fontSize: 21,
+                          letterSpacing: -0.3,
+                        )),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('|',
+                        style: YFont.titleLG().copyWith(
+                            fontSize: 18, color: YColor.inkSubtle)),
+                  ),
+                  Flexible(
+                    child: Text(e.role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: YFont.titleMD().copyWith(
+                            fontSize: 16, color: YColor.inkMuted)),
                   ),
                 ]),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
                     _statusPill(e.status),
+                    _smallPill(
+                      icon: Icons.badge_outlined,
+                      label: e.employmentType.label,
+                      color: YColor.inkMuted,
+                    ),
                     if (tenure.isNotEmpty)
                       _smallPill(
                         icon: Icons.workspace_premium_outlined,
