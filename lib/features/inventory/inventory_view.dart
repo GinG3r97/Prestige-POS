@@ -168,6 +168,16 @@ class _InventoryViewState extends State<InventoryView> {
                               contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 11),
                               onChanged: (v) => setState(() => _query = v),
+                              suffix: _query.isEmpty
+                                  ? null
+                                  : GestureDetector(
+                                      onTap: () => setState(() {
+                                        _searchC.clear();
+                                        _query = '';
+                                      }),
+                                      child: const Icon(Icons.close_rounded,
+                                          size: 17, color: YColor.inkMuted),
+                                    ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -211,7 +221,8 @@ class _InventoryViewState extends State<InventoryView> {
                       Container(height: 0.5, color: YColor.hairline),
                       Expanded(
                         child: filtered.isEmpty
-                            ? Center(
+                            ? Align(
+                                alignment: const Alignment(-0.12, -0.3),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -219,9 +230,11 @@ class _InventoryViewState extends State<InventoryView> {
                                         size: 38, color: YColor.inkMuted),
                                     const SizedBox(height: 8),
                                     Text('No items here',
+                                        textAlign: TextAlign.center,
                                         style: YFont.bodyStrong()),
                                     Text(
                                         'Try another category, search, or add an item.',
+                                        textAlign: TextAlign.center,
                                         style: YFont.caption()),
                                   ],
                                 ),
