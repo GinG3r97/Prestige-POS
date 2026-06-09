@@ -1768,7 +1768,19 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               ? Icons.check_circle
               : Icons.visibility_off_outlined,
           label: _available ? 'Available' : 'Hidden',
-          onTap: () => setState(() => _available = !_available),
+          onTap: () {
+            setState(() => _available = !_available);
+            PushToast.show(
+              context,
+              title: _available ? 'Available' : 'Hidden',
+              subtitle: _available
+                  ? 'Shows on the Sell menu.'
+                  : 'Hidden from the Sell menu.',
+              leadingIcon: _available
+                  ? Icons.check_circle
+                  : Icons.visibility_off_outlined,
+            );
+          },
           bg: _available ? YColor.brandTint : YColor.surface2,
           fg: _available ? YColor.brandDeep : YColor.inkMuted,
           border: _available
