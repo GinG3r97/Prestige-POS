@@ -539,7 +539,7 @@ class _ItemRow extends StatelessWidget {
             const SizedBox(width: 12),
             // Name + meta
             Expanded(
-              flex: 4,
+              flex: 6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -571,11 +571,14 @@ class _ItemRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${item.category} · ${item.unit.label}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: YFont.caption(),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 16),
             // Stock amount + bar
             Expanded(
               flex: 4,
