@@ -134,6 +134,7 @@ class _ProductAreaTab extends StatefulWidget {
 
 class _ProductAreaTabState extends State<_ProductAreaTab> {
   String? _typeId;
+  bool _showTracking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -170,8 +171,11 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                   label: t.name,
                   iconName: t.iconName,
                   fallback: Icons.label_outline,
-                  selected: t.id == _typeId,
-                  onTap: () => setState(() => _typeId = t.id),
+                  selected: !_showTracking && t.id == _typeId,
+                  onTap: () => setState(() {
+                    _typeId = t.id;
+                    _showTracking = false;
+                  }),
                 ),
               if (types.isEmpty)
                 Padding(
@@ -180,23 +184,123 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
                       style:
                           YFont.caption().copyWith(color: YColor.inkMuted)),
                 ),
+              const SizedBox(height: 12),
+              const Divider(color: YColor.hairline, height: 1),
+              const SizedBox(height: 8),
+              _navRow(
+                label: 'Inventory tracking',
+                fallback: Icons.inventory_2_outlined,
+                selected: _showTracking,
+                onTap: () => setState(() => _showTracking = true),
+              ),
             ],
           ),
         ),
         // ── Right detail pane ──
         Expanded(
-          child: selType == null
-              ? Center(
-                  child: _emptyCard(
-                    icon: Icons.label_outline,
-                    title: 'No product types yet',
-                    subtitle:
-                        'Add a type like Drinks, Foods, or Service to start.',
-                  ),
-                )
-              : _detail(context, state, selType, subs),
+          child: _showTracking
+              ? _trackingPane(context, state)
+              : selType == null
+                  ? Center(
+                      child: _emptyCard(
+                        icon: Icons.label_outline,
+                        title: 'No product types yet',
+                        subtitle:
+                            'Add a type like Drinks, Foods, or Service to start.',
+                      ),
+                    )
+                  : _detail(context, state, selType, subs),
         ),
       ],
+    );
+  }
+
+  /// Right pane shown when "Inventory tracking" is selected in the rail — the
+  /// store-wide master switch + a plain-English explanation.
+  Widget _trackingPane(BuildContext context, AppState state) {
+    final on = state.inventoryTrackingEnabled;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(on ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                size: 26, color: YColor.brandDeep),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Inventory tracking',
+                      style: YFont.titleMD().copyWith(fontSize: 22)),
+                  const SizedBox(height: 2),
+                  Text(on ? 'On for this store' : 'Off for this store',
+                      style: YFont.caption().copyWith(
+                          color: on ? YColor.brand : YColor.inkMuted)),
+                ],
+              ),
+            ),
+            Switch(
+              value: on,
+              onChanged: (v) async {
+                final err = await state.setInventoryTrackingEnabled(v);
+                if (!context.mounted) return;
+                if (err != null) {
+                  PushToast.show(context,
+                      title: 'Could not update',
+                      subtitle: err,
+                      leadingIcon: Icons.error_outline);
+                }
+              },
+              activeThumbColor: YColor.brand,
+            ),
+          ]),
+          const SizedBox(height: 20),
+          const Divider(color: YColor.hairline),
+          const SizedBox(height: 16),
+          Text('What this does',
+              style: YFont.bodyStrong().copyWith(fontSize: 14)),
+          const SizedBox(height: 10),
+          _trackExplainRow(Icons.check_circle_outline, 'When ON',
+              'Products that have a recipe and their own "Track inventory" toggle on deduct ingredients on every sale, and stop selling when an ingredient runs out.'),
+          const SizedBox(height: 10),
+          _trackExplainRow(Icons.do_not_disturb_on_outlined, 'When OFF',
+              'Nothing is deducted — every product sells freely regardless of stock. The per-product toggles are ignored until you switch this back on.'),
+          const SizedBox(height: 10),
+          _trackExplainRow(Icons.tune, 'Per product',
+              'Each product also has its own "Track inventory" switch (product editor → Options). This store switch is the master that gates them all.'),
+        ],
+      ),
+    );
+  }
+
+  Widget _trackExplainRow(IconData icon, String title, String body) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: YColor.surface1,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(color: YColor.hairline),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: YColor.brandDeep),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(body, style: YFont.caption()),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

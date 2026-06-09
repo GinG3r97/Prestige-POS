@@ -48,8 +48,6 @@ class _ProductsViewState extends State<ProductsView> {
       color: YColor.surface2,
       child: Column(
         children: [
-          _globalTrackingBanner(context, state),
-          Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: Row(
               children: [
@@ -170,9 +168,19 @@ class _ProductsViewState extends State<ProductsView> {
                                 child: InkWell(
                                   onTap: () =>
                                       setState(() => _selectedId = p.id),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: selected
+                                              ? YColor.brand
+                                              : Colors.transparent,
+                                          width: 3,
+                                        ),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.fromLTRB(
+                                        13, 12, 12, 12),
                                     child: Row(children: [
                                       ProductVisual(
                                         imageUrl: p.imageUrl,
@@ -222,12 +230,18 @@ class _ProductsViewState extends State<ProductsView> {
                                             ]),
                                             const SizedBox(height: 2),
                                             Text(
-                                              '${p.categoryName.isNotEmpty ? p.categoryName : p.category.title} · ${p.basePrice.formatted}',
+                                              '${p.categoryName.isNotEmpty ? p.categoryName : p.category.title} · ${p.openPrice ? 'Custom price' : p.basePrice.formatted}',
                                               style: YFont.caption(),
                                             ),
                                           ],
                                         ),
                                       ),
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.chevron_right,
+                                          size: 18,
+                                          color: selected
+                                              ? YColor.brandDeep
+                                              : YColor.inkSubtle),
                                     ]),
                                   ),
                                 ),
@@ -258,50 +272,6 @@ class _ProductsViewState extends State<ProductsView> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _globalTrackingBanner(BuildContext context, AppState state) {
-    final on = state.inventoryTrackingEnabled;
-    return Container(
-      color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      child: Row(children: [
-        Icon(on ? Icons.inventory_2 : Icons.inventory_2_outlined,
-            size: 18, color: YColor.brandDeep),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Track inventory for this store',
-                  style: YFont.bodyStrong()),
-              const SizedBox(height: 2),
-              Text(
-                on
-                    ? 'On — tracked products deduct ingredients and stop selling when out of stock.'
-                    : 'Off — every product sells freely; ingredients are not deducted.',
-                style: YFont.caption(),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        Switch(
-          value: on,
-          onChanged: (v) async {
-            final err = await state.setInventoryTrackingEnabled(v);
-            if (!context.mounted) return;
-            if (err != null) {
-              PushToast.show(context,
-                  title: 'Could not update',
-                  subtitle: err,
-                  leadingIcon: Icons.error_outline);
-            }
-          },
-          activeThumbColor: YColor.brand,
-        ),
-      ]),
     );
   }
 
@@ -1810,6 +1780,13 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
   /// Tappable progress header — jump to any step.
   Widget _stepBar() {
+    // Inline editor → real tabs (no 1·2·3·4 progress, you jump freely).
+    if (widget.embedded) {
+      return Row(children: [
+        for (var i = 0; i < _stepTitles.length; i++)
+          Expanded(child: _tabItem(i)),
+      ]);
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(children: [
@@ -1825,6 +1802,34 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           _stepPill(i),
         ],
       ]),
+    );
+  }
+
+  Widget _tabItem(int i) {
+    final active = i == _step;
+    return GestureDetector(
+      onTap: () => setState(() => _step = i),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? YColor.brand : Colors.transparent,
+              width: 2.5,
+            ),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            _stepTitles[i],
+            style: YFont.bodyStrong().copyWith(
+              fontSize: 13.5,
+              color: active ? YColor.brand : YColor.inkMuted,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
