@@ -45,11 +45,11 @@ class _InventoryViewState extends State<InventoryView> {
         final rb = rank(b);
         return ra != rb ? ra.compareTo(rb) : a.compareTo(b);
       });
-    // No "All" anymore — default-select the first category once we have
-    // any. Re-pick if the user's previous choice was removed.
-    if (categories.isNotEmpty &&
-        (_category == null || !categories.contains(_category))) {
-      _category = categories.first;
+    // Default lands on "All items" (null category). Only clear a category that
+    // was removed so the rail selection stays valid.
+    if (_category != null && !categories.contains(_category)) {
+      _category = null;
+      _filter = _Filter.all;
     }
 
     final filtered = _applyFilter(all);
@@ -82,7 +82,7 @@ class _InventoryViewState extends State<InventoryView> {
                                 fontSize: 30, letterSpacing: -0.5)),
                         const SizedBox(height: 4),
                         Text(
-                          '${all.length} items · auto-deducts on each sale',
+                          '${all.length} items · ₱${totalValue.toStringAsFixed(0)} stock value',
                           style: YFont.body()
                               .copyWith(color: YColor.inkMuted),
                         ),
@@ -108,187 +108,150 @@ class _InventoryViewState extends State<InventoryView> {
               ),
             ),
           ),
-          const SizedBox(height: 22),
+          Container(height: 0.5, color: YColor.hairline),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-              child: _InvCentered(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                // Stat cards
-                Row(children: [
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Items',
-                      value: '${all.length}',
-                      color: YColor.brandDeep,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Left rail: quick filters + categories ──
+                SizedBox(
+                  width: 212,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: YColor.surface1,
+                      border: Border(
+                          right: BorderSide(color: YColor.hairline)),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.warning_amber_rounded,
-                      label: 'Low stock',
-                      value: '$lowCount',
-                      color: lowCount > 0 ? Colors.orange : YColor.inkMuted,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.cancel_outlined,
-                      label: 'Out of stock',
-                      value: '$outCount',
-                      color: outCount > 0 ? YColor.danger : YColor.inkMuted,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.payments_outlined,
-                      label: 'Stock value',
-                      value: '₱${totalValue.toStringAsFixed(0)}',
-                      color: YColor.brand,
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 22),
-
-                // Filter row
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: YColor.surface1,
-                    borderRadius: BorderRadius.circular(YRadius.lg),
-                    border: Border.all(
-                        color: YColor.hairline.withValues(alpha: 0.6)),
-                  ),
-                  child: Row(children: [
-                    Expanded(
-                      child: TextField(
-                        onChanged: (v) => setState(() => _query = v),
-                        decoration: InputDecoration(
-                          prefixIcon:
-                              const Icon(Icons.search, size: 18),
-                          hintText: 'Search by name, SKU, supplier…',
-                          hintStyle: YFont.body()
-                              .copyWith(color: YColor.inkSubtle),
-                          filled: true,
-                          fillColor: YColor.surface2,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(YRadius.md),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    _filterChip('All', _filter == _Filter.all,
-                        () => setState(() => _filter = _Filter.all)),
-                    const SizedBox(width: 6),
-                    _filterChip(
-                      'Low ($lowCount)',
-                      _filter == _Filter.low,
-                      () => setState(() => _filter = _Filter.low),
-                      tone: lowCount > 0 ? Colors.orange : null,
-                    ),
-                    const SizedBox(width: 6),
-                    _filterChip(
-                      'Out ($outCount)',
-                      _filter == _Filter.out,
-                      () => setState(() => _filter = _Filter.out),
-                      tone: outCount > 0 ? YColor.danger : null,
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 8),
-                if (categories.isNotEmpty)
-                  SizedBox(
-                    height: 36,
-                    // Removed the "All categories" chip — Stock now always
-                    // lands on a real bucket (Coffee & Tea first, then the
-                    // rest in their declared sort order).
                     child: ListView(
-                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.fromLTRB(10, 12, 10, 24),
                       children: [
-                        for (final c in categories)
+                        _railRow('All items', all.length,
+                            icon: Icons.inventory_2_outlined,
+                            selected:
+                                _category == null && _filter == _Filter.all,
+                            onTap: () => setState(() {
+                                  _category = null;
+                                  _filter = _Filter.all;
+                                })),
+                        _railRow('Low stock', lowCount,
+                            icon: Icons.warning_amber_rounded,
+                            tone: Colors.orange,
+                            selected: _filter == _Filter.low,
+                            onTap: () => setState(() {
+                                  _filter = _Filter.low;
+                                  _category = null;
+                                })),
+                        _railRow('Out of stock', outCount,
+                            icon: Icons.cancel_outlined,
+                            tone: YColor.danger,
+                            selected: _filter == _Filter.out,
+                            onTap: () => setState(() {
+                                  _filter = _Filter.out;
+                                  _category = null;
+                                })),
+                        if (categories.isNotEmpty) ...[
+                          const SizedBox(height: 8),
                           Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: _categoryChip(c, c),
+                            padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+                            child: Text('CATEGORIES',
+                                style: YFont.caption().copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.0,
+                                  color: YColor.inkMuted,
+                                )),
                           ),
-                      ],
-                    ),
-                  ),
-
-                const SizedBox(height: 14),
-
-                // List
-                if (filtered.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(36),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: YColor.surface1,
-                      borderRadius: BorderRadius.circular(YRadius.lg),
-                      border: Border.all(color: YColor.hairline),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.inventory_2_outlined,
-                            size: 38, color: YColor.inkMuted),
-                        const SizedBox(height: 8),
-                        Text('No items match.',
-                            style: YFont.bodyStrong()),
-                        Text(
-                          'Try a different search or clear the filter.',
-                          style: YFont.caption(),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Container(
-                    decoration: BoxDecoration(
-                      color: YColor.surface1,
-                      borderRadius: BorderRadius.circular(YRadius.lg),
-                      border: Border.all(
-                          color: YColor.hairline.withValues(alpha: 0.6)),
-                    ),
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < filtered.length; i++) ...[
-                          _ItemRow(
-                            item: filtered[i],
-                            onEdit: () =>
-                                _openForm(context, state, filtered[i]),
-                            onRestock: () =>
-                                _openRestock(context, state, filtered[i]),
-                            onStockTake: () =>
-                                _openStockTake(context, state, filtered[i]),
-                            onRemove: () =>
-                                _confirmRemove(context, state, filtered[i]),
-                          ),
-                          if (i != filtered.length - 1)
-                            Container(
-                              height: 0.5,
-                              color: YColor.hairline,
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                            ),
+                          for (final c in categories)
+                            _railRow(
+                                c, all.where((i) => i.category == c).length,
+                                icon: Icons.folder_outlined,
+                                selected: _filter == _Filter.all &&
+                                    _category == c,
+                                onTap: () => setState(() {
+                                      _category = c;
+                                      _filter = _Filter.all;
+                                    })),
                         ],
                       ],
                     ),
                   ),
-                const SizedBox(height: 32),
-                  ],
                 ),
-              ),
+                // ── Right pane: search + compact item list ──
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+                        child: TextField(
+                          onChanged: (v) => setState(() => _query = v),
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            hintText: 'Search by name, SKU, supplier…',
+                            hintStyle: YFont.body()
+                                .copyWith(color: YColor.inkSubtle),
+                            filled: true,
+                            fillColor: YColor.surface1,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md),
+                              borderSide:
+                                  const BorderSide(color: YColor.hairline),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md),
+                              borderSide:
+                                  const BorderSide(color: YColor.hairline),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Container(height: 0.5, color: YColor.hairline),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.inventory_2_outlined,
+                                        size: 38, color: YColor.inkMuted),
+                                    const SizedBox(height: 8),
+                                    Text('No items here',
+                                        style: YFont.bodyStrong()),
+                                    Text(
+                                        'Try another category, search, or add an item.',
+                                        style: YFont.caption()),
+                                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) => Container(
+                                    height: 0.5,
+                                    color: YColor.hairline,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 16)),
+                                itemBuilder: (_, i) => _ItemRow(
+                                  item: filtered[i],
+                                  onEdit: () =>
+                                      _openForm(context, state, filtered[i]),
+                                  onRestock: () => _openRestock(
+                                      context, state, filtered[i]),
+                                  onStockTake: () => _openStockTake(
+                                      context, state, filtered[i]),
+                                  onRemove: () => _confirmRemove(
+                                      context, state, filtered[i]),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -318,60 +281,49 @@ class _InventoryViewState extends State<InventoryView> {
     return result;
   }
 
-  Widget _filterChip(
+  /// Left-rail nav row — icon + label + count, brand highlight when selected.
+  Widget _railRow(
     String label,
-    bool selected,
-    VoidCallback onTap, {
+    int count, {
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
     Color? tone,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? (tone ?? YColor.brand)
-              : (tone == null
-                  ? YColor.surface2
-                  : tone.withValues(alpha: 0.10)),
-          borderRadius: BorderRadius.circular(YRadius.md),
-          border: Border.all(
-            color: selected ? Colors.transparent : YColor.hairline,
-          ),
-        ),
-        child: Text(
-          label,
-          style: YFont.bodyStrong().copyWith(
-            fontSize: 12,
+    final accent = tone ?? YColor.brandDeep;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
             color: selected
-                ? Colors.white
-                : (tone ?? YColor.ink),
+                ? (tone == null
+                    ? YColor.brandTint
+                    : tone.withValues(alpha: 0.14))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(YRadius.md),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _categoryChip(String? value, String label) {
-    final selected = _category == value;
-    return GestureDetector(
-      onTap: () => setState(() => _category = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? YColor.brand : YColor.surface1,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: YColor.hairline),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: YFont.bodyStrong().copyWith(
-            fontSize: 12,
-            color: selected ? Colors.white : YColor.ink,
-          ),
+          child: Row(children: [
+            Icon(icon, size: 17, color: accent),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(
+                    fontSize: 13,
+                    color: selected ? accent : YColor.ink,
+                  )),
+            ),
+            Text('$count',
+                style: YFont.caption().copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: selected ? accent : YColor.inkMuted,
+                )),
+          ]),
         ),
       ),
     );
@@ -513,69 +465,6 @@ class _InvCentered extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 1100),
         child: child,
       ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: YColor.surface1,
-        borderRadius: BorderRadius.circular(YRadius.lg),
-        border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
-      ),
-      child: Row(children: [
-        Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: YFont.caption().copyWith(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: YFont.titleLG().copyWith(
-                  fontSize: 22,
-                  letterSpacing: -0.5,
-                  color: color,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ]),
     );
   }
 }
