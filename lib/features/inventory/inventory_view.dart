@@ -68,44 +68,40 @@ class _InventoryViewState extends State<InventoryView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
-            child: _InvCentered(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Inventory',
-                            style: YFont.titleLG().copyWith(
-                                fontSize: 30, letterSpacing: -0.5)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${all.length} items · ₱${totalValue.toStringAsFixed(0)} stock value',
-                          style: YFont.body()
-                              .copyWith(color: YColor.inkMuted),
-                        ),
-                      ],
-                    ),
+            padding: const EdgeInsets.fromLTRB(24, 14, 16, 12),
+            child: Row(
+              children: [
+                Text('Inventory',
+                    style: YFont.titleLG()
+                        .copyWith(fontSize: 22, letterSpacing: -0.4)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '${all.length} items · ₱${totalValue.toStringAsFixed(0)} value',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        YFont.caption().copyWith(color: YColor.inkMuted),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openForm(context, state, null),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add item'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: YColor.brand,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md)),
-                    ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _openForm(context, state, null),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add item'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: YColor.brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md)),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           Container(height: 0.5, color: YColor.hairline),
@@ -450,25 +446,6 @@ class _InventoryViewState extends State<InventoryView> {
 /// Horizontally centers [child] inside the 1100px column. Mirrors the More
 /// page pattern — Row + Spacer keeps content top-anchored instead of
 /// vertically centered inside the scroll view.
-class _InvCentered extends StatelessWidget {
-  const _InvCentered({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // Center (not Spacer+ConstrainedBox+Spacer): Spacers force the box to be
-    // measured at its full maxWidth, which overflows on a narrower iPad mini
-    // (≈1077pt). Center caps the child to the available width and still
-    // centers it on a wide iPad Pro.
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1100),
-        child: child,
-      ),
-    );
-  }
-}
-
 class _ItemRow extends StatelessWidget {
   const _ItemRow({
     required this.item,
