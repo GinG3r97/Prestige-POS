@@ -96,7 +96,8 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
     super.dispose();
   }
 
-  bool get _canSave => _name.text.trim().isNotEmpty;
+  bool get _canSave =>
+      _name.text.trim().isNotEmpty && _categoryId != null;
 
   void _save() {
     final label = _unitLabel.text.trim();

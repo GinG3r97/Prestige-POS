@@ -182,38 +182,51 @@ class _InventoryViewState extends State<InventoryView> {
                           ),
                           const SizedBox(width: 12),
                           // Overall stock value.
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: YColor.brandTint.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(YRadius.md),
+                          SizedBox(
+                            height: 46,
+                            child: Container(
+                              alignment: Alignment.center,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color:
+                                    YColor.brandTint.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(YRadius.md),
+                              ),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.payments_outlined,
+                                        size: 15, color: YColor.brandDeep),
+                                    const SizedBox(width: 6),
+                                    Text('₱${totalValue.toStringAsFixed(0)}',
+                                        style: YFont.bodyStrong().copyWith(
+                                            fontSize: 13,
+                                            color: YColor.brandDeep)),
+                                  ]),
                             ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.payments_outlined,
-                                  size: 15, color: YColor.brandDeep),
-                              const SizedBox(width: 6),
-                              Text('₱${totalValue.toStringAsFixed(0)}',
-                                  style: YFont.bodyStrong().copyWith(
-                                      fontSize: 13, color: YColor.brandDeep)),
-                            ]),
                           ),
                           const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: () => _openForm(context, state, null),
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Add item'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: YColor.brand,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
-                              textStyle: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(YRadius.md)),
+                          SizedBox(
+                            height: 46,
+                            child: ElevatedButton.icon(
+                              onPressed: () =>
+                                  _openForm(context, state, null),
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Add item'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: YColor.brand,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16),
+                                textStyle: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(YRadius.md)),
+                              ),
                             ),
                           ),
                         ]),

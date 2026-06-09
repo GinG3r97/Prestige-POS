@@ -108,20 +108,24 @@ class _ProductsViewState extends State<ProductsView> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: () => _openForm(context, state, null),
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: YColor.brand,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 13),
-                          textStyle: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(YRadius.md)),
+                      SizedBox(
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _openForm(context, state, null),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: YColor.brand,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            textStyle: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w600),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(YRadius.md)),
+                          ),
                         ),
                       ),
                     ]),
