@@ -2508,14 +2508,42 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           ),
           const SizedBox(height: 10),
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  for (var i = 0; i < _recipe.length; i++)
-                    _recipeLine(i),
-                ],
-              ),
-            ),
+            child: _recipe.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: YColor.brandTint.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(Icons.science_outlined,
+                              size: 26, color: YColor.brandDeep),
+                        ),
+                        const SizedBox(height: 12),
+                        Text('No ingredients yet',
+                            style: YFont.bodyStrong()
+                                .copyWith(color: YColor.inkMuted)),
+                        const SizedBox(height: 3),
+                        Text(
+                            'Link inventory items so stock auto-deducts on each sale.',
+                            textAlign: TextAlign.center,
+                            style: YFont.caption()),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _recipe.length; i++)
+                          _recipeLine(i),
+                      ],
+                    ),
+                  ),
           ),
           const SizedBox(height: 6),
           OutlinedButton.icon(
@@ -2919,59 +2947,216 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
+  /// Searchable ingredient picker — a bottom sheet listing inventory items
+  /// (icon · name · stock) with a live search box.
+  Future<void> _pickIngredient(RecipeLine line) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final searchCtrl = TextEditingController();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: YColor.surface1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final q = searchCtrl.text.trim().toLowerCase();
+          final items = widget.inventory.where((it) {
+            return q.isEmpty ||
+                it.name.toLowerCase().contains(q) ||
+                it.category.toLowerCase().contains(q);
+          }).toList();
+          return Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.62,
+              child: Column(children: [
+                const SizedBox(height: 10),
+                Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: YColor.hairline,
+                        borderRadius: BorderRadius.circular(2))),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: Row(children: [
+                    const Icon(Icons.science_outlined,
+                        size: 18, color: YColor.brandDeep),
+                    const SizedBox(width: 10),
+                    Text('Pick ingredient',
+                        style: YFont.titleMD().copyWith(fontSize: 17)),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    onChanged: (_) => setSheet(() {}),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      hintText: 'Search ingredients…',
+                      hintStyle:
+                          YFont.body().copyWith(color: YColor.inkSubtle),
+                      filled: true,
+                      fillColor: YColor.surface2,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                Container(height: 0.5, color: YColor.hairline),
+                Expanded(
+                  child: items.isEmpty
+                      ? Center(
+                          child: Text('No ingredients match.',
+                              style: YFont.caption()))
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: items.length,
+                          itemBuilder: (_, i) {
+                            final it = items[i];
+                            final selected = it.id == line.inventoryItemId;
+                            return InkWell(
+                              onTap: () => Navigator.pop(ctx, it.id),
+                              child: Container(
+                                color: selected
+                                    ? YColor.brandTint.withValues(alpha: 0.4)
+                                    : null,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
+                                child: Row(children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                        color: YColor.brandTint
+                                            .withValues(alpha: 0.5),
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                    child: Icon(
+                                        materialIconForName(it.name) ??
+                                            Icons.inventory_2_outlined,
+                                        size: 18,
+                                        color: YColor.brandDeep),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(it.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: YFont.bodyStrong()
+                                                .copyWith(fontSize: 14)),
+                                        Text(
+                                            '${it.category} · ${it.currentStock.toStringAsFixed(0)} ${it.displayUnit} in stock',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: YFont.caption()),
+                                      ],
+                                    ),
+                                  ),
+                                  if (selected)
+                                    const Icon(Icons.check_circle,
+                                        size: 18, color: YColor.brand),
+                                ]),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+    searchCtrl.dispose();
+    if (!mounted) return;
+    if (picked != null) setState(() => line.inventoryItemId = picked);
+  }
+
   Widget _recipeLine(int index) {
     final line = _recipe[index];
     final item = widget.inventory
         .where((i) => i.id == line.inventoryItemId)
         .firstOrNull;
     final unit = item?.displayUnit ?? '';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        color: YColor.surface1,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(color: YColor.hairline),
+      ),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Inventory item dropdown
+            // Tappable ingredient picker (opens a searchable sheet)
             Expanded(
-              flex: 4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: YColor.surface1,
-                  borderRadius: BorderRadius.circular(YRadius.md),
-                  border: Border.all(color: YColor.hairline),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: line.inventoryItemId,
-                    isExpanded: true,
-                    itemHeight: null,
-                    items: widget.inventory
-                        .map((it) => DropdownMenuItem(
-                              value: it.id,
-                              child: _ingredientMenuRow(
-                                  '${it.name} (${it.displayUnit})'),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(
-                        () => line.inventoryItemId = v ?? line.inventoryItemId),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _pickIngredient(line),
+                child: Row(children: [
+                  Container(
+                    width: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: YColor.brandTint.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                        materialIconForName(item?.name ?? '') ??
+                            Icons.inventory_2_outlined,
+                        size: 18,
+                        color: YColor.brandDeep),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item?.name ?? 'Select ingredient',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: YFont.bodyStrong().copyWith(
+                          fontSize: 13.5,
+                          color: item == null
+                              ? YColor.inkSubtle
+                              : YColor.ink),
+                    ),
+                  ),
+                  const Icon(Icons.unfold_more,
+                      size: 16, color: YColor.inkSubtle),
+                ]),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             // Quantity
             SizedBox(
-              width: 130,
+              width: 86,
               child: KeyboardAccessoryField(
                 controller: _qtyCtrl(line),
                 accessoryLabel: 'QUANTITY',
                 hint: '0',
                 keyboardType: TextInputType.number,
-                fillColor: YColor.surface1,
+                fillColor: YColor.surface2,
                 borderColor: YColor.hairline,
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 14),
+                    horizontal: 10, vertical: 12),
                 onChanged: (v) {
                   line.quantity = double.tryParse(v) ?? 0;
                   setState(() {});
@@ -2979,23 +3164,24 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               ),
             ),
             // Unit display
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+            SizedBox(
+              width: 38,
               child: Center(
                 child: Text(unit,
-                    style: YFont.bodyStrong()
-                        .copyWith(color: YColor.inkMuted)),
+                    style: YFont.caption().copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: YColor.inkMuted)),
               ),
             ),
             // Remove
             IconButton(
               iconSize: 18,
+              visualDensity: VisualDensity.compact,
               onPressed: () => setState(() {
                 final removed = _recipe.removeAt(index);
                 _qtyCtrls.remove(removed.id)?.dispose();
               }),
-              icon: const Icon(Icons.delete_outline,
-                  color: YColor.inkMuted),
+              icon: const Icon(Icons.delete_outline, color: YColor.danger),
             ),
           ],
         ),
