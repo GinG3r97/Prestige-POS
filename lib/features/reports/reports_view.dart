@@ -489,9 +489,8 @@ class _ReportsViewState extends State<ReportsView> {
     final separated = _separatedSalesGroups(context.read<AppState>(), data);
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
-      if (_salesSubTab == 'separated') ...[
-        _SeparatedKpiStrip(groups: separated),
-        _CategoryBreakdownSection(
+      if (_salesSubTab == 'separated')
+        _SeparatedRailSection(
           title: 'Separated sales',
           subtitle:
               'Consigned / separated groups (Books, Flowers…) and the products sold',
@@ -500,8 +499,8 @@ class _ReportsViewState extends State<ReportsView> {
               'No separated sales groups yet. In Maintenance, turn on '
               '"Separate in Sales reports" for a Product Type or Category '
               '(e.g. consigned Books) to settle it here.',
-        ),
-      ] else ...[
+        )
+      else ...[
         _Headline(data: data, comparing: _comparePrior),
         _KpiStrip(data: data, comparing: _comparePrior),
         _SalesOverTime(data: data, comparing: _comparePrior),
@@ -562,9 +561,8 @@ class _ReportsViewState extends State<ReportsView> {
     final separated = _separatedSalesGroups(context.read<AppState>(), data);
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
-      if (_productSubTab == 'separated') ...[
-        _SeparatedKpiStrip(groups: separated),
-        _CategoryBreakdownSection(
+      if (_productSubTab == 'separated')
+        _SeparatedRailSection(
           title: 'Separated products',
           subtitle:
               'Products sold under each consigned / separated group (Books, Flowers…)',
@@ -572,8 +570,8 @@ class _ReportsViewState extends State<ReportsView> {
           emptyMessage:
               'No separated groups yet. In Maintenance, turn on "Separate in '
               'Sales reports" for a Product Type or Category.',
-        ),
-      ] else ...[
+        )
+      else ...[
         _Headline(data: data, comparing: _comparePrior),
         _ProductKpiStrip(data: data),
         _TwoColRow(
@@ -1072,59 +1070,167 @@ class _ProductIcon extends StatelessWidget {
   }
 }
 
-/// KPI strip for the Separated sub-tab (Sales + Products).
-class _SeparatedKpiStrip extends StatelessWidget {
-  const _SeparatedKpiStrip({required this.groups});
+/// Separated sales as a rail — groups on the left, the selected group's
+/// products (themed icon · qty · revenue) on the right.
+class _SeparatedRailSection extends StatefulWidget {
+  const _SeparatedRailSection({
+    required this.title,
+    required this.subtitle,
+    required this.groups,
+    required this.emptyMessage,
+  });
+  final String title;
+  final String subtitle;
   final List<_CatGroup> groups;
+  final String emptyMessage;
+
+  @override
+  State<_SeparatedRailSection> createState() => _SeparatedRailSectionState();
+}
+
+class _SeparatedRailSectionState extends State<_SeparatedRailSection> {
+  int _sel = 0;
+
+  String _peso(int cents) => '₱${(cents / 100).toStringAsFixed(0)}';
 
   @override
   Widget build(BuildContext context) {
-    final revenue = groups.fold<int>(0, (s, g) => s + g.cents);
-    final items = groups.fold<int>(0, (s, g) => s + g.qty);
-    final top = groups.isEmpty ? '—' : groups.first.name;
-    return LayoutBuilder(builder: (_, c) {
-      final cols = c.maxWidth > 760 ? 4 : (c.maxWidth > 480 ? 2 : 1);
-      const gap = 12.0;
-      final w = (c.maxWidth - gap * (cols - 1)) / cols;
-      return Wrap(spacing: gap, runSpacing: gap, children: [
-        SizedBox(
-          width: w,
-          child: _KpiBox(
-            icon: Icons.payments_outlined,
-            tone: YColor.brand,
-            label: 'Separated revenue',
-            value: '₱${(revenue / 100).toStringAsFixed(0)}',
+    final groups = widget.groups;
+    return _SectionCard(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      onExportCsv: () {
+        final buf = StringBuffer('Sales group,Product,Qty,Revenue (PHP)\n');
+        for (final g in groups) {
+          for (final it in g.items) {
+            buf.writeln('"${g.name.replaceAll('"', '""')}",'
+                '"${it.name.replaceAll('"', '""')}",${it.qty},'
+                '${(it.revenueCents / 100).toStringAsFixed(2)}');
+          }
+        }
+        return buf.toString();
+      },
+      child: groups.isEmpty
+          ? _empty(widget.emptyMessage)
+          : Container(
+              height: 320,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(YRadius.md),
+                border:
+                    Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+              ),
+              child: Row(children: [
+                SizedBox(width: 168, child: _rail(groups)),
+                Container(width: 0.5, color: YColor.hairline),
+                Expanded(
+                    child: _rightPane(
+                        groups[_sel.clamp(0, groups.length - 1)])),
+              ]),
+            ),
+    );
+  }
+
+  Widget _rail(List<_CatGroup> groups) {
+    return Container(
+      color: YColor.surface1,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+        children: [
+          for (var i = 0; i < groups.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _sel = i),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: i == _sel ? YColor.brand : Colors.transparent,
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(groups[i].name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: YFont.bodyStrong().copyWith(
+                              fontSize: 13,
+                              color:
+                                  i == _sel ? Colors.white : YColor.ink)),
+                      const SizedBox(height: 2),
+                      Text('${_peso(groups[i].cents)} · ${groups[i].qty} sold',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: YFont.caption().copyWith(
+                              fontSize: 11,
+                              color: i == _sel
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : YColor.inkMuted)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rightPane(_CatGroup g) {
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Row(children: [
+          const Icon(Icons.sell_outlined, size: 18, color: YColor.brandDeep),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(g.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.titleMD().copyWith(fontSize: 16)),
           ),
+          Text(_peso(g.cents),
+              style: YFont.bodyStrong()
+                  .copyWith(fontSize: 15, color: YColor.brandDeep)),
+        ]),
+      ),
+      Container(height: 0.5, color: YColor.hairline),
+      Expanded(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+          children: [
+            for (final it in g.items)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  _ProductIcon(it.name, size: 30, iconSize: 16),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(it.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                  ),
+                  Text('${it.qty}×',
+                      style:
+                          YFont.caption().copyWith(color: YColor.inkMuted)),
+                  const SizedBox(width: 14),
+                  SizedBox(
+                    width: 84,
+                    child: Text(_peso(it.revenueCents),
+                        textAlign: TextAlign.right,
+                        style: YFont.bodyStrong()
+                            .copyWith(fontSize: 13, color: YColor.brandDeep)),
+                  ),
+                ]),
+              ),
+          ],
         ),
-        SizedBox(
-          width: w,
-          child: _KpiBox(
-            icon: Icons.sell_outlined,
-            tone: YColor.brandDeep,
-            label: 'Sales groups',
-            value: groups.length.toString(),
-          ),
-        ),
-        SizedBox(
-          width: w,
-          child: _KpiBox(
-            icon: Icons.shopping_basket_outlined,
-            tone: Colors.indigo,
-            label: 'Items sold',
-            value: items.toString(),
-          ),
-        ),
-        SizedBox(
-          width: w,
-          child: _KpiBox(
-            icon: Icons.star_outline,
-            tone: Colors.teal,
-            label: 'Top group',
-            value: top,
-          ),
-        ),
-      ]);
-    });
+      ),
+    ]);
   }
 }
 
