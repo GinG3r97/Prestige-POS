@@ -2821,12 +2821,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                   )
                 : GridView.builder(
                     padding: EdgeInsets.zero,
-                    // Pack as many columns as the pane width allows (so the
-                    // narrower right pane next to the rail still fits 2),
-                    // instead of forcing one full-width row.
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 230,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      // 1 item → full width, 2 → halves, 3+ → thirds.
+                      crossAxisCount: _recipe.length.clamp(1, 3),
                       mainAxisExtent: 84,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
