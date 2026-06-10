@@ -487,33 +487,26 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   List<Widget> _salesSections(_ReportData data) {
-    final separated = _separatedSalesGroups(context.read<AppState>(), data);
+    final state = context.read<AppState>();
+    final separated = _salesSubTab == 'separated';
+    // Same UI, different data — General = all categories, Separated = only the
+    // consigned/separated groups. (Full store analytics live in the All lens.)
+    final groups =
+        separated ? _separatedSalesGroups(state, data) : data.categoryGroups;
+    final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
-      if (_salesSubTab == 'separated')
-        _SeparatedRailSection(
-          title: 'Separated sales',
-          subtitle:
-              'Consigned / separated groups (Books, Flowers…) and the products sold',
-          groups: separated,
-          emptyMessage:
-              'No separated sales groups yet. In Maintenance, turn on '
-              '"Separate in Sales reports" for a Product Type or Category '
-              '(e.g. consigned Books) to settle it here.',
-        )
-      else ...[
-        _Headline(data: data, comparing: _comparePrior),
-        _KpiStrip(data: data, comparing: _comparePrior),
-        _SalesOverTime(data: data, comparing: _comparePrior),
-        _TwoColRow(
-          left: _ByPaymentSection(data: data),
-          right: _PeakHoursSection(data: data),
-        ),
-        _TwoColRow(
-          left: _ByCashierSection(data: data),
-          right: _RefundsVoidsSection(data: data),
-        ),
-      ],
+      _SalesMoneyKpis(groups: groups),
+      _CategoryBreakdownSection(
+        title: separated ? 'Separated revenue by group' : 'Revenue by category',
+        subtitle: 'Tap a row to see which products made the money',
+        groups: sorted,
+        emptyMessage: separated
+            ? 'No separated sales groups yet. In Maintenance, turn on '
+                '"Separate in Sales reports" for a Product Type or Category '
+                '(e.g. consigned Books).'
+            : 'No sales in this range yet.',
+      ),
     ];
   }
 
@@ -1351,6 +1344,61 @@ class _NotSellingSection extends StatelessWidget {
               ],
             ),
     );
+  }
+}
+
+/// Owner-friendly money KPIs for the Sales lens, computed from the scoped
+/// category groups (works for both General and Separated).
+class _SalesMoneyKpis extends StatelessWidget {
+  const _SalesMoneyKpis({required this.groups});
+  final List<_CatGroup> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    final revenue = groups.fold<int>(0, (s, g) => s + g.cents);
+    final items = groups.fold<int>(0, (s, g) => s + g.qty);
+    final avgItem = items > 0 ? revenue ~/ items : 0;
+    final top = groups.isEmpty
+        ? '—'
+        : (groups.toList()..sort((a, b) => b.cents.compareTo(a.cents)))
+            .first
+            .name;
+    String peso(int c) => '₱${(c / 100).toStringAsFixed(0)}';
+    return LayoutBuilder(builder: (_, c) {
+      final cols = c.maxWidth > 760 ? 4 : (c.maxWidth > 480 ? 2 : 1);
+      const gap = 12.0;
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(spacing: gap, runSpacing: gap, children: [
+        SizedBox(
+            width: w,
+            child: _KpiBox(
+                icon: Icons.payments_outlined,
+                tone: YColor.brand,
+                label: 'Revenue',
+                value: peso(revenue))),
+        SizedBox(
+            width: w,
+            child: _KpiBox(
+                icon: Icons.shopping_basket_outlined,
+                tone: YColor.brandDeep,
+                label: 'Items sold',
+                value: items.toString())),
+        SizedBox(
+            width: w,
+            child: _KpiBox(
+                icon: Icons.sell_outlined,
+                tone: Colors.indigo,
+                label: 'Avg per item',
+                value: peso(avgItem))),
+        SizedBox(
+            width: w,
+            child: _KpiBox(
+                icon: Icons.star_outline,
+                tone: Colors.teal,
+                label: 'Top earner',
+                value: top)),
+      ]);
+    });
   }
 }
 
