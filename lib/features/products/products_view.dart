@@ -2481,7 +2481,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         Container(width: 0.5, color: YColor.hairline),
         Expanded(
           child: _recipeSel == 'base'
-              ? _baseTab()
+              ? _baseTab(oneColumn: true)
               : _selectedOptionEditor(groups),
         ),
       ]),
@@ -2494,7 +2494,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         if (o.id == _recipeSel) return _optionRecipeEditor(g, o);
       }
     }
-    return _baseTab();
+    return _baseTab(oneColumn: true);
   }
 
   /// Left rail — Base recipe + each modifier option (grouped).
@@ -2591,7 +2591,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final adj = _adjFor(group.id, option.id);
     final baseLines =
         _recipe.where((l) => l.inventoryItemId.isNotEmpty).toList();
-    final extras = adj?.addLines ?? const <RecipeLine>[];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
@@ -2600,50 +2599,22 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           Text('${group.name} · ${option.name}',
               style: YFont.titleMD().copyWith(fontSize: 16)),
           const SizedBox(height: 2),
-          Text('Scale each base ingredient for this option (×1 = no change).',
+          Text(
+              'Scale each base ingredient (×1 = no change, ×0 to remove). '
+              'Add ingredients in Base recipe.',
               style: YFont.caption()),
           const SizedBox(height: 12),
           Expanded(
             child: baseLines.isEmpty
                 ? Center(
-                    child: Text('Add base ingredients first.',
+                    child: Text('Add base ingredients first (Base recipe).',
+                        textAlign: TextAlign.center,
                         style: YFont.caption()))
                 : ListView(
                     padding: EdgeInsets.zero,
                     children: [
                       for (final line in baseLines)
                         _optionLineRow(group, option, line, adj),
-                      const SizedBox(height: 6),
-                      // Extra ingredients only this option adds (e.g. Ice).
-                      if (extras.isNotEmpty) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 6),
-                          child: Text('EXTRA FOR THIS OPTION',
-                              style: YFont.caption().copyWith(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                  color: YColor.inkMuted)),
-                        ),
-                        for (var i = 0; i < extras.length; i++)
-                          _extraLineRow(group, option, i),
-                      ],
-                      const SizedBox(height: 4),
-                      OutlinedButton.icon(
-                        onPressed: () => _addExtraLine(group, option),
-                        icon: const Icon(Icons.add, size: 15),
-                        label: const Text('Add extra ingredient'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: YColor.brand,
-                          side: const BorderSide(color: YColor.hairline),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          textStyle: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(YRadius.md)),
-                        ),
-                      ),
                     ],
                   ),
           ),
@@ -2743,122 +2714,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  void _addExtraLine(ModifierGroup group, ModifierOption option) {
-    final adj = _adjFor(group.id, option.id);
-    final lines = List<RecipeLine>.from(adj?.addLines ?? const []);
-    lines.add(RecipeLine(inventoryItemId: '', quantity: 1));
-    _setAdjustment(
-      groupId: group.id,
-      optionId: option.id,
-      kind: AdjustmentKind.multiplier,
-      addLines: lines,
-    );
-  }
-
-  Widget _extraLineRow(
-      ModifierGroup group, ModifierOption option, int index) {
-    final adj = _adjFor(group.id, option.id)!;
-    final line = adj.addLines[index];
-    final it = widget.inventory
-        .where((i) => i.id == line.inventoryItemId)
-        .firstOrNull;
-    final unit = it == null
-        ? ''
-        : ((it.unitLabel?.trim().isNotEmpty ?? false)
-            ? it.unitLabel!.trim()
-            : it.unit.label.split(' (').first);
-    void commit() {
-      _setAdjustment(
-        groupId: group.id,
-        optionId: option.id,
-        kind: AdjustmentKind.multiplier,
-        addLines: List<RecipeLine>.from(adj.addLines),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-      decoration: BoxDecoration(
-        color: YColor.surface1,
-        borderRadius: BorderRadius.circular(YRadius.md),
-        border: Border.all(color: YColor.hairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                adj.addLines.removeAt(index);
-                commit();
-              },
-              child: Text('Remove',
-                  style: YFont.caption().copyWith(
-                      color: YColor.danger, fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(children: [
-            Expanded(
-              child: IngredientSearchField(
-                items: widget.inventory,
-                selectedId: line.inventoryItemId.isEmpty
-                    ? null
-                    : line.inventoryItemId,
-                onSelect: (id) {
-                  line.inventoryItemId = id;
-                  commit();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 98,
-              child: IgnorePointer(
-                ignoring: it == null,
-                child: Opacity(
-                  opacity: it == null ? 0.4 : 1,
-                  child: TextField(
-                    controller: _qtyCtrl(line),
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true),
-                    style: YFont.bodyStrong().copyWith(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: '0',
-                      isDense: true,
-                      filled: true,
-                      fillColor: YColor.surface2,
-                      suffixText: unit.isEmpty ? null : unit,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 11),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md),
-                        borderSide: const BorderSide(color: YColor.hairline),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md),
-                        borderSide: const BorderSide(color: YColor.hairline),
-                      ),
-                    ),
-                    onChanged: (v) {
-                      line.quantity = double.tryParse(v) ?? 0;
-                      commit();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _baseTab() {
+  Widget _baseTab({bool oneColumn = false}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
@@ -2925,7 +2781,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     padding: EdgeInsets.zero,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       // 1 item → full width, 2 → halves, 3+ → thirds.
-                      crossAxisCount: _recipe.length.clamp(1, 3),
+                      crossAxisCount:
+                          oneColumn ? 1 : _recipe.length.clamp(1, 3),
                       mainAxisExtent: 84,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
