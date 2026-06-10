@@ -3002,7 +3002,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             const SizedBox(width: 8),
             // Quantity with the unit inside — disabled until an item is picked.
             SizedBox(
-              width: 128,
+              width: 98,
               child: IgnorePointer(
                 ignoring: item == null,
                 child: Opacity(
@@ -3015,17 +3015,17 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     fillColor: YColor.surface2,
                     borderColor: YColor.hairline,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 11),
+                        horizontal: 8, vertical: 11),
                     suffix: unit.isEmpty
                         ? null
                         : Center(
                             widthFactor: 1.0,
                             child: Padding(
                               padding:
-                                  const EdgeInsets.only(left: 4, right: 10),
+                                  const EdgeInsets.only(left: 2, right: 8),
                               child: Text(unit,
                                   style: YFont.bodyStrong().copyWith(
-                                      color: YColor.inkMuted, fontSize: 12)),
+                                      color: YColor.inkMuted, fontSize: 11.5)),
                             ),
                           ),
                     onChanged: (v) {
