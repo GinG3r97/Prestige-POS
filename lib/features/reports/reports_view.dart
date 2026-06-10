@@ -1046,10 +1046,53 @@ class _ProductIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.read<AppState>();
     final lower = name.trim().toLowerCase();
-    final p = context
+    final p = state.products
+        .where((x) => x.name.trim().toLowerCase() == lower)
+        .firstOrNull;
+    // The product's own icon, else the icon of its category (product icons
+    // follow the category), else a name-derived themed icon.
+    String? iconName =
+        (p?.iconName?.isNotEmpty ?? false) ? p!.iconName : null;
+    if (iconName == null && p != null) {
+      iconName = state.categories
+          .where((c) => c.id == p.categoryId)
+          .firstOrNull
+          ?.iconName;
+    }
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: YColor.brandTint.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: NameIconOrEmoji(
+        name: name,
+        iconName: iconName,
+        iconSize: iconSize,
+        color: YColor.brandDeep,
+      ),
+    );
+  }
+}
+
+/// Themed category icon for report rows — uses the icon assigned to that
+/// category in Maintenance.
+class _CategoryIcon extends StatelessWidget {
+  const _CategoryIcon(this.name, {this.size = 28, this.iconSize = 15});
+  final String name;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = name.trim().toLowerCase();
+    final c = context
         .read<AppState>()
-        .products
+        .categories
         .where((x) => x.name.trim().toLowerCase() == lower)
         .firstOrNull;
     return Container(
@@ -1062,7 +1105,7 @@ class _ProductIcon extends StatelessWidget {
       ),
       child: NameIconOrEmoji(
         name: name,
-        iconName: p?.iconName,
+        iconName: c?.iconName,
         iconSize: iconSize,
         color: YColor.brandDeep,
       ),
@@ -1364,6 +1407,8 @@ class _CategoryBreakdownSectionState extends State<_CategoryBreakdownSection> {
                     size: 20, color: YColor.inkMuted),
               ),
               const SizedBox(width: 6),
+              _CategoryIcon(g.name, size: 28, iconSize: 15),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(g.name,
                     maxLines: 1,
@@ -2539,17 +2584,7 @@ class _ByCategorySection extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Row(children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: YColor.brandTint.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.folder_outlined,
-                            size: 16, color: YColor.brandDeep),
-                      ),
+                      _CategoryIcon(r.name, size: 32, iconSize: 16),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
