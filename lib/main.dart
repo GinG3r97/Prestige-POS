@@ -16,6 +16,21 @@ import 'features/pin/set_pin_view.dart';
 import 'features/shell/nav_controller.dart';
 import 'features/shell/shell_view.dart';
 
+/// Drops keyboard focus after any route is popped so a closing dropdown/dialog/
+/// picker/sheet can't restore focus to a text field and re-pop its
+/// KeyboardAccessoryField. Deferred a frame to run after the route's own
+/// focus-restoration.
+class _DismissKeyboardOnPopObserver extends NavigatorObserver {
+  void _drop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _drop();
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
@@ -151,6 +166,11 @@ class YosefPOSApp extends StatelessWidget {
         title: 'Prestige POS',
         debugShowCheckedModeBanner: false,
         theme: theme,
+        // Global guard: after ANY route closes (dropdown menu, dialog, date/
+        // time picker, bottom sheet), drop focus so the route can't restore it
+        // to a text field — which would re-pop that field's KeyboardAccessory
+        // card (the "selecting a dropdown re-opens the keyboard/search" bug).
+        navigatorObservers: [_DismissKeyboardOnPopObserver()],
         // Scales the whole app down to fit smaller/low-res tablets (e.g. the
         // Techlife) so the UI isn't oversized. NOTE: this transforms the tree,
         // so overlay-based drag (the 3rd-party product grid) can float off the

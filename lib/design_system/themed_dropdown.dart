@@ -149,6 +149,15 @@ class _ThemedDropdownFieldState<T> extends State<_ThemedDropdownField<T>> {
           ),
       ],
     );
+    // Kill any focus the popup route restored on close — otherwise it re-focuses
+    // the last text field and re-pops its KeyboardAccessoryField card. Do it now
+    // AND next frame, since the restore can land after this returns.
+    if (mounted) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusManager.instance.primaryFocus?.unfocus();
+      });
+    }
     if (picked != null) widget.onChanged(picked);
   }
 
