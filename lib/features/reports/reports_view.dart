@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../app/app_state.dart';
 import '../../app/stores/catalog_store.dart';
 import '../../app/stores/hr_store.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -458,10 +459,15 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   Widget _content(_ReportData? data) {
-    // Inventory lens reads from AppState directly and doesn't need
-    // the `_ReportData` order snapshot, so we pull tenant data here
-    // via watch() and forward it to the inventory section.
+    // Inventory lens reads inventory items/categories (now from
+    // InventoryStore) and doesn't need the `_ReportData` order snapshot, so we
+    // pull tenant data here via watch() and forward it to the inventory
+    // section. Watch InventoryStore too so the Inventory lens rebuilds when
+    // stock/items change (AppState no longer notifies on inventory). The
+    // inventory section widgets read live data through the AppState [state]
+    // delegates, so forwarding `state` keeps working.
     final state = context.watch<AppState>();
+    context.watch<InventoryStore>();
     final sections = <Widget>[];
 
     switch (_lens) {

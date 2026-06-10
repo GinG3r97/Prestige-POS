@@ -25,6 +25,7 @@ import '../models/tenant.dart';
 import 'stores/bookings_store.dart';
 import 'stores/catalog_store.dart';
 import 'stores/hr_store.dart';
+import 'stores/inventory_store.dart';
 import 'stores/members_store.dart';
 
 const _uuid = Uuid();
@@ -90,6 +91,19 @@ class AppState extends ChangeNotifier {
   /// main.dart).
   final CatalogStore catalog = CatalogStore();
 
+  /// Inventory domain (inventory items + inventory categories) lives in its
+  /// own ChangeNotifier so stock changes don't rebuild every AppState
+  /// watcher. AppState owns the instance and drives its lifecycle
+  /// (hydrate/reset). It's money-path coupled — CHECKOUT deducts stock — so
+  /// the deduction stays a coordinator here ([deductCartFromInventory]) that
+  /// reads cart + catalog and mutates inventory THROUGH [InventoryStore.
+  /// applyDeductions]; the stock-read coordinators
+  /// (canFulfillOne/buildableCount/validateCartStock/projectedCartDeductions)
+  /// also stay here and read `inv.inventory`. Inventory feature screens watch
+  /// this store directly via its own provider (see main.dart). Named `inv` to
+  /// avoid colliding with the local `inv` vars in the read coordinators.
+  final InventoryStore inv = InventoryStore();
+
   StreamSubscription<sb.AuthState>? _authSub;
 
   /// Mirror Supabase auth state into our local owner model. If the user is
@@ -134,8 +148,7 @@ class AppState extends ChangeNotifier {
         _features = cat.TenantFeatures();
         hr.reset();
         catalog.reset();
-        _inventory = [];
-        _inventoryCategories = [];
+        inv.reset();
         bookings.reset();
         members.reset();
         cart.clear();
@@ -295,26 +308,11 @@ class AppState extends ChangeNotifier {
         // independent catalog tables then fetches products + add-ons, so the
         // parallelism is unchanged — it just runs as one entry in this batch.
         catalog.hydrate(tid),
-        () async {
-          final invCatRows = await supabase
-              .from('inventory_categories')
-              .select('*')
-              .eq('tenant_id', tid)
-              .order('sort_order');
-          _inventoryCategories = (invCatRows as List)
-              .map((r) => InventoryCategory.fromRow(r as Map<String, dynamic>))
-              .toList();
-        }(),
-        () async {
-          final invRows = await supabase
-              .from('inventory_items')
-              .select('*')
-              .eq('tenant_id', tid)
-              .order('name');
-          _inventory = (invRows as List)
-              .map((r) => InventoryItem.fromRow(r as Map<String, dynamic>))
-              .toList();
-        }(),
+        // Inventory (items + categories) lives in InventoryStore. hydrate runs
+        // its own internal Future.wait over the two tables (same order/sort),
+        // so the parallelism is unchanged — it just runs as one entry in this
+        // concurrent batch.
+        inv.hydrate(tid as String),
       ]);
 
       // Configured receipt printer (single default).
@@ -2257,11 +2255,11 @@ class AppState extends ChangeNotifier {
     if (!tracksStock(product)) return true;
     if (product.recipe.isEmpty) return true;
     for (final line in product.recipe) {
-      final inv = _inventory
+      final invItem = inv.inventory
           .where((i) => i.id == line.inventoryItemId)
           .firstOrNull;
-      if (inv == null) continue; // tolerate orphan refs — block at tender
-      if (inv.currentStock < line.quantity) return false;
+      if (invItem == null) continue; // tolerate orphan refs — block at tender
+      if (invItem.currentStock < line.quantity) return false;
     }
     return true;
   }
@@ -2283,10 +2281,10 @@ class AppState extends ChangeNotifier {
     var maxBuild = kUnlimitedBuild;
     for (final line in product.recipe) {
       if (line.quantity <= 0) continue; // a 0-qty line never limits
-      final inv =
-          _inventory.where((i) => i.id == line.inventoryItemId).firstOrNull;
-      if (inv == null) return 0; // missing ingredient → can't make any
-      final canMake = (inv.currentStock / line.quantity).floor();
+      final invItem =
+          inv.inventory.where((i) => i.id == line.inventoryItemId).firstOrNull;
+      if (invItem == null) return 0; // missing ingredient → can't make any
+      final canMake = (invItem.currentStock / line.quantity).floor();
       if (canMake < maxBuild) maxBuild = canMake;
       if (maxBuild <= 0) return 0;
     }
@@ -2328,14 +2326,14 @@ class AppState extends ChangeNotifier {
   String? validateCartStock() {
     final needed = projectedCartDeductions();
     for (final entry in needed.entries) {
-      final inv = _inventory
+      final invItem = inv.inventory
           .where((i) => i.id == entry.key)
           .firstOrNull;
-      if (inv == null) continue;
-      if (inv.currentStock < entry.value) {
-        final short = (entry.value - inv.currentStock).toStringAsFixed(0);
-        return 'Not enough ${inv.name} — need $short more '
-            '${inv.displayUnit} than what\'s on hand. '
+      if (invItem == null) continue;
+      if (invItem.currentStock < entry.value) {
+        final short = (entry.value - invItem.currentStock).toStringAsFixed(0);
+        return 'Not enough ${invItem.name} — need $short more '
+            '${invItem.displayUnit} than what\'s on hand. '
             'Restock on the Stock page or remove the item from the cart.';
       }
     }
@@ -2364,212 +2362,59 @@ class AppState extends ChangeNotifier {
         addOnQuantities: kind.addOnQuantities,
       );
       for (final r in expanded) {
-        final invIdx = _inventory
-            .indexWhere((it) => it.id == r.inventoryItemId);
-        if (invIdx < 0) continue;
+        // Only record a deduction for items that actually exist in the
+        // cache; the store applies them below. (Was an inline mutation of
+        // _inventory[invIdx].currentStock.)
+        if (inv.inventory.indexWhere((it) => it.id == r.inventoryItemId) < 0) {
+          continue;
+        }
         final totalQty = r.quantity * line.quantity;
-        _inventory[invIdx].currentStock =
-            (_inventory[invIdx].currentStock - totalQty)
-                .clamp(0, double.infinity);
         summary.update(r.inventoryItemId, (v) => v + totalQty,
             ifAbsent: () => totalQty);
       }
     }
-    if (summary.isNotEmpty) notifyListeners();
+    inv.applyDeductions(summary);
     return summary;
   }
 
-  // ───── inventory categories (Supabase-backed) ─────────────────────
+  // ───── Inventory domain delegates (data now lives in InventoryStore) ─────
+  //
+  // The inventory items/categories data + CRUD moved to [inv]
+  // (InventoryStore). The checkout coordinator (deductCartFromInventory) and
+  // the stock-read coordinators above, plus a few un-migrated consumers
+  // (tender_sheet, void_refund_dialog) still call `state.inventory` /
+  // `state.inventoryCategories` and the CRUD entry points, so these thin
+  // delegates forward to the store. Inventory feature screens watch the store
+  // directly via its own provider so they rebuild when stock changes.
 
-  /// Owners manage these in Maintenance → Inventory categories.
-  /// `inventory_items.inventory_category_id` is the canonical FK.
-  List<InventoryCategory> _inventoryCategories = [];
-  List<InventoryCategory> get inventoryCategories =>
-      List.unmodifiable(_inventoryCategories);
+  /// Live inventory categories for the active tenant. Delegates to [inv].
+  List<InventoryCategory> get inventoryCategories => inv.inventoryCategories;
 
-  /// Lookup helper — returns null if the id isn't in the cache (e.g. the
-  /// category was just deleted while items still reference it; UI falls
-  /// back to the denormalized text `inventory_items.category`).
-  InventoryCategory? inventoryCategoryById(String? id) {
-    if (id == null) return null;
-    for (final c in _inventoryCategories) {
-      if (c.id == id) return c;
-    }
-    return null;
-  }
+  /// Resolve an inventory category by id. Delegates to [inv].
+  InventoryCategory? inventoryCategoryById(String? id) =>
+      inv.inventoryCategoryById(id);
 
-  Future<String?> addInventoryCategory(InventoryCategory c) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (c.name.trim().isEmpty) return 'Category name is required.';
-    try {
-      final row = await supabase
-          .from('inventory_categories')
-          .insert({
-            'tenant_id': tenantId,
-            'name': c.name.trim(),
-            'icon_name': c.iconName,
-            'sort_order': c.sortOrder,
-          })
-          .select('*')
-          .single();
-      _inventoryCategories.add(InventoryCategory.fromRow(row));
-      _inventoryCategories.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      if (e.code == '23505') {
-        return 'A category named "${c.name}" already exists.';
-      }
-      return 'Could not add category: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
+  /// Live inventory items for the active tenant. Delegates to [inv].
+  List<InventoryItem> get inventory => inv.inventory;
 
-  Future<String?> updateInventoryCategory(InventoryCategory updated) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (updated.name.trim().isEmpty) return 'Category name is required.';
-    try {
-      final row = await supabase
-          .from('inventory_categories')
-          .update({
-            'name': updated.name.trim(),
-            'icon_name': updated.iconName,
-            'sort_order': updated.sortOrder,
-          })
-          .eq('id', updated.id)
-          .select('*')
-          .single();
-      final fresh = InventoryCategory.fromRow(row);
-      final i = _inventoryCategories.indexWhere((c) => c.id == fresh.id);
-      if (i >= 0) _inventoryCategories[i] = fresh;
-      _inventoryCategories.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      // Items already point at the same id — denormalized `category` text
-      // on each item is updated lazily next time the item is saved (or
-      // on the next tenant reload). Cheap to refresh names here.
-      for (final it in _inventory) {
-        if (it.categoryId == fresh.id) it.category = fresh.name;
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update category: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
+  /// Count of items at/below their low-stock threshold. Delegates to [inv].
+  int get lowStockCount => inv.lowStockCount;
 
-  Future<String?> removeInventoryCategory(String id) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('inventory_categories').delete().eq('id', id);
-      _inventoryCategories.removeWhere((c) => c.id == id);
-      // Items keep their text `category` as a display fallback; the FK is
-      // already nulled by the ON DELETE SET NULL clause on the column.
-      for (final it in _inventory) {
-        if (it.categoryId == id) it.categoryId = null;
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete category: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  // ───── inventory (Supabase-backed) ───────────────────────────────
-
-  List<InventoryItem> _inventory = [];
-  List<InventoryItem> get inventory => List.unmodifiable(_inventory);
-
-  int get lowStockCount =>
-      _inventory.where((i) => i.isLowStock).length;
-
-  Future<String?> addInventoryItem(InventoryItem item) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (item.name.trim().isEmpty) return 'Item name is required.';
-    try {
-      final row = await supabase
-          .from('inventory_items')
-          .insert(item.toRowPayload(tenantId))
-          .select('*')
-          .single();
-      _inventory.add(InventoryItem.fromRow(row));
-      _inventory.sort((a, b) => a.name.compareTo(b.name));
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      if (e.code == '23505') {
-        return 'An inventory item named "${item.name}" already exists.';
-      }
-      return 'Could not add item: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> updateInventoryItem(InventoryItem updated) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    try {
-      await supabase
-          .from('inventory_items')
-          .update(updated.toRowPayload(tenantId)
-            ..['updated_at'] = DateTime.now().toIso8601String())
-          .eq('id', updated.id);
-      final i = _inventory.indexWhere((it) => it.id == updated.id);
-      if (i >= 0) _inventory[i] = updated;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update item: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> removeInventoryItem(String id) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('inventory_items').delete().eq('id', id);
-      _inventory.removeWhere((it) => it.id == id);
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete item: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> adjustStock(String id, double delta) async {
-    final i = _inventory.indexWhere((it) => it.id == id);
-    if (i < 0) return 'Item not found.';
-    final item = _inventory[i];
-    final newQty =
-        (item.currentStock + delta).clamp(0.0, double.infinity);
-    item.currentStock = newQty;
-    final err = await updateInventoryItem(item);
-    return err;
-  }
-
-  Future<String?> restock(String id, double qty,
-      {double? newCostPerUnit}) async {
-    if (qty <= 0) return 'Quantity must be positive.';
-    final i = _inventory.indexWhere((it) => it.id == id);
-    if (i < 0) return 'Item not found.';
-    final item = _inventory[i];
-    item.currentStock += qty;
-    item.lastRestockedAt = DateTime.now();
-    if (newCostPerUnit != null && newCostPerUnit > 0) {
-      item.costPerUnit = newCostPerUnit;
-    }
-    return updateInventoryItem(item);
-  }
+  Future<String?> addInventoryCategory(InventoryCategory c) =>
+      inv.addInventoryCategory(c);
+  Future<String?> updateInventoryCategory(InventoryCategory u) =>
+      inv.updateInventoryCategory(u);
+  Future<String?> removeInventoryCategory(String id) =>
+      inv.removeInventoryCategory(id);
+  Future<String?> addInventoryItem(InventoryItem item) =>
+      inv.addInventoryItem(item);
+  Future<String?> updateInventoryItem(InventoryItem u) =>
+      inv.updateInventoryItem(u);
+  Future<String?> removeInventoryItem(String id) => inv.removeInventoryItem(id);
+  Future<String?> adjustStock(String id, double delta) =>
+      inv.adjustStock(id, delta);
+  Future<String?> restock(String id, double qty, {double? newCostPerUnit}) =>
+      inv.restock(id, qty, newCostPerUnit: newCostPerUnit);
 
   // ───── HR domain delegates (data now lives in HrStore) ─────
   //
@@ -2819,10 +2664,9 @@ class AppState extends ChangeNotifier {
           .select('*')
           .eq('tenant_id', tenantId)
           .order('name');
-      _inventory = (invRows as List)
+      inv.replaceItems((invRows as List)
           .map((r) => InventoryItem.fromRow(r as Map<String, dynamic>))
-          .toList();
-      notifyListeners();
+          .toList());
     } catch (e) {
       if (kDebugMode) debugPrint('Reload inventory after reverse failed: $e');
     }

@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -75,6 +76,9 @@ class _DashboardViewState extends State<DashboardView> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    // Watch InventoryStore for the low-stock tile/list (AppState no longer
+    // notifies on inventory changes).
+    final invStore = context.watch<InventoryStore>();
     final paid = _orders.where((ord) => ord.status == o.OrderStatus.paid);
     final todayOrders =
         paid.where((ord) => _isToday(ord.createdAt)).toList();
@@ -96,7 +100,7 @@ class _DashboardViewState extends State<DashboardView> {
     final avgTicketCents = todayOrders.isEmpty
         ? 0
         : todayRevenueCents ~/ todayOrders.length;
-    final lowStock = state.inventory.where((i) => i.isLowStock).toList();
+    final lowStock = invStore.inventory.where((i) => i.isLowStock).toList();
 
     final recentOrders = _orders
         .where((ord) => ord.status != o.OrderStatus.cancelled)

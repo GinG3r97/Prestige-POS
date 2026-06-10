@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -36,8 +37,12 @@ class _InventoryViewState extends State<InventoryView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final all = state.inventory;
+    // Watch InventoryStore for the live item/category data (AppState no longer
+    // notifies on inventory changes). AppState is still read (not watched) for
+    // the CRUD delegates the action helpers call.
+    final invStore = context.watch<InventoryStore>();
+    final state = context.read<AppState>();
+    final all = invStore.inventory;
 
     // Categories present, ordered by Coffee & Tea → other ingredient
     // buckets → Books / merch → Placeholder (rest alphabetical inside
@@ -132,7 +137,7 @@ class _InventoryViewState extends State<InventoryView> {
                           for (final c in categories)
                             _railRow(
                                 c, all.where((i) => i.category == c).length,
-                                icon: _iconForCategory(state, c),
+                                icon: _iconForCategory(invStore, c),
                                 selected: _filter == _Filter.all &&
                                     _category == c,
                                 onTap: () => setState(() {
@@ -315,9 +320,9 @@ class _InventoryViewState extends State<InventoryView> {
 
   /// The icon for a category rail row — mirrors the category's own icon
   /// (from inventory_categories), falling back to a name-based guess.
-  IconData _iconForCategory(AppState state, String name) {
+  IconData _iconForCategory(InventoryStore invStore, String name) {
     final lower = name.toLowerCase();
-    for (final ic in state.inventoryCategories) {
+    for (final ic in invStore.inventoryCategories) {
       if (ic.name.toLowerCase() == lower) {
         return iconFromKey(ic.iconName) ??
             materialIconForName(name) ??

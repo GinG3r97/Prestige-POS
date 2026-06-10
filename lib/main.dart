@@ -8,6 +8,7 @@ import 'app/app_state.dart';
 import 'app/stores/bookings_store.dart';
 import 'app/stores/catalog_store.dart';
 import 'app/stores/hr_store.dart';
+import 'app/stores/inventory_store.dart';
 import 'app/stores/members_store.dart';
 import 'models/cart.dart';
 import 'data/supabase_client.dart';
@@ -200,6 +201,17 @@ class YosefPOSApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AppState, CatalogStore>(
           create: (ctx) => ctx.read<AppState>().catalog,
           update: (_, app, __) => app.catalog,
+        ),
+        // Scope the Inventory domain (inventory items + inventory categories)
+        // to its own store so stock/item edits repaint only inventory-watching
+        // widgets (Stock, inventory form, the low-stock dashboard tile, the
+        // recipe ingredient picker, Maintenance inventory-categories, the
+        // Reports inventory lens), not every context.watch<AppState>()
+        // consumer. Same InventoryStore instance AppState owns (provided by
+        // value via the proxy, never recreated).
+        ChangeNotifierProxyProvider<AppState, InventoryStore>(
+          create: (ctx) => ctx.read<AppState>().inv,
+          update: (_, app, __) => app.inv,
         ),
       ],
       child: MaterialApp(

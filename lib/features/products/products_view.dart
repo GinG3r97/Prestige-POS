@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../app/stores/catalog_store.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/icons.dart'
@@ -65,8 +66,10 @@ class _ProductsViewState extends State<ProductsView> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     // Catalog data (products/categories/types/modifier groups) lives in
-    // CatalogStore; inventory + cross-domain reads stay on AppState.
+    // CatalogStore; inventory (the recipe ingredient picker) lives in
+    // InventoryStore; cross-domain reads stay on AppState.
     final catalog = context.watch<CatalogStore>();
+    final invStore = context.watch<InventoryStore>();
     final products = catalog.products;
     final filtered = _filtered(products);
     final selected = _selectedId == null
@@ -282,7 +285,7 @@ class _ProductsViewState extends State<ProductsView> {
                 : ProductFormDialog(
                     key: ValueKey(selected.id),
                     initial: selected,
-                    inventory: state.inventory,
+                    inventory: invStore.inventory,
                     embedded: true,
                     onRemove: () => _confirmRemove(context, state, selected),
                   ),
@@ -395,12 +398,13 @@ class _ProductsViewState extends State<ProductsView> {
   Future<void> _openForm(
       BuildContext context, AppState state, CafeItem? existing) async {
     final catalog = context.read<CatalogStore>();
+    final inventory = context.read<InventoryStore>().inventory;
     final saved = await showDialog<CafeItem>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ProductFormDialog(
         initial: existing,
-        inventory: state.inventory,
+        inventory: inventory,
       ),
     );
     if (saved == null || !mounted) return;
@@ -475,13 +479,13 @@ class _ProductsViewState extends State<ProductsView> {
 /// the Sell "arrange mode" + box.
 Future<void> showProductEditor(BuildContext context,
     {String? presetTypeId, String? presetCategoryId}) async {
-  final state = context.read<AppState>();
   final catalog = context.read<CatalogStore>();
+  final inventory = context.read<InventoryStore>().inventory;
   final saved = await showDialog<CafeItem>(
     context: context,
     barrierDismissible: false,
     builder: (_) => ProductFormDialog(
-      inventory: state.inventory,
+      inventory: inventory,
       presetTypeId: presetTypeId,
       presetCategoryId: presetCategoryId,
     ),

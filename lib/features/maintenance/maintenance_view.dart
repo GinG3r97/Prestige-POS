@@ -5,6 +5,7 @@ import '../../app/app_state.dart';
 import '../../app/stores/catalog_store.dart';
 import '../../app/stores/bookings_store.dart';
 import '../../app/stores/hr_store.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -1231,6 +1232,9 @@ class _AddOnsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final addOns = context.watch<CatalogStore>().addOns;
+    // Inventory list (for each add-on row's recipe picker) lives in
+    // InventoryStore; watch it so rows rebuild when stock/items change.
+    final inventory = context.watch<InventoryStore>().inventory;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Center(
@@ -1291,7 +1295,7 @@ class _AddOnsTab extends StatelessWidget {
                       for (var i = 0; i < addOns.length; i++) ...[
                         _AddOnRow(
                           addOn: addOns[i],
-                          inventory: state.inventory,
+                          inventory: inventory,
                           onEdit: () =>
                               _openForm(context, state, addOns[i]),
                           onRemove: () =>
@@ -1319,12 +1323,13 @@ class _AddOnsTab extends StatelessWidget {
   Future<void> _openForm(
       BuildContext context, AppState state, AddOn? existing) async {
     final catalog = context.read<CatalogStore>();
+    final inventory = context.read<InventoryStore>().inventory;
     final saved = await showDialog<AddOn>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AddOnFormDialog(
         initial: existing,
-        inventory: state.inventory,
+        inventory: inventory,
         categories: catalog.categories,
       ),
     );
@@ -1548,7 +1553,11 @@ class _InventoryCategoriesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cats = state.inventoryCategories;
+    // Inventory categories + items live in InventoryStore now; watch it so
+    // this tab rebuilds when a category or item changes. CRUD still flows
+    // through the AppState [state] delegates the helpers call.
+    final invStore = context.watch<InventoryStore>();
+    final cats = invStore.inventoryCategories;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Center(
@@ -1617,7 +1626,7 @@ class _InventoryCategoriesTab extends StatelessWidget {
                     ),
                     itemBuilder: (_, i) {
                       final c = cats[i];
-                      final itemCount = state.inventory
+                      final itemCount = invStore.inventory
                           .where((it) => it.categoryId == c.id)
                           .length;
                       return _MaintGridTile(

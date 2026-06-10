@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart'
     show iconFromKey, materialIconForName;
@@ -479,8 +479,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
     // via ThemedDropdown's iconOf hook so the field + menu match the rest
     // of the icon system.
     return Builder(builder: (ctx) {
-      final state = ctx.watch<AppState>();
-      final cats = state.inventoryCategories;
+      final cats = ctx.watch<InventoryStore>().inventoryCategories;
       return ThemedDropdown<String>(
         label: 'Category',
         value: _categoryId,
