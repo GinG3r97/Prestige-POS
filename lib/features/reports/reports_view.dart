@@ -497,6 +497,7 @@ class _ReportsViewState extends State<ReportsView> {
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
       _SalesMoneyKpis(groups: groups),
+      _RevenueContributionSection(groups: groups),
       _CategoryBreakdownSection(
         title: separated ? 'Separated revenue by group' : 'Revenue by category',
         subtitle: 'Tap a row to see which products made the money',
@@ -1395,6 +1396,82 @@ class _SalesMoneyKpis extends StatelessWidget {
                 value: top)),
       ]);
     });
+  }
+}
+
+/// Revenue contribution bars — what share each category drives. Owner sees
+/// where the money comes from at a glance. Works for General + Separated.
+class _RevenueContributionSection extends StatelessWidget {
+  const _RevenueContributionSection({required this.groups});
+  final List<_CatGroup> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = groups.fold<int>(0, (s, g) => s + g.cents);
+    final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
+    return _SectionCard(
+      title: 'Revenue contribution',
+      subtitle: 'Which categories drive the sales',
+      onExportCsv: () {
+        final buf = StringBuffer('Category,Share %,Revenue (PHP)\n');
+        for (final g in sorted) {
+          final pct = total == 0 ? 0 : (g.cents * 100 / total);
+          buf.writeln('"${g.name.replaceAll('"', '""')}",'
+              '${pct.toStringAsFixed(1)},'
+              '${(g.cents / 100).toStringAsFixed(2)}');
+        }
+        return buf.toString();
+      },
+      child: total == 0
+          ? _empty('No sales in this range yet.')
+          : Column(
+              children: [
+                for (final g in sorted.take(8))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(children: [
+                          _CategoryIcon(g.name, size: 26, iconSize: 14),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(g.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: YFont.bodyStrong()
+                                    .copyWith(fontSize: 13)),
+                          ),
+                          Text('${(g.cents * 100 / total).round()}%',
+                              style: YFont.bodyStrong().copyWith(
+                                  fontSize: 13, color: YColor.brandDeep)),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 78,
+                            child: Text('₱${(g.cents / 100).toStringAsFixed(0)}',
+                                textAlign: TextAlign.right,
+                                style: YFont.bodyStrong().copyWith(
+                                    fontSize: 13, color: YColor.inkMuted)),
+                          ),
+                        ]),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value:
+                                (g.cents / (sorted.first.cents)).clamp(0, 1),
+                            minHeight: 7,
+                            backgroundColor: YColor.surface3,
+                            valueColor: const AlwaysStoppedAnimation(
+                                YColor.brand),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
   }
 }
 
