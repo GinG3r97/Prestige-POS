@@ -1392,6 +1392,45 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     });
   }
 
+  /// Apply one multiplier to EVERY base ingredient under an option (the quick
+  /// "Set all" chips). Also refreshes the per-ingredient ×fields.
+  void _setAllLineMul(
+      ModifierGroup group, ModifierOption option, double mul) {
+    final map = <String, double>{};
+    for (final line in _recipe.where((l) => l.inventoryItemId.isNotEmpty)) {
+      if ((mul - 1.0).abs() >= 0.001) map[line.inventoryItemId] = mul;
+      _mulCtrls['${option.id}_${line.inventoryItemId}']?.text =
+          mul == mul.roundToDouble()
+              ? mul.toStringAsFixed(0)
+              : mul.toStringAsFixed(2);
+    }
+    _setAdjustment(
+      groupId: group.id,
+      optionId: option.id,
+      kind: AdjustmentKind.multiplier,
+      lineMultipliers: map,
+    );
+  }
+
+  Widget _mulPresetChip(double mul, VoidCallback onTap) {
+    final label = mul == 0 ? 'None' : '×${_numStr(mul)}';
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: YColor.hairline),
+        ),
+        child: Text(label,
+            style: YFont.bodyStrong()
+                .copyWith(fontSize: 12, color: YColor.brandDeep)),
+      ),
+    );
+  }
+
   /// Set the multiplier for one base ingredient under one option. ×1 = no
   /// change (we drop it so the override map stays minimal).
   void _setLineMul(ModifierGroup group, ModifierOption option, String itemId,
@@ -2653,6 +2692,22 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               'Scale each base ingredient (×1 = no change, ×0 to remove). '
               'Add ingredients in Base recipe.',
               style: YFont.caption()),
+          if (baseLines.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            // Quick: apply one multiplier to every ingredient at once.
+            Row(children: [
+              Text('Set all:',
+                  style: YFont.caption()
+                      .copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(width: 8),
+              for (final p in const [0.0, 1.0, 1.5, 2.0, 3.0])
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _mulPresetChip(
+                      p, () => _setAllLineMul(group, option, p)),
+                ),
+            ]),
+          ],
           const SizedBox(height: 12),
           Expanded(
             child: baseLines.isEmpty
@@ -2779,23 +2834,31 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               ),
             ),
             const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => setState(() {
-                _recipe.add(RecipeLine(inventoryItemId: '', quantity: 1));
-              }),
-              icon: const Icon(Icons.add, size: 15),
-              label: const Text('Add ingredient'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: YColor.brand,
-                side: const BorderSide(color: YColor.hairline),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                textStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md)),
-              ),
-            ),
+            Builder(builder: (_) {
+              // Block adding another line while one is still empty.
+              final hasEmpty =
+                  _recipe.any((l) => l.inventoryItemId.isEmpty);
+              return OutlinedButton.icon(
+                onPressed: hasEmpty
+                    ? null
+                    : () => setState(() {
+                          _recipe.add(
+                              RecipeLine(inventoryItemId: '', quantity: 1));
+                        }),
+                icon: const Icon(Icons.add, size: 15),
+                label: const Text('Add ingredient'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: YColor.brand,
+                  side: const BorderSide(color: YColor.hairline),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+              );
+            }),
           ]),
           const SizedBox(height: 10),
           Expanded(
