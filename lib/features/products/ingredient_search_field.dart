@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../design_system/colors.dart';
@@ -34,8 +32,6 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
   final TextEditingController _ctrl = TextEditingController();
   late final AnimationController _anim;
   OverlayEntry? _entry;
-
-  static const int _kMaxInline = 4;
 
   @override
   void initState() {
@@ -134,12 +130,10 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _dismiss,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                      sigmaX: 12 * progress, sigmaY: 12 * progress),
-                  child: Container(
-                      color: Colors.black.withValues(alpha: 0.18 * progress)),
-                ),
+                // Plain dim (no BackdropFilter) — blur was the source of the
+                // open lag while the keyboard animates up.
+                child: Container(
+                    color: Colors.black.withValues(alpha: 0.3 * progress)),
               ),
             ),
           ),
@@ -169,32 +163,25 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
   Widget _card() {
     return Material(
       color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-            constraints: const BoxConstraints(maxWidth: 540, minWidth: 360),
-            decoration: BoxDecoration(
-              color: YColor.surface1.withValues(alpha: 0.82),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.6), width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.22),
-                  blurRadius: 36,
-                  offset: const Offset(0, 12),
-                ),
-              ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        constraints: const BoxConstraints(maxWidth: 580, minWidth: 380),
+        decoration: BoxDecoration(
+          color: YColor.surface1,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: YColor.hairline),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
             ),
-            child: ValueListenableBuilder<TextEditingValue>(
+          ],
+        ),
+        child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _ctrl,
               builder: (_, value, __) {
                 final matches = _matches(value.text);
-                final inline = matches.take(_kMaxInline).toList();
-                final more = matches.length - inline.length;
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -207,15 +194,22 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
                             style:
                                 YFont.body().copyWith(color: YColor.inkMuted)),
                       )
-                    else ...[
-                      for (final it in inline) _resultRow(it),
-                      if (more > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2, left: 4),
-                          child: Text('+ $more more — keep typing to narrow',
-                              style: YFont.caption()),
+                    else
+                      SizedBox(
+                        height: matches.length <= 3 ? 84 : 178,
+                        child: GridView.builder(
+                          padding: EdgeInsets.zero,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisExtent: 76,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                          itemCount: matches.length,
+                          itemBuilder: (_, i) => _resultCell(matches[i]),
                         ),
-                    ],
+                      ),
                     const SizedBox(height: 8),
                     Container(
                         height: 1,
@@ -279,54 +273,51 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
                 );
               },
             ),
-          ),
-        ),
       ),
     );
   }
 
-  Widget _resultRow(InventoryItem it) {
+  Widget _resultCell(InventoryItem it) {
     final selected = it.id == widget.selectedId;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: () => _select(it),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
-        child: Row(children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: YColor.brandTint,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-                materialIconForName(it.name) ?? Icons.inventory_2_outlined,
-                size: 19,
-                color: YColor.brandDeep),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(it.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.bodyStrong().copyWith(fontSize: 14)),
-                Text(
-                    '${it.category} · ${it.currentStock.toStringAsFixed(0)} ${it.displayUnit} in stock',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.caption()),
-              ],
-            ),
-          ),
-          if (selected)
-            const Icon(Icons.check_circle, size: 18, color: YColor.brand),
-        ]),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: selected
+              ? YColor.brandTint.withValues(alpha: 0.55)
+              : YColor.surface2,
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: selected ? YColor.brand : YColor.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Icon(
+                  materialIconForName(it.name) ?? Icons.inventory_2_outlined,
+                  size: 17,
+                  color: YColor.brandDeep),
+              const Spacer(),
+              if (selected)
+                const Icon(Icons.check_circle, size: 15, color: YColor.brand),
+            ]),
+            const SizedBox(height: 6),
+            Text(it.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.bodyStrong().copyWith(fontSize: 12.5)),
+            Text(
+                '${it.currentStock.toStringAsFixed(0)} ${it.displayUnit}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.caption().copyWith(fontSize: 10)),
+          ],
+        ),
       ),
     );
   }
