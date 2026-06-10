@@ -2553,13 +2553,17 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       ],
                     ),
                   )
-                : SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < _recipe.length; i++)
-                          _recipeLine(i),
-                      ],
+                : GridView.builder(
+                    padding: EdgeInsets.zero,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisExtent: 126,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
                     ),
+                    itemCount: _recipe.length,
+                    itemBuilder: (_, i) => _recipeLine(i),
                   ),
           ),
         ],
@@ -2960,7 +2964,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ? item.unitLabel!.trim()
             : item.unit.label.split(' (').first);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
       decoration: BoxDecoration(
         color: YColor.surface1,
@@ -2969,6 +2972,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Remove anchored top-right.
           Align(
@@ -2979,64 +2983,52 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 final removed = _recipe.removeAt(index);
                 _qtyCtrls.remove(removed.id)?.dispose();
               }),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 4, left: 8),
-                child: Text('Remove',
-                    style: YFont.caption().copyWith(
-                        color: YColor.danger, fontWeight: FontWeight.w700)),
+              child: Text('Remove',
+                  style: YFont.caption().copyWith(
+                      color: YColor.danger, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 2),
+          // Sell-style search picker (glass card above the keyboard).
+          IngredientSearchField(
+            items: widget.inventory,
+            selectedId:
+                line.inventoryItemId.isEmpty ? null : line.inventoryItemId,
+            onSelect: (id) => setState(() => line.inventoryItemId = id),
+          ),
+          const SizedBox(height: 8),
+          // Quantity with the unit inside the input — disabled until picked.
+          IgnorePointer(
+            ignoring: item == null,
+            child: Opacity(
+              opacity: item == null ? 0.4 : 1,
+              child: KeyboardAccessoryField(
+                controller: _qtyCtrl(line),
+                accessoryLabel: 'QUANTITY',
+                hint: '0',
+                keyboardType: TextInputType.number,
+                fillColor: YColor.surface2,
+                borderColor: YColor.hairline,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                suffix: unit.isEmpty
+                    ? null
+                    : Center(
+                        widthFactor: 1.0,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4, right: 10),
+                          child: Text(unit,
+                              style: YFont.bodyStrong().copyWith(
+                                  color: YColor.inkMuted, fontSize: 12)),
+                        ),
+                      ),
+                onChanged: (v) {
+                  line.quantity = double.tryParse(v) ?? 0;
+                  setState(() {});
+                },
               ),
             ),
           ),
-          Row(children: [
-            // Sell-style search picker (glass card above the keyboard).
-            Expanded(
-              child: IngredientSearchField(
-                items: widget.inventory,
-                selectedId:
-                    line.inventoryItemId.isEmpty ? null : line.inventoryItemId,
-                onSelect: (id) =>
-                    setState(() => line.inventoryItemId = id),
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Quantity with the unit shown inside the input. Disabled until an
-            // ingredient is picked (no unit to measure against yet).
-            SizedBox(
-              width: 158,
-              child: IgnorePointer(
-                ignoring: item == null,
-                child: Opacity(
-                  opacity: item == null ? 0.4 : 1,
-                  child: KeyboardAccessoryField(
-                    controller: _qtyCtrl(line),
-                    accessoryLabel: 'QUANTITY',
-                    hint: '0',
-                    keyboardType: TextInputType.number,
-                    fillColor: YColor.surface2,
-                    borderColor: YColor.hairline,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 12),
-                    suffix: unit.isEmpty
-                        ? null
-                        : Center(
-                            widthFactor: 1.0,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 4, right: 10),
-                              child: Text(unit,
-                                  style: YFont.bodyStrong().copyWith(
-                                      color: YColor.inkMuted, fontSize: 12.5)),
-                            ),
-                          ),
-                    onChanged: (v) {
-                      line.quantity = double.tryParse(v) ?? 0;
-                      setState(() {});
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ]),
         ],
       ),
     );

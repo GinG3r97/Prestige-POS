@@ -181,12 +181,24 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
         child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: _ctrl,
               builder: (_, value, __) {
-                final matches = _matches(value.text);
+                final q = value.text.trim();
+                // Don't render the whole list on open — only once they type,
+                // so the card pops up instantly with the keyboard.
+                final matches =
+                    q.isEmpty ? const <InventoryItem>[] : _matches(value.text);
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (matches.isEmpty)
+                    if (q.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 4),
+                        child: Text('Type to search ingredients',
+                            style:
+                                YFont.body().copyWith(color: YColor.inkMuted)),
+                      )
+                    else if (matches.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(
                             vertical: 14, horizontal: 4),
@@ -196,16 +208,9 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
                       )
                     else
                       SizedBox(
-                        height: matches.length <= 3 ? 84 : 178,
-                        child: GridView.builder(
+                        height: matches.length <= 2 ? 116 : 210,
+                        child: ListView.builder(
                           padding: EdgeInsets.zero,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            mainAxisExtent: 76,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
                           itemCount: matches.length,
                           itemBuilder: (_, i) => _resultCell(matches[i]),
                         ),
@@ -280,44 +285,45 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
   Widget _resultCell(InventoryItem it) {
     final selected = it.id == widget.selectedId;
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       onTap: () => _select(it),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: selected
-              ? YColor.brandTint.withValues(alpha: 0.55)
-              : YColor.surface2,
-          borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: selected ? YColor.brand : YColor.hairline),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(children: [
-              Icon(
-                  materialIconForName(it.name) ?? Icons.inventory_2_outlined,
-                  size: 17,
-                  color: YColor.brandDeep),
-              const Spacer(),
-              if (selected)
-                const Icon(Icons.check_circle, size: 15, color: YColor.brand),
-            ]),
-            const SizedBox(height: 6),
-            Text(it.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: YFont.bodyStrong().copyWith(fontSize: 12.5)),
-            Text(
-                '${it.currentStock.toStringAsFixed(0)} ${it.displayUnit}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: YFont.caption().copyWith(fontSize: 10)),
-          ],
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: YColor.brandTint,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+                materialIconForName(it.name) ?? Icons.inventory_2_outlined,
+                size: 19,
+                color: YColor.brandDeep),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(it.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.bodyStrong().copyWith(fontSize: 14)),
+                Text(
+                    '${it.category} · ${it.currentStock.toStringAsFixed(0)} ${it.displayUnit} in stock',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.caption()),
+              ],
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check_circle, size: 18, color: YColor.brand),
+        ]),
       ),
     );
   }
