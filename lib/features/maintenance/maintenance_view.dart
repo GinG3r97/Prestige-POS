@@ -658,25 +658,16 @@ class _ModifierGroupsTab extends StatelessWidget {
 
   Future<void> _confirmRemoveGroup(
       BuildContext context, AppState state, MasterModifierGroup g) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${g.name}?'),
-        content: Text(
-            'Products will lose access to "${g.name}" options. Existing orders are unaffected.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${g.name}?',
+      message:
+          'Products will lose access to "${g.name}" options. Existing orders are unaffected.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeModifierGroup(g.id);
     if (!context.mounted) return;
     if (err != null) {
@@ -1347,25 +1338,16 @@ class _AddOnsTab extends StatelessWidget {
 
   Future<void> _confirmRemove(
       BuildContext context, AppState state, AddOn addOn) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${addOn.name}?'),
-        content: const Text(
-            'This add-on will no longer appear at order time. Existing orders are unaffected.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${addOn.name}?',
+      message:
+          'This add-on will no longer appear at order time. Existing orders are unaffected.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeAddOn(addOn.id);
     if (!context.mounted) return;
     if (err != null) {
@@ -1679,28 +1661,19 @@ class _InventoryCategoriesTab extends StatelessWidget {
     final inUse = state.inventory
         .where((it) => it.categoryId == category.id)
         .length;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove "${category.name}"?'),
-        content: Text(inUse > 0
-            ? '$inUse inventory item${inUse == 1 ? "" : "s"} reference '
-                'this category. They\'ll keep their stored category name '
-                'as a display fallback, but you\'ll want to re-categorise them.'
-            : 'No items use this category — safe to delete.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove "${category.name}"?',
+      message: inUse > 0
+          ? '$inUse inventory item${inUse == 1 ? "" : "s"} reference '
+              'this category. They\'ll keep their stored category name '
+              'as a display fallback, but you\'ll want to re-categorise them.'
+          : 'No items use this category — safe to delete.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeInventoryCategory(category.id);
     if (!context.mounted) return;
     if (err != null) {
@@ -2426,25 +2399,16 @@ class _RolesTab extends StatelessWidget {
 
   Future<void> _confirmRemoveRole(
       BuildContext context, AppState state, EmployeeRole r) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${r.name}?'),
-        content: Text(
-            'Employees with this role will lose their permissions until you assign them a new one.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${r.name}?',
+      message:
+          'Employees with this role will lose their permissions until you assign them a new one.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeEmployeeRole(r.id);
     if (!context.mounted) return;
     if (err != null) {

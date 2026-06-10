@@ -7,6 +7,7 @@ import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/member.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -121,42 +122,17 @@ class _MemberFormDialogState extends State<MemberFormDialog> {
 
   Future<void> _confirmRemove() async {
     if (!_isEdit) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(YRadius.lg)),
-        backgroundColor: YColor.surface1,
-        title: Text('Remove member?',
-            style: YFont.titleMD().copyWith(fontSize: 18)),
-        content: Text(
-          'This permanently deletes ${widget.existing!.fullName} and '
+    final ok = await showConfirm(
+      context,
+      title: 'Remove member?',
+      message: 'This permanently deletes ${widget.existing!.fullName} and '
           'their plan info. Use "Churned" status instead if you want '
           'to keep their record for analytics.',
-          style: YFont.body().copyWith(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: YColor.danger,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final state = context.read<AppState>();
     final err = await state.removeMember(widget.existing!.id);
     if (!mounted) return;

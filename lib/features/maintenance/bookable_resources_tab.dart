@@ -7,6 +7,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/typography.dart';
 import '../../models/booking.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -176,27 +177,16 @@ class BookableResourcesTab extends StatelessWidget {
 
   Future<void> _confirmRemove(BuildContext context, AppState state,
       BookableResource r) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove "${r.name}"?'),
-        content: const Text(
-            'Existing bookings on this resource will block deletion. '
-            'Cancel or complete them first.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove "${r.name}"?',
+      message: 'Existing bookings on this resource will block deletion. '
+          'Cancel or complete them first.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeBookableResource(r.id);
     if (!context.mounted) return;
     if (err != null) {

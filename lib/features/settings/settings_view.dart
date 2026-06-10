@@ -10,6 +10,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../auth/otp_numpad.dart';
 import '../pin/set_pin_view.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import '../printing/cash_drawer_dialog.dart';
@@ -625,25 +626,16 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _confirmSignOut(BuildContext context, AppState state) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Sign out of account?'),
-        content: const Text(
-            'This will return you to the welcome screen. In-memory data will be cleared.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign out',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Sign out of account?',
+      message:
+          'This will return you to the welcome screen. In-memory data will be cleared.',
+      confirmLabel: 'Sign out',
+      danger: true,
+      icon: Icons.logout,
     );
-    if (ok == true) await state.signOutAccount();
+    if (ok) await state.signOutAccount();
   }
 
   Future<void> _editStoreName(BuildContext context, AppState state) async {

@@ -9,6 +9,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/typography.dart';
 import '../../models/member.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -304,45 +305,20 @@ class _PlanRow extends StatelessWidget {
   Future<void> _confirmRemove(BuildContext context, MemberPlan plan) async {
     final state = context.read<AppState>();
     final inUse = state.members.where((m) => m.planId == plan.id).length;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(YRadius.lg)),
-        backgroundColor: YColor.surface1,
-        title: Text('Remove "${plan.name}"?',
-            style: YFont.titleMD().copyWith(fontSize: 18)),
-        content: Text(
-          inUse == 0
-              ? 'This plan template will be deleted. No members are '
-                  'currently assigned to it.'
-              : '$inUse member${inUse == 1 ? "" : "s"} currently on this '
-                  'plan will be marked "No plan" — you can reassign them '
-                  'after.',
-          style: YFont.body().copyWith(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: YColor.danger,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md)),
-            ),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove "${plan.name}"?',
+      message: inUse == 0
+          ? 'This plan template will be deleted. No members are '
+              'currently assigned to it.'
+          : '$inUse member${inUse == 1 ? "" : "s"} currently on this '
+              'plan will be marked "No plan" — you can reassign them '
+              'after.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final err = await state.removeMemberPlan(plan.id);
     if (!context.mounted) return;
     if (err != null) {

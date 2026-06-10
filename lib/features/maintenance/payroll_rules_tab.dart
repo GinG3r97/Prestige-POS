@@ -6,6 +6,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
 import '../../models/payroll_rules.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import '../../design_system/icons.dart'
@@ -531,25 +532,15 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   }
 
   Future<void> _confirmDeleteLeave(LeaveType lt) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Delete "${lt.name}"?'),
-        content: const Text(
-            'Employees with pending balance for this leave will lose it.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: YColor.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Delete "${lt.name}"?',
+      message: 'Employees with pending balance for this leave will lose it.',
+      confirmLabel: 'Delete',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await widget.state.removeLeaveType(lt.id);
     if (!mounted) return;
     if (err != null) {

@@ -7,6 +7,7 @@ import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
+import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'inventory_form_dialog.dart';
@@ -454,26 +455,16 @@ class _InventoryViewState extends State<InventoryView> {
 
   Future<void> _confirmRemove(
       BuildContext context, AppState state, InventoryItem item) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Remove ${item.name}?'),
-        content: const Text(
-            'The item will be removed from this store. Recipes that reference it will need to be updated.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove',
-                style: TextStyle(color: YColor.danger)),
-          ),
-        ],
-      ),
+    final ok = await showConfirm(
+      context,
+      title: 'Remove ${item.name}?',
+      message:
+          'The item will be removed from this store. Recipes that reference it will need to be updated.',
+      confirmLabel: 'Remove',
+      danger: true,
+      icon: Icons.delete_outline,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await state.removeInventoryItem(item.id);
     if (!mounted) return;
     if (err != null) {
