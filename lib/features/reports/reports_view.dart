@@ -8,6 +8,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../../models/catalog.dart';
 import '../../models/employee.dart';
 import '../../models/inventory.dart';
 import '../../models/money.dart';
@@ -558,34 +559,56 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   List<Widget> _productSections(_ReportData data) {
-    final separated = _separatedSalesGroups(context.read<AppState>(), data);
+    final state = context.read<AppState>();
+    final separated = _productSubTab == 'separated';
+    // Same UI, different data — General = everything, Separated = only the
+    // separated groups / their catalog.
+    final groups =
+        separated ? _separatedSalesGroups(state, data) : data.categoryGroups;
+    final catalog = separated ? _separatedCatalog(state) : state.products;
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
-      if (_productSubTab == 'separated')
-        _SeparatedRailSection(
-          title: 'Separated products',
-          subtitle:
-              'Products sold under each consigned / separated group (Books, Flowers…)',
-          groups: separated,
-          emptyMessage:
-              'No separated groups yet. In Maintenance, turn on "Separate in '
-              'Sales reports" for a Product Type or Category.',
-        )
-      else ...[
-        _Headline(data: data, comparing: _comparePrior),
-        _ProductKpiStrip(data: data),
-        _TwoColRow(
-          left: _TopItemsSection(data: data),
-          right: _ByCategorySection(data: data),
-        ),
-        _CategoryBreakdownSection(
-          title: 'Products by category',
-          subtitle: 'Tap a category to see the products sold under it',
-          groups: data.categoryGroups,
-          emptyMessage: 'No products sold in this range yet.',
-        ),
-      ],
+      ..._productMovementSections(groups, catalog),
     ];
+  }
+
+  /// Movement view (no money): products sold per category (units) + a list of
+  /// products with no sales. Shared by General + Separated.
+  List<Widget> _productMovementSections(
+      List<_CatGroup> groups, List<CafeItem> catalog) {
+    final sortedGroups = [...groups]..sort((a, b) => b.qty.compareTo(a.qty));
+    final sold = {
+      for (final g in groups)
+        for (final it in g.items) it.name.trim().toLowerCase()
+    };
+    final notSelling = catalog
+        .where((p) => !sold.contains(p.name.trim().toLowerCase()))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return [
+      _CategoryBreakdownSection(
+        title: 'Products sold by category',
+        subtitle: 'Units sold — tap a category (top movers first, slow last)',
+        groups: sortedGroups,
+        moneyless: true,
+        emptyMessage: 'No products sold in this range yet.',
+      ),
+      _NotSellingSection(products: notSelling),
+    ];
+  }
+
+  /// Catalog products that belong to a separated category / type.
+  List<CafeItem> _separatedCatalog(AppState state) {
+    return state.products.where((p) {
+      final c = state.categories
+          .where((x) => x.id == p.categoryId)
+          .firstOrNull;
+      if (c != null && c.separateSales) return true;
+      final t = c?.typeId == null
+          ? null
+          : state.productTypes.where((x) => x.id == c!.typeId).firstOrNull;
+      return t?.separateSales ?? false;
+    }).toList();
   }
 
   List<Widget> _inventorySections(AppState state) => [
@@ -1277,6 +1300,60 @@ class _SeparatedRailSectionState extends State<_SeparatedRailSection> {
   }
 }
 
+/// Products in the catalog with NO sales in the period — the "dead" menu
+/// items the owner should review. Movement report, no money.
+class _NotSellingSection extends StatelessWidget {
+  const _NotSellingSection({required this.products});
+  final List<CafeItem> products;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Not selling',
+      subtitle: products.isEmpty
+          ? 'Every product sold at least once'
+          : '${products.length} product${products.length == 1 ? '' : 's'} with no sales this period',
+      onExportCsv: () {
+        final buf = StringBuffer('Product,Category\n');
+        for (final p in products) {
+          buf.writeln('"${p.name.replaceAll('"', '""')}",'
+              '"${p.categoryName.replaceAll('"', '""')}"');
+        }
+        return buf.toString();
+      },
+      child: products.isEmpty
+          ? _empty('Everything sold at least once 🎉')
+          : Column(
+              children: [
+                for (final p in products.take(60))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(children: [
+                      _ProductIcon(p.name, size: 28, iconSize: 15),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(p.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                      ),
+                      Text('0 sold',
+                          style: YFont.caption()
+                              .copyWith(color: YColor.danger)),
+                    ]),
+                  ),
+                if (products.length > 60)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('+ ${products.length - 60} more',
+                        style: YFont.caption()),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
 /// A category with the individual products sold under it.
 class _CatGroup {
   _CatGroup({
@@ -1348,11 +1425,15 @@ class _CategoryBreakdownSection extends StatefulWidget {
     required this.subtitle,
     required this.groups,
     required this.emptyMessage,
+    this.moneyless = false,
   });
   final String title;
   final String subtitle;
   final List<_CatGroup> groups;
   final String emptyMessage;
+
+  /// Products report → show units sold, not revenue.
+  final bool moneyless;
 
   @override
   State<_CategoryBreakdownSection> createState() =>
@@ -1416,11 +1497,16 @@ class _CategoryBreakdownSectionState extends State<_CategoryBreakdownSection> {
                     style: YFont.bodyStrong().copyWith(fontSize: 13.5)),
               ),
               Text('${g.qty} sold',
-                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
-              const SizedBox(width: 14),
-              Text(_peso(g.cents),
-                  style: YFont.bodyStrong()
-                      .copyWith(fontSize: 13.5, color: YColor.brandDeep)),
+                  style: widget.moneyless
+                      ? YFont.bodyStrong().copyWith(
+                          fontSize: 13.5, color: YColor.brandDeep)
+                      : YFont.caption().copyWith(color: YColor.inkMuted)),
+              if (!widget.moneyless) ...[
+                const SizedBox(width: 14),
+                Text(_peso(g.cents),
+                    style: YFont.bodyStrong()
+                        .copyWith(fontSize: 13.5, color: YColor.brandDeep)),
+              ],
             ]),
           ),
         ),
@@ -1441,16 +1527,21 @@ class _CategoryBreakdownSectionState extends State<_CategoryBreakdownSection> {
                             overflow: TextOverflow.ellipsis,
                             style: YFont.body().copyWith(fontSize: 13)),
                       ),
-                      Text('${it.qty}×',
-                          style: YFont.caption()
-                              .copyWith(color: YColor.inkMuted)),
-                      const SizedBox(width: 14),
-                      SizedBox(
-                        width: 80,
-                        child: Text(_peso(it.revenueCents),
-                            textAlign: TextAlign.right,
-                            style: YFont.bodyStrong().copyWith(fontSize: 13)),
-                      ),
+                      Text('${it.qty} sold',
+                          style: widget.moneyless
+                              ? YFont.bodyStrong().copyWith(fontSize: 13)
+                              : YFont.caption()
+                                  .copyWith(color: YColor.inkMuted)),
+                      if (!widget.moneyless) ...[
+                        const SizedBox(width: 14),
+                        SizedBox(
+                          width: 80,
+                          child: Text(_peso(it.revenueCents),
+                              textAlign: TextAlign.right,
+                              style:
+                                  YFont.bodyStrong().copyWith(fontSize: 13)),
+                        ),
+                      ],
                     ]),
                   ),
               ],
