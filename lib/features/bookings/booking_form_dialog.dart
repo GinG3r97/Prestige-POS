@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
@@ -83,7 +83,7 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
   DateTime get _endsAt => _startsAt.add(_duration);
 
   int _previewPriceCents() {
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final r = state.resourceById(_resourceId);
     if (r == null) return 0;
     return r.priceFor(_duration);
@@ -112,7 +112,7 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
       _busy = true;
       _error = null;
     });
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final result = await state.createBooking(
       resourceId: _resourceId!,
       customerName: _name.text,
@@ -154,7 +154,7 @@ class _BookingFormDialogState extends State<BookingFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<BookingsStore>();
     final resources = state.bookableResources;
     final preview = _previewPriceCents();
     final size = MediaQuery.sizeOf(context);

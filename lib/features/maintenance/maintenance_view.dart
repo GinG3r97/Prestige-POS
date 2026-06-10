@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -112,7 +113,9 @@ class MaintenanceView extends StatelessWidget {
                   _ProductAreaTab(state: state),
                   _RolesTab(state: state),
                   PayrollRulesTab(state: state),
-                  if (showBookable) BookableResourcesTab(state: state),
+                  if (showBookable)
+                    BookableResourcesTab(
+                        state: context.watch<BookingsStore>()),
                 ],
               ),
             ),

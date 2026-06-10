@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
@@ -47,7 +47,7 @@ class _SessionsViewState extends State<SessionsView> {
   }
 
   Future<void> _refresh() async {
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     setState(() => _loading = true);
     final rows = await state.fetchActiveSessions();
     if (!mounted) return;
@@ -59,7 +59,7 @@ class _SessionsViewState extends State<SessionsView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<BookingsStore>();
     final resources = state.bookableResources
         .where((r) => r.isActive)
         .toList();
@@ -253,7 +253,7 @@ class _SessionsViewState extends State<SessionsView> {
                 child: _SessionCard(
                   session: s,
                   resource: context
-                      .read<AppState>()
+                      .read<BookingsStore>()
                       .resourceById(s.resourceId),
                   now: _now,
                   onStop: () => _confirmStop(s),
@@ -266,7 +266,7 @@ class _SessionsViewState extends State<SessionsView> {
   }
 
   Future<void> _openStartDialog() async {
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final resources = state.bookableResources
         .where((r) => r.isActive)
         .toList();
@@ -299,7 +299,7 @@ class _SessionsViewState extends State<SessionsView> {
   }
 
   Future<void> _confirmStop(Booking session) async {
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final resource = state.resourceById(session.resourceId);
     final rate = resource?.hourlyRateCents ?? 0;
     final rounded = roundSessionEnd(session.startsAt, DateTime.now());
@@ -662,7 +662,7 @@ class _StartSessionDialogState extends State<_StartSessionDialog> {
       _busy = true;
       _error = null;
     });
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final res = await state.startSession(
       resourceId: _resourceId!,
       customerName: _name.text,

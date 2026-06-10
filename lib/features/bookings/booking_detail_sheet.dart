@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
@@ -25,7 +25,7 @@ class _BookingDetailSheetState extends State<BookingDetailSheet> {
   Future<void> _setStatus(BookingStatus s) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     final err = await state.updateBookingStatus(widget.booking.id, s);
     if (!mounted) return;
     if (err != null) {
@@ -67,7 +67,7 @@ class _BookingDetailSheetState extends State<BookingDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<BookingsStore>();
     final b = widget.booking;
     final resource = state.resourceById(b.resourceId);
     final accent = _accent(resource);

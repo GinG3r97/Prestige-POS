@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
@@ -44,7 +44,7 @@ class _BookingsViewState extends State<BookingsView> {
   }
 
   Future<void> _refresh() async {
-    final state = context.read<AppState>();
+    final state = context.read<BookingsStore>();
     setState(() => _loading = true);
     final rows = await state.fetchBookingsForDay(_day);
     if (!mounted) return;
@@ -84,7 +84,7 @@ class _BookingsViewState extends State<BookingsView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<BookingsStore>();
     final resources = state.bookableResources;
     return Container(
       color: YColor.surface2,

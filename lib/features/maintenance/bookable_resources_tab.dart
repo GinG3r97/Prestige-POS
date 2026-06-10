@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/bookings_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -16,7 +16,7 @@ import '../widgets/push_toast.dart';
 /// the Bookings calendar.
 class BookableResourcesTab extends StatelessWidget {
   const BookableResourcesTab({super.key, required this.state});
-  final AppState state;
+  final BookingsStore state;
 
   /// Curated brand-friendly palette owners pick from when setting a
   /// resource's accent. Maps a friendly label to its hex string + a
@@ -150,7 +150,7 @@ class BookableResourcesTab extends StatelessWidget {
     );
   }
 
-  Future<void> _openForm(BuildContext context, AppState state,
+  Future<void> _openForm(BuildContext context, BookingsStore state,
       BookableResource? existing) async {
     final saved = await showDialog<BookableResource>(
       context: context,
@@ -175,7 +175,7 @@ class BookableResourcesTab extends StatelessWidget {
         leadingIcon: saved.kind.icon);
   }
 
-  Future<void> _confirmRemove(BuildContext context, AppState state,
+  Future<void> _confirmRemove(BuildContext context, BookingsStore state,
       BookableResource r) async {
     final ok = await showConfirm(
       context,
