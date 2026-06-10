@@ -1270,8 +1270,11 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   List<RecipeLine> get _cleanRecipe =>
       _recipe.where((l) => l.inventoryItemId.isNotEmpty).toList();
 
-  /// Recipe rail selection: 'base' or a modifier option id.
-  String _recipeSel = 'base';
+  /// Recipe top tab: 'base' or a modifier group id.
+  String _recipeTab = 'base';
+
+  /// Selected option id within the current group's rail.
+  String _recipeSel = '';
   late List<ModifierGroup> _modifierGroups;
   /// FK ids of master modifier groups this product opts into. Source of
   /// truth on save; [_modifierGroups] is derived from these for the
@@ -2467,74 +2470,113 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       );
     }
 
-    // With modifiers → rail (Base + each option) | per-option ingredient editor.
+    // With modifiers → Base recipe by default; a top tab per group transitions
+    // to that group's rail (options) + per-ingredient multiplier editor.
+    final onBase = _recipeTab == 'base' ||
+        !groups.any((g) => g.id == _recipeTab);
     return Container(
-      height: 380,
+      height: 420,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: YColor.surface2,
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
       ),
-      child: Row(children: [
-        SizedBox(width: 188, child: _recipeRail(groups)),
-        Container(width: 0.5, color: YColor.hairline),
+      child: Column(children: [
+        _recipeTabBar(groups),
+        Container(height: 0.5, color: YColor.hairline),
         Expanded(
-          child: _recipeSel == 'base'
-              ? _baseTab(oneColumn: true)
-              : _selectedOptionEditor(groups),
+          child: onBase
+              ? _baseTab()
+              : _groupRailView(groups.firstWhere((g) => g.id == _recipeTab)),
         ),
       ]),
     );
   }
 
-  Widget _selectedOptionEditor(List<ModifierGroup> groups) {
-    for (final g in groups) {
-      for (final o in g.options) {
-        if (o.id == _recipeSel) return _optionRecipeEditor(g, o);
-      }
+  /// Top tabs — Base recipe + each modifier group (Size / Temp / …).
+  Widget _recipeTabBar(List<ModifierGroup> groups) {
+    Widget tab(String key, String label) {
+      final on =
+          key == 'base' ? !groups.any((g) => g.id == _recipeTab) : _recipeTab == key;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() {
+          _recipeTab = key;
+          if (key != 'base') {
+            final g = groups.firstWhere((g) => g.id == key);
+            if (!g.options.any((o) => o.id == _recipeSel) &&
+                g.options.isNotEmpty) {
+              _recipeSel = g.options.first.id;
+            }
+          }
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: on ? YColor.brand : Colors.transparent,
+                width: 2.5,
+              ),
+            ),
+          ),
+          child: Text(label,
+              style: YFont.bodyStrong().copyWith(
+                  fontSize: 13.5,
+                  color: on ? YColor.brandDeep : YColor.inkMuted)),
+        ),
+      );
     }
-    return _baseTab(oneColumn: true);
-  }
 
-  /// Left rail — Base recipe + each modifier option (grouped).
-  Widget _recipeRail(List<ModifierGroup> groups) {
     return Container(
       color: YColor.surface1,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
-        children: [
-          _recipeRailRow(
-            label: 'Base recipe',
-            icon: Icons.science_outlined,
-            selected: _recipeSel == 'base',
-            onTap: () => setState(() => _recipeSel = 'base'),
-          ),
-          for (final g in groups) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 12, 8, 4),
-              child: Text(g.name.toUpperCase(),
-                  style: YFont.caption().copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                    color: YColor.inkMuted,
-                  )),
-            ),
-            for (final o in g.options)
-              _recipeRailRow(
-                label: o.name,
-                icon: Icons.tune,
-                selected: _recipeSel == o.id,
-                onTap: () => setState(() => _recipeSel = o.id),
-                customized:
-                    (_adjFor(g.id, o.id)?.lineMultipliers.isNotEmpty ?? false) ||
-                        (_adjFor(g.id, o.id)?.addLines.isNotEmpty ?? false),
-              ),
-          ],
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(children: [
+          tab('base', 'Base recipe'),
+          for (final g in groups) tab(g.id, g.name),
+        ]),
       ),
     );
+  }
+
+  /// One group's rail (its options) + the per-ingredient editor.
+  Widget _groupRailView(ModifierGroup group) {
+    final sel = group.options.any((o) => o.id == _recipeSel)
+        ? _recipeSel
+        : (group.options.isNotEmpty ? group.options.first.id : '');
+    final option = group.options.where((o) => o.id == sel).firstOrNull;
+    return Row(children: [
+      SizedBox(
+        width: 180,
+        child: Container(
+          color: YColor.surface1,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
+            children: [
+              for (final o in group.options)
+                _recipeRailRow(
+                  label: o.name,
+                  icon: Icons.tune,
+                  selected: o.id == sel,
+                  onTap: () => setState(() => _recipeSel = o.id),
+                  customized:
+                      _adjFor(group.id, o.id)?.lineMultipliers.isNotEmpty ??
+                          false,
+                ),
+            ],
+          ),
+        ),
+      ),
+      Container(width: 0.5, color: YColor.hairline),
+      Expanded(
+        child: option == null
+            ? const SizedBox.shrink()
+            : _optionRecipeEditor(group, option),
+      ),
+    ]);
   }
 
   Widget _recipeRailRow({
@@ -2714,7 +2756,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  Widget _baseTab({bool oneColumn = false}) {
+  Widget _baseTab() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
@@ -2779,10 +2821,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                   )
                 : GridView.builder(
                     padding: EdgeInsets.zero,
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      // 1 item → full width, 2 → halves, 3+ → thirds.
-                      crossAxisCount:
-                          oneColumn ? 1 : _recipe.length.clamp(1, 3),
+                    // Pack as many columns as the pane width allows (so the
+                    // narrower right pane next to the rail still fits 2),
+                    // instead of forcing one full-width row.
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 230,
                       mainAxisExtent: 84,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
