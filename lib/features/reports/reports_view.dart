@@ -497,6 +497,7 @@ class _ReportsViewState extends State<ReportsView> {
     final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
+      _SalesBanner(groups: groups, separated: separated),
       _SalesMoneyKpis(groups: groups),
       _RevenueContributionSection(groups: groups),
       _CategoryBreakdownSection(
@@ -565,14 +566,14 @@ class _ReportsViewState extends State<ReportsView> {
         separated ? _separatedCatalog(state) : _generalCatalog(state);
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
-      ..._productMovementSections(groups, catalog),
+      ..._productMovementSections(groups, catalog, separated),
     ];
   }
 
   /// Movement view (no money): products sold per category (units) + a list of
   /// products with no sales. Shared by General + Separated.
   List<Widget> _productMovementSections(
-      List<_CatGroup> groups, List<CafeItem> catalog) {
+      List<_CatGroup> groups, List<CafeItem> catalog, bool separated) {
     final sortedGroups = [...groups]..sort((a, b) => b.qty.compareTo(a.qty));
     final sold = {
       for (final g in groups)
@@ -583,6 +584,11 @@ class _ReportsViewState extends State<ReportsView> {
         .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     return [
+      _ProductsBanner(
+        groups: sortedGroups,
+        notSellingCount: notSelling.length,
+        separated: separated,
+      ),
       _CategoryBreakdownSection(
         title: 'Products sold by category',
         subtitle: 'Units sold — tap a category (top movers first, slow last)',
@@ -1353,6 +1359,148 @@ class _NotSellingSection extends StatelessWidget {
                   ),
               ],
             ),
+    );
+  }
+}
+
+/// Headline banner for the Sales lens (scoped to the current sub-tab) — same
+/// gradient-card style as Inventory / Payroll / Staff / Attendance.
+class _SalesBanner extends StatelessWidget {
+  const _SalesBanner({required this.groups, required this.separated});
+  final List<_CatGroup> groups;
+  final bool separated;
+
+  @override
+  Widget build(BuildContext context) {
+    final revenue = groups.fold<int>(0, (s, g) => s + g.cents);
+    final items = groups.fold<int>(0, (s, g) => s + g.qty);
+    return _ReportBanner(
+      label: separated ? 'SEPARATED SALES' : 'SALES',
+      value: Money(revenue).formatted,
+      subtitle: groups.isEmpty
+          ? (separated
+              ? 'No separated sales in this range.'
+              : 'No sales in this range.')
+          : '$items item${items == 1 ? '' : 's'} sold across ${groups.length} '
+              'categor${groups.length == 1 ? 'y' : 'ies'}.',
+      icon: Icons.payments_outlined,
+    );
+  }
+}
+
+/// Headline banner for the Products lens (movement — units, not money).
+class _ProductsBanner extends StatelessWidget {
+  const _ProductsBanner({
+    required this.groups,
+    required this.notSellingCount,
+    required this.separated,
+  });
+  final List<_CatGroup> groups;
+  final int notSellingCount;
+  final bool separated;
+
+  @override
+  Widget build(BuildContext context) {
+    final units = groups.fold<int>(0, (s, g) => s + g.qty);
+    final distinct = groups.fold<int>(0, (s, g) => s + g.items.length);
+    return _ReportBanner(
+      label: separated ? 'SEPARATED PRODUCTS' : 'PRODUCTS',
+      value: '$units',
+      valueSuffix: ' sold',
+      subtitle:
+          '$distinct product${distinct == 1 ? '' : 's'} moving · $notSellingCount not selling.',
+      icon: Icons.coffee_outlined,
+    );
+  }
+}
+
+/// Shared gradient headline banner.
+class _ReportBanner extends StatelessWidget {
+  const _ReportBanner({
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    this.valueSuffix = '',
+  });
+  final String label;
+  final String value;
+  final String valueSuffix;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            YColor.brand.withValues(alpha: 0.92),
+            YColor.brandDeep.withValues(alpha: 0.95),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(YRadius.lg),
+        boxShadow: [
+          BoxShadow(
+            color: YColor.brand.withValues(alpha: 0.25),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: YFont.caption().copyWith(
+                    fontSize: 11,
+                    letterSpacing: 1.4,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withValues(alpha: 0.85),
+                  )),
+              const SizedBox(height: 6),
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                      text: value,
+                      style: YFont.titleLG().copyWith(
+                          fontSize: 36,
+                          letterSpacing: -1.0,
+                          color: Colors.white)),
+                  if (valueSuffix.isNotEmpty)
+                    TextSpan(
+                        text: valueSuffix,
+                        style: YFont.titleLG().copyWith(
+                            fontSize: 18,
+                            color: Colors.white.withValues(alpha: 0.85))),
+                ]),
+              ),
+              const SizedBox(height: 4),
+              Text(subtitle,
+                  style: YFont.body().copyWith(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.92),
+                  )),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 52,
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 26, color: Colors.white),
+        ),
+      ]),
     );
   }
 }
