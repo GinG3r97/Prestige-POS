@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
+import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
@@ -488,7 +489,8 @@ class _ReportsViewState extends State<ReportsView> {
     final separated = _separatedSalesGroups(context.read<AppState>(), data);
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
-      if (_salesSubTab == 'separated')
+      if (_salesSubTab == 'separated') ...[
+        _SeparatedKpiStrip(groups: separated),
         _CategoryBreakdownSection(
           title: 'Separated sales',
           subtitle:
@@ -498,8 +500,8 @@ class _ReportsViewState extends State<ReportsView> {
               'No separated sales groups yet. In Maintenance, turn on '
               '"Separate in Sales reports" for a Product Type or Category '
               '(e.g. consigned Books) to settle it here.',
-        )
-      else ...[
+        ),
+      ] else ...[
         _Headline(data: data, comparing: _comparePrior),
         _KpiStrip(data: data, comparing: _comparePrior),
         _SalesOverTime(data: data, comparing: _comparePrior),
@@ -560,7 +562,8 @@ class _ReportsViewState extends State<ReportsView> {
     final separated = _separatedSalesGroups(context.read<AppState>(), data);
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
-      if (_productSubTab == 'separated')
+      if (_productSubTab == 'separated') ...[
+        _SeparatedKpiStrip(groups: separated),
         _CategoryBreakdownSection(
           title: 'Separated products',
           subtitle:
@@ -569,8 +572,8 @@ class _ReportsViewState extends State<ReportsView> {
           emptyMessage:
               'No separated groups yet. In Maintenance, turn on "Separate in '
               'Sales reports" for a Product Type or Category.',
-        )
-      else ...[
+        ),
+      ] else ...[
         _Headline(data: data, comparing: _comparePrior),
         _ProductKpiStrip(data: data),
         _TwoColRow(
@@ -1034,6 +1037,97 @@ class _CategoryRow {
   final int cents;
 }
 
+/// Themed product icon for report rows — looks the product up by name to use
+/// its assigned icon (falls back to a name-derived themed icon), in a tinted
+/// tile. Replaces the raw emoji.
+class _ProductIcon extends StatelessWidget {
+  const _ProductIcon(this.name, {this.size = 30, this.iconSize = 16});
+  final String name;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = name.trim().toLowerCase();
+    final p = context
+        .read<AppState>()
+        .products
+        .where((x) => x.name.trim().toLowerCase() == lower)
+        .firstOrNull;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: YColor.brandTint.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: NameIconOrEmoji(
+        name: name,
+        iconName: p?.iconName,
+        iconSize: iconSize,
+        color: YColor.brandDeep,
+      ),
+    );
+  }
+}
+
+/// KPI strip for the Separated sub-tab (Sales + Products).
+class _SeparatedKpiStrip extends StatelessWidget {
+  const _SeparatedKpiStrip({required this.groups});
+  final List<_CatGroup> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    final revenue = groups.fold<int>(0, (s, g) => s + g.cents);
+    final items = groups.fold<int>(0, (s, g) => s + g.qty);
+    final top = groups.isEmpty ? '—' : groups.first.name;
+    return LayoutBuilder(builder: (_, c) {
+      final cols = c.maxWidth > 760 ? 4 : (c.maxWidth > 480 ? 2 : 1);
+      const gap = 12.0;
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(spacing: gap, runSpacing: gap, children: [
+        SizedBox(
+          width: w,
+          child: _KpiBox(
+            icon: Icons.payments_outlined,
+            tone: YColor.brand,
+            label: 'Separated revenue',
+            value: '₱${(revenue / 100).toStringAsFixed(0)}',
+          ),
+        ),
+        SizedBox(
+          width: w,
+          child: _KpiBox(
+            icon: Icons.sell_outlined,
+            tone: YColor.brandDeep,
+            label: 'Sales groups',
+            value: groups.length.toString(),
+          ),
+        ),
+        SizedBox(
+          width: w,
+          child: _KpiBox(
+            icon: Icons.shopping_basket_outlined,
+            tone: Colors.indigo,
+            label: 'Items sold',
+            value: items.toString(),
+          ),
+        ),
+        SizedBox(
+          width: w,
+          child: _KpiBox(
+            icon: Icons.star_outline,
+            tone: Colors.teal,
+            label: 'Top group',
+            value: top,
+          ),
+        ),
+      ]);
+    });
+  }
+}
+
 /// A category with the individual products sold under it.
 class _CatGroup {
   _CatGroup({
@@ -1188,11 +1282,10 @@ class _CategoryBreakdownSectionState extends State<_CategoryBreakdownSection> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(children: [
+                      _ProductIcon(it.name, size: 26, iconSize: 14),
+                      const SizedBox(width: 9),
                       Expanded(
-                        child: Text(
-                            it.emoji.isEmpty
-                                ? it.name
-                                : '${it.emoji}  ${it.name}',
+                        child: Text(it.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: YFont.body().copyWith(fontSize: 13)),
@@ -1802,13 +1895,8 @@ class _TopItemsSection extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Row(children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text(
-                          t.emoji.isEmpty ? '·' : t.emoji,
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                      ),
+                      _ProductIcon(t.name, size: 30, iconSize: 16),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
