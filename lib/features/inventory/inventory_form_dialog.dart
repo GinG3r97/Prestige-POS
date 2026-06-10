@@ -107,13 +107,22 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   }
 
   bool get _canSave =>
-      _name.text.trim().isNotEmpty && _categoryId != null;
+      _name.text.trim().isNotEmpty && _categoryId != null && !_busy;
+
+  /// One-shot guard so a fast double-tap on "Add item" / "Save changes"
+  /// can only pop the dialog (and therefore run the caller's mutation) once.
+  bool _busy = false;
 
   void _save() {
+    if (_busy) return;
+    _busy = true;
     final label = _unitLabel.text.trim();
     // Restockable=false zeroes the threshold so low-stock alerts stay silent.
+    // Clamp negatives to 0 — stock/threshold/cost must never go below zero.
     final threshold = _restockable
         ? (double.tryParse(_threshold.text) ?? 0)
+            .clamp(0, double.infinity)
+            .toDouble()
         : 0.0;
     final saved = InventoryItem(
       id: widget.initial?.id,
@@ -123,9 +132,13 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
       categoryId: _categoryId,
       unit: _unit,
       unitLabel: label.isEmpty ? null : label,
-      currentStock: double.tryParse(_stock.text) ?? 0,
+      currentStock: (double.tryParse(_stock.text) ?? 0)
+          .clamp(0, double.infinity)
+          .toDouble(),
       lowStockThreshold: threshold,
-      costPerUnit: double.tryParse(_cost.text) ?? 0,
+      costPerUnit: (double.tryParse(_cost.text) ?? 0)
+          .clamp(0, double.infinity)
+          .toDouble(),
       supplier: _supplier.text.trim(),
       lastRestockedAt: widget.initial?.lastRestockedAt,
     );

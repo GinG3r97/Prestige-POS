@@ -75,11 +75,19 @@ class _AddOnFormDialogState extends State<AddOnFormDialog> {
     super.dispose();
   }
 
-  bool get _canSave => _name.text.trim().isNotEmpty;
+  bool get _canSave => _name.text.trim().isNotEmpty && !_busy;
+
+  /// One-shot guard so a fast double-tap on "Add add-on" / "Save changes"
+  /// can only pop the dialog (and therefore run the caller's mutation) once.
+  bool _busy = false;
 
   void _save() {
-    final price = double.tryParse(_price.text) ?? 0;
-    final max = int.tryParse(_maxQty.text) ?? 0;
+    if (_busy) return;
+    _busy = true;
+    // Clamp negatives to 0 — money and quantities must never go below zero.
+    final price =
+        (double.tryParse(_price.text) ?? 0).clamp(0, double.infinity).toDouble();
+    final max = (int.tryParse(_maxQty.text) ?? 0).clamp(0, 1 << 31).toInt();
     final saved = AddOn(
       id: widget.initial?.id,
       name: _name.text.trim(),
@@ -476,7 +484,8 @@ class _AddOnFormDialogState extends State<AddOnFormDialog> {
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 14),
                 onChanged: (v) {
-                  line.quantity = double.tryParse(v) ?? 0;
+                  line.quantity =
+                      (double.tryParse(v) ?? 0).clamp(0, double.infinity);
                   setState(() {});
                 },
               ),

@@ -875,6 +875,8 @@ class _ModifierGroupDialogState extends State<_ModifierGroupDialog> {
   late List<MasterOption> _options;
   final Map<String, TextEditingController> _optCtrls = {};
   final Map<String, TextEditingController> _priceCtrls = {};
+  /// One-shot guard so a fast double-tap on Add/Save pops only once.
+  bool _busy = false;
 
   @override
   void initState() {
@@ -926,7 +928,7 @@ class _ModifierGroupDialogState extends State<_ModifierGroupDialog> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final canSave =
-        _name.text.trim().isNotEmpty && _options.isNotEmpty;
+        _name.text.trim().isNotEmpty && _options.isNotEmpty && !_busy;
     return Dialog(
       insetPadding:
           const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
@@ -1195,6 +1197,8 @@ class _ModifierGroupDialogState extends State<_ModifierGroupDialog> {
             ))
         .toList();
     if (cleaned.isEmpty) return;
+    if (_busy) return;
+    _busy = true;
     final saved = MasterModifierGroup(
       id: widget.initial?.id,
       name: _name.text.trim(),
@@ -1721,9 +1725,14 @@ class _InventoryCategoryDialogState extends State<_InventoryCategoryDialog> {
     super.dispose();
   }
 
-  bool get _canSave => _name.text.trim().isNotEmpty;
+  bool get _canSave => _name.text.trim().isNotEmpty && !_busy;
+
+  /// One-shot guard so a fast double-tap on Save pops only once.
+  bool _busy = false;
 
   void _save() {
+    if (_busy) return;
+    _busy = true;
     final saved = InventoryCategory(
       id: widget.initial?.id ?? '00000000-0000-0000-0000-000000000000',
       name: _name.text.trim(),
@@ -1942,6 +1951,29 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   String? _typeId;
   late String _emoji;
   late bool _separateSales;
+  /// One-shot guard so a fast double-tap on Add/Save pops only once.
+  bool _busy = false;
+
+  void _save() {
+    if (_busy) return;
+    _busy = true;
+    Navigator.pop(
+      context,
+      cat.Category(
+        // For new categories, the id is a placeholder —
+        // AppState.addCategory ignores it and the DB
+        // generates the real uuid. For edits, we keep
+        // the existing id so updateCategory targets it.
+        id: widget.initial?.id ?? '',
+        name: _name.text.trim(),
+        emoji: _emoji,
+        iconName: _iconName,
+        sortOrder: int.tryParse(_sortOrder.text) ?? 100,
+        typeId: _typeId,
+        separateSales: _separateSales,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -1970,7 +2002,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final canSave = _name.text.trim().isNotEmpty;
+    final canSave = _name.text.trim().isNotEmpty && !_busy;
     return Dialog(
       insetPadding:
           const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
@@ -2100,25 +2132,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: canSave
-                    ? () => Navigator.pop(
-                          context,
-                          cat.Category(
-                            // For new categories, the id is a placeholder —
-                            // AppState.addCategory ignores it and the DB
-                            // generates the real uuid. For edits, we keep
-                            // the existing id so updateCategory targets it.
-                            id: widget.initial?.id ?? '',
-                            name: _name.text.trim(),
-                            emoji: _emoji,
-                            iconName: _iconName,
-                            sortOrder:
-                                int.tryParse(_sortOrder.text) ?? 100,
-                            typeId: _typeId,
-                            separateSales: _separateSales,
-                          ),
-                        )
-                    : null,
+                onPressed: canSave ? _save : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: YColor.brand,
                   foregroundColor: Colors.white,
@@ -2546,6 +2560,8 @@ class _RoleDialogState extends State<_RoleDialog> {
   String? _iconName;
   late bool _requiresPin;
   late Set<String> _permissions;
+  /// One-shot guard so a fast double-tap on Save pops only once.
+  bool _busy = false;
 
   @override
   void initState() {
@@ -2574,6 +2590,8 @@ class _RoleDialogState extends State<_RoleDialog> {
   }
 
   void _save() {
+    if (_busy) return;
+    _busy = true;
     final saved = EmployeeRole(
       id: widget.initial?.id ?? '',
       name: _name.text.trim(),
@@ -2589,7 +2607,7 @@ class _RoleDialogState extends State<_RoleDialog> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final canSave = _name.text.trim().isNotEmpty;
+    final canSave = _name.text.trim().isNotEmpty && !_busy;
     return Dialog(
       insetPadding:
           const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
@@ -2793,6 +2811,8 @@ class _ProductTypeDialog extends StatefulWidget {
 class _ProductTypeDialogState extends State<_ProductTypeDialog> {
   late final TextEditingController _name;
   String? _iconName;
+  /// One-shot guard so a fast double-tap on Save pops only once.
+  bool _busy = false;
 
   @override
   void initState() {
@@ -2809,6 +2829,8 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
   }
 
   void _save() {
+    if (_busy) return;
+    _busy = true;
     Navigator.of(context).pop(ProductType(
       id: widget.initial?.id ?? '',
       name: _name.text.trim(),
@@ -2826,7 +2848,7 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final canSave = _name.text.trim().isNotEmpty;
+    final canSave = _name.text.trim().isNotEmpty && !_busy;
     return Dialog(
       insetPadding:
           const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
