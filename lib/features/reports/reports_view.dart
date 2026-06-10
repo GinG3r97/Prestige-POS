@@ -88,6 +88,7 @@ class ReportsView extends StatefulWidget {
 class _ReportsViewState extends State<ReportsView> {
   _ReportLens _lens = _ReportLens.all;
   String _salesSubTab = 'general';
+  String _productSubTab = 'general';
   _DateRange _range = _DateRange.today();
   bool _comparePrior = true;
 
@@ -486,7 +487,7 @@ class _ReportsViewState extends State<ReportsView> {
   List<Widget> _salesSections(_ReportData data) {
     final separated = _separatedSalesGroups(context.read<AppState>(), data);
     return [
-      _salesSubTabBar(),
+      _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
       if (_salesSubTab == 'separated')
         _CategoryBreakdownSection(
           title: 'Separated sales',
@@ -510,20 +511,19 @@ class _ReportsViewState extends State<ReportsView> {
           left: _ByCashierSection(data: data),
           right: _RefundsVoidsSection(data: data),
         ),
-        _SalesGroupsSection(data: data),
       ],
     ];
   }
 
-  /// General vs Separated sub-tabs for the Sales lens.
-  Widget _salesSubTabBar() {
+  /// General vs Separated sub-tabs (reused by Sales + Products).
+  Widget _subTabBar(String current, ValueChanged<String> onChange) {
     Widget chip(String key, String label, IconData icon) {
-      final on = _salesSubTab == key;
+      final on = current == key;
       return Padding(
         padding: const EdgeInsets.only(right: 8),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _salesSubTab = key),
+          onTap: () => onChange(key),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 130),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
@@ -556,7 +556,21 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
-  List<Widget> _productSections(_ReportData data) => [
+  List<Widget> _productSections(_ReportData data) {
+    final separated = _separatedSalesGroups(context.read<AppState>(), data);
+    return [
+      _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
+      if (_productSubTab == 'separated')
+        _CategoryBreakdownSection(
+          title: 'Separated products',
+          subtitle:
+              'Products sold under each consigned / separated group (Books, Flowers…)',
+          groups: separated,
+          emptyMessage:
+              'No separated groups yet. In Maintenance, turn on "Separate in '
+              'Sales reports" for a Product Type or Category.',
+        )
+      else ...[
         _Headline(data: data, comparing: _comparePrior),
         _ProductKpiStrip(data: data),
         _TwoColRow(
@@ -569,7 +583,9 @@ class _ReportsViewState extends State<ReportsView> {
           groups: data.categoryGroups,
           emptyMessage: 'No products sold in this range yet.',
         ),
-      ];
+      ],
+    ];
+  }
 
   List<Widget> _inventorySections(AppState state) => [
         _InventoryHeadline(state: state),
@@ -2582,7 +2598,7 @@ class _ProductKpiStrip extends StatelessWidget {
           SizedBox(
             width: w,
             child: _KpiBox(
-              icon: Icons.local_cafe_outlined,
+              icon: Icons.coffee_outlined,
               tone: YColor.brand,
               label: 'Distinct items sold',
               value: distinct.toString(),
