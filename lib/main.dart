@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app/app_state.dart';
 import 'app/stores/bookings_store.dart';
+import 'app/stores/hr_store.dart';
 import 'app/stores/members_store.dart';
 import 'models/cart.dart';
 import 'data/supabase_client.dart';
@@ -179,6 +180,15 @@ class YosefPOSApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AppState, BookingsStore>(
           create: (ctx) => ctx.read<AppState>().bookings,
           update: (_, app, __) => app.bookings,
+        ),
+        // Scope the HR domain (employees, roles, leave types, employment
+        // templates, payroll rules, time entries, payroll runs) to its own
+        // store so HR edits repaint only HR-watching widgets, not every
+        // context.watch<AppState>() consumer. Same HrStore instance AppState
+        // owns (provided by value via the proxy, never recreated).
+        ChangeNotifierProxyProvider<AppState, HrStore>(
+          create: (ctx) => ctx.read<AppState>().hr,
+          update: (_, app, __) => app.hr,
         ),
       ],
       child: MaterialApp(

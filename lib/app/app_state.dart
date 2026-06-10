@@ -21,10 +21,9 @@ import '../models/money.dart';
 import '../models/order.dart' as o;
 import '../models/printer_config.dart';
 import '../models/shift.dart';
-import '../models/payroll.dart';
-import '../models/payroll_rules.dart';
 import '../models/tenant.dart';
 import 'stores/bookings_store.dart';
+import 'stores/hr_store.dart';
 import 'stores/members_store.dart';
 
 const _uuid = Uuid();
@@ -71,6 +70,15 @@ class AppState extends ChangeNotifier {
   /// provider (see main.dart).
   final BookingsStore bookings = BookingsStore();
 
+  /// HR domain (employees, roles, leave types, employment templates, payroll
+  /// rules, time entries, payroll runs) lives in its own ChangeNotifier so HR
+  /// changes don't rebuild every AppState watcher. AppState owns the instance
+  /// and drives its lifecycle (hydrateCore/hydratePayrollCache/ensureTenant/
+  /// reset); the auth/PIN/permission code on AppState READS this store for
+  /// employee/role data. Consumers watch this store directly via its own
+  /// provider (see main.dart).
+  final HrStore hr = HrStore();
+
   StreamSubscription<sb.AuthState>? _authSub;
 
   /// Mirror Supabase auth state into our local owner model. If the user is
@@ -115,11 +123,7 @@ class AppState extends ChangeNotifier {
         _categories = [];
         _features = cat.TenantFeatures();
         _modifierGroups = [];
-        _employeeRoles = [];
-        _employees = [];
-        _payrollRules = PayrollRules();
-        _leaveTypes = [];
-        _employmentTemplates = [];
+        hr.reset();
         _productTypes = [];
         _products = [];
         _inventory = [];
@@ -241,8 +245,7 @@ class AppState extends ChangeNotifier {
         // Time-tracking still pending its own DB migration; start empty
         // instead of fabricating entries against employees we no longer
         // mock-seed.
-        _timeEntriesByTenant[tenantObj.id] = [];
-        _payrollRunsByTenant[tenantObj.id] = [];
+        hr.ensureTenant(tenantObj.id);
       }
       _currentStoreIndex = 0;
       _currentTenantDbId = tenantRows.first['id'] as String;
@@ -304,59 +307,11 @@ class AppState extends ChangeNotifier {
             return MasterModifierGroup.fromRow(row, options: opts);
           }).toList();
         }(),
-        () async {
-          final roleRows = await supabase
-              .from('employee_roles')
-              .select(
-                  'id, name, icon_name, permissions, requires_pin, is_system, sort_order')
-              .eq('tenant_id', tid)
-              .order('sort_order');
-          _employeeRoles = (roleRows as List)
-              .map((r) => EmployeeRole.fromRow(r as Map<String, dynamic>))
-              .toList();
-        }(),
-        () async {
-          final empRows = await supabase
-              .from('employees')
-              .select('*, role:employee_roles(id, name)')
-              .eq('tenant_id', tid)
-              .order('created_at');
-          _employees = (empRows as List).map((r) {
-            final row = r as Map<String, dynamic>;
-            final joined = row['role'] as Map<String, dynamic>?;
-            return Employee.fromRow(row, roleRow: joined);
-          }).toList();
-        }(),
-        () async {
-          final rulesRow = await supabase
-              .from('payroll_rules')
-              .select('*')
-              .eq('tenant_id', tid)
-              .maybeSingle();
-          _payrollRules = rulesRow == null
-              ? PayrollRules()
-              : PayrollRules.fromRow(rulesRow);
-        }(),
-        () async {
-          final ltRows = await supabase
-              .from('leave_types')
-              .select('*')
-              .eq('tenant_id', tid)
-              .order('sort_order');
-          _leaveTypes = (ltRows as List)
-              .map((r) => LeaveType.fromRow(r as Map<String, dynamic>))
-              .toList();
-        }(),
-        () async {
-          final tplRows = await supabase
-              .from('employment_templates')
-              .select('*')
-              .eq('tenant_id', tid)
-              .order('employment_type');
-          _employmentTemplates = (tplRows as List)
-              .map((r) => EmploymentTemplate.fromRow(r as Map<String, dynamic>))
-              .toList();
-        }(),
+        // HR core (roles/employees/payrollRules/leaveTypes/templates) lives
+        // in HrStore. hydrateCore runs its own internal Future.wait over the
+        // same five fetches, so the parallelism is unchanged — it just runs
+        // as one entry in this concurrent batch.
+        hr.hydrateCore(tid as String),
         () async {
           final typeRows = await supabase
               .from('product_types')
@@ -450,41 +405,10 @@ class AppState extends ChangeNotifier {
       // Member plan templates + member roster live in MembersStore.
       await members.hydrate(_currentTenantDbId!);
 
-      // Payroll — time entries first (small, all rows), then runs
-      // with their payslips nested via PostgREST so we get the
-      // whole hierarchy in a single round-trip. The per-tenant
-      // cache key is the in-memory Tenant id (matches what we
-      // initialised at the top of this method).
-      final tenantCacheId = tenant!.id;
-      final teRows = await supabase
-          .from('time_entries')
-          .select('*')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('entry_date', ascending: false)
-          .limit(2000);
-      _timeEntriesByTenant[tenantCacheId] = (teRows as List)
-          .map((r) => TimeEntry.fromRow(r as Map<String, dynamic>))
-          .toList();
-
-      final runRows = await supabase
-          .from('payroll_runs')
-          .select(
-              'id, tenant_id, period_start, period_end, kind, status, '
-              'paid_at, created_at, '
-              'payslips(id, employee_id, employee_name, employee_role, '
-              'compensation_type, hours_worked, hourly_rate, daily_rate, '
-              'monthly_salary, bonus, deductions)')
-          .eq('tenant_id', _currentTenantDbId as Object)
-          .order('period_start', ascending: false)
-          .limit(60);
-      _payrollRunsByTenant[tenantCacheId] = (runRows as List).map((r) {
-        final row = r as Map<String, dynamic>;
-        final slipsRaw = (row['payslips'] as List? ?? const []);
-        final slips = slipsRaw
-            .map((s) => Payslip.fromRow(s as Map<String, dynamic>))
-            .toList();
-        return PayrollRun.fromRow(row, slips: slips);
-      }).toList();
+      // Payroll — time entries + payroll runs live in HrStore. The per-tenant
+      // cache key is the in-memory Tenant id (matches what we initialised at
+      // the top of this method); the queries are scoped by the DB id.
+      await hr.hydratePayrollCache(_currentTenantDbId!, tenant!.id);
 
       _isHydrating = false;
       notifyListeners();
@@ -692,11 +616,6 @@ class AppState extends ChangeNotifier {
       !_ownerPinSet;
 
   int _selectedBranchIndex = 0;
-
-  // Per-tenant payroll state. Keyed by tenant.id so switching stores keeps
-  // each store's books separate.
-  final Map<String, List<TimeEntry>> _timeEntriesByTenant = {};
-  final Map<String, List<PayrollRun>> _payrollRunsByTenant = {};
 
   Branch get selectedBranch {
     final t = tenant;
@@ -1009,7 +928,7 @@ class AppState extends ChangeNotifier {
       // Seed payroll rules + default leaves + employment templates. Same
       // shape the SQL backfill uses for existing tenants. Idempotent —
       // relies on unique constraints to no-op if already present.
-      await _seedDefaultPayrollSurface(tenantDbId);
+      await hr.seedDefaultPayrollSurface(tenantDbId);
 
       // (Product types were seeded earlier so categories could link to them.)
     } on sb.PostgrestException catch (e) {
@@ -1033,12 +952,11 @@ class AppState extends ChangeNotifier {
     _addingStore = false;
     _currentTenantDbId = tenantDbId;
     _ownerPinSet = false; // fresh tenant — owner still needs to set the PIN
-    _timeEntriesByTenant[newStore.id] = [];
-    _payrollRunsByTenant[newStore.id] = [];
+    hr.ensureTenant(newStore.id);
 
     // Seed default employee roles for this fresh tenant. Idempotent against
     // the SQL backfill via unique(tenant_id, name).
-    await _seedDefaultEmployeeRoles(tenantDbId);
+    await hr.seedDefaultEmployeeRoles(tenantDbId);
     selectedRoute = AppRoute.sell;
     notifyListeners();
     return null;
@@ -1110,7 +1028,7 @@ class AppState extends ChangeNotifier {
         // Attach the synthesized owner-staff to the seeded Owner role so
         // role-aware UI (badges, etc.) reads consistently. Permission gates
         // bypass this anyway via the `currentOwner != null` short-circuit.
-        final ownerRole = _employeeRoles
+        final ownerRole = hr.employeeRoles
             .where((r) => r.isSystem && r.name == 'Owner')
             .firstOrNull;
         currentStaff = Employee(
@@ -1161,7 +1079,7 @@ class AppState extends ChangeNotifier {
           'p_count_failure': false,
         });
         if (ok == true) {
-          final ownerRole = _employeeRoles
+          final ownerRole = hr.employeeRoles
               .where((r) => r.isSystem && r.name == 'Owner')
               .firstOrNull;
           currentStaff = Employee(
@@ -1188,7 +1106,7 @@ class AppState extends ChangeNotifier {
 
     // 2) Cashier PINs — only employees whose role requires a PIN.
     final candidates = <Employee>[];
-    for (final e in _employees) {
+    for (final e in hr.employees) {
       final role = roleById(e.roleId);
       if (role?.requiresPin == true) candidates.add(e);
     }
@@ -1253,7 +1171,7 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // Locked / unreachable — fall through to cashier matching.
     }
-    for (final emp in _employees) {
+    for (final emp in hr.employees) {
       if (emp.id == excludeId) continue;
       final role = roleById(emp.roleId);
       if (role?.requiresPin != true) continue;
@@ -3371,200 +3289,25 @@ class AppState extends ChangeNotifier {
     return updateInventoryItem(item);
   }
 
-  // ───── employee roles (Supabase-backed; Maintenance → Roles) ─────
+  // ───── HR domain delegates (data now lives in HrStore) ─────
+  //
+  // The employees/roles/payroll data + CRUD moved to [hr] (HrStore). The
+  // session/permission code below and a few un-migrated shell screens still
+  // call `state.employees` / `state.employeeRoles` / `state.roleById`, so
+  // these thin delegates forward to the store. HR feature screens watch the
+  // store directly via its own provider.
 
-  /// Cached list of roles for the active tenant. Populated by
-  /// [_restoreTenantFromDb]; mutated by the role CRUD methods.
-  List<EmployeeRole> _employeeRoles = [];
-  List<EmployeeRole> get employeeRoles => List.unmodifiable(_employeeRoles);
+  /// Live employee roster for the active tenant. Delegates to [hr] so the
+  /// PIN flow, more_view tiles, and reports keep working via AppState.
+  List<Employee> get employees => hr.employees;
 
-  EmployeeRole? roleById(String? id) {
-    if (id == null) return null;
-    for (final r in _employeeRoles) {
-      if (r.id == id) return r;
-    }
-    return null;
-  }
+  /// Live employee roles for the active tenant. Delegates to [hr].
+  List<EmployeeRole> get employeeRoles => hr.employeeRoles;
 
-  /// Seeds Owner / Cashier / Inventory Manager for a freshly created tenant.
-  /// Idempotent — relies on the unique(tenant_id, name) constraint to no-op
-  /// if defaults already exist (e.g. from the SQL backfill).
-  Future<void> _seedDefaultEmployeeRoles(String tenantId) async {
-    Future<void> insertRole({
-      required String name,
-      required String iconName,
-      required List<String> permissions,
-      required bool requiresPin,
-      required int sortOrder,
-    }) async {
-      await supabase.from('employee_roles').insert({
-        'tenant_id': tenantId,
-        'name': name,
-        'icon_name': iconName,
-        'permissions': permissions,
-        'requires_pin': requiresPin,
-        'is_system': true,
-        'sort_order': sortOrder,
-      });
-    }
-
-    try {
-      await insertRole(
-        name: 'Owner',
-        iconName: 'admin_panel_settings_outlined',
-        permissions: const [
-          'dashboard', 'sell', 'bookings', 'sessions', 'members',
-          'orders', 'reports', 'employees', 'payroll', 'products',
-          'inventory', 'maintenance', 'settings', 'authorize_refunds',
-          'switch_branch',
-        ],
-        requiresPin: true,
-        sortOrder: 10,
-      );
-      // Manager — can run the floor and authorize voids/refunds, but can't
-      // touch payroll/employees/settings. 'authorize_refunds' is the
-      // permission that lets a PIN approve a void/refund at the till.
-      await insertRole(
-        name: 'Manager',
-        iconName: 'badge_outlined',
-        permissions: const [
-          'dashboard', 'sell', 'orders', 'reports', 'inventory',
-          'products', 'authorize_refunds',
-        ],
-        requiresPin: true,
-        sortOrder: 15,
-      );
-      await insertRole(
-        name: 'Cashier',
-        iconName: 'point_of_sale_outlined',
-        permissions: const ['sell', 'orders'],
-        requiresPin: true,
-        sortOrder: 20,
-      );
-      await insertRole(
-        name: 'Inventory Manager',
-        iconName: 'inventory_2_outlined',
-        permissions: const ['inventory', 'products'],
-        requiresPin: false,
-        sortOrder: 30,
-      );
-    } on sb.PostgrestException catch (e) {
-      // 23505 = unique violation — defaults already seeded (e.g. SQL
-      // backfill ran). Silently skip.
-      if (e.code != '23505' && kDebugMode) {
-        debugPrint('Seed default employee roles failed: ${e.message}');
-      }
-    }
-  }
-
-  /// Seeds payroll_rules + default leave types + employment_templates for
-  /// a freshly created tenant. Same defaults the SQL backfill uses. Each
-  /// insert is wrapped in its own try/catch so a 23505 (already-present)
-  /// for one block doesn't skip the others.
-  Future<void> _seedDefaultPayrollSurface(String tenantId) async {
-    try {
-      await supabase.from('payroll_rules').insert({'tenant_id': tenantId});
-    } on sb.PostgrestException catch (e) {
-      if (e.code != '23505' && kDebugMode) {
-        debugPrint('Seed payroll_rules failed: ${e.message}');
-      }
-    }
-
-    String? silId, vlId, slId;
-    try {
-      final rows = await supabase.from('leave_types').insert([
-        {
-          'tenant_id': tenantId,
-          'name': 'Service Incentive Leave',
-          'emoji': '🌴',
-          'icon_name': 'park_outlined',
-          'annual_days': 5,
-          'paid': true,
-          'notes': 'Mandatory PH SIL — convertible to cash if unused.',
-          'sort_order': 10,
-          'is_system': true,
-        },
-        {
-          'tenant_id': tenantId,
-          'name': 'Vacation Leave',
-          'emoji': '🏖',
-          'icon_name': 'beach_access_outlined',
-          'annual_days': 10,
-          'paid': true,
-          'notes': '',
-          'sort_order': 20,
-          'is_system': true,
-        },
-        {
-          'tenant_id': tenantId,
-          'name': 'Sick Leave',
-          'emoji': '🤒',
-          'icon_name': 'sick_outlined',
-          'annual_days': 7,
-          'paid': true,
-          'notes': '',
-          'sort_order': 30,
-          'is_system': true,
-        },
-      ]).select('id, name');
-      for (final r in rows as List) {
-        final m = r as Map<String, dynamic>;
-        switch (m['name']) {
-          case 'Service Incentive Leave':
-            silId = m['id'] as String;
-          case 'Vacation Leave':
-            vlId = m['id'] as String;
-          case 'Sick Leave':
-            slId = m['id'] as String;
-        }
-      }
-    } on sb.PostgrestException catch (e) {
-      if (e.code != '23505' && kDebugMode) {
-        debugPrint('Seed leave_types failed: ${e.message}');
-      }
-    }
-
-    try {
-      await supabase.from('employment_templates').insert([
-        {
-          'tenant_id': tenantId,
-          'employment_type': 'full_time',
-          'compensation_type': 'salaried',
-          'default_monthly_salary_cents': 2800000,
-          'overtime_multiplier': 1.25,
-          'leave_type_ids': [silId, vlId, slId].whereType<String>().toList(),
-        },
-        {
-          'tenant_id': tenantId,
-          'employment_type': 'part_time',
-          'compensation_type': 'hourly',
-          'default_hourly_rate_cents': 12000,
-          'overtime_multiplier': 1.25,
-          'leave_type_ids': [silId].whereType<String>().toList(),
-        },
-        {
-          'tenant_id': tenantId,
-          'employment_type': 'contract',
-          'compensation_type': 'daily',
-          'default_daily_rate_cents': 80000,
-          'overtime_multiplier': 1.25,
-          'leave_type_ids': [silId].whereType<String>().toList(),
-        },
-        {
-          'tenant_id': tenantId,
-          'employment_type': 'seasonal',
-          'compensation_type': 'hourly',
-          'default_hourly_rate_cents': 11000,
-          'overtime_multiplier': 1.25,
-          'leave_type_ids': const <String>[],
-        },
-      ]);
-    } on sb.PostgrestException catch (e) {
-      if (e.code != '23505' && kDebugMode) {
-        debugPrint('Seed employment_templates failed: ${e.message}');
-      }
-    }
-  }
+  /// Resolve a role by id. Delegates to [hr]. Kept on AppState so the
+  /// permission getters and un-migrated shell screens (topbar / more_view)
+  /// that call `state.roleById(...)` keep working.
+  EmployeeRole? roleById(String? id) => hr.roleById(id);
 
   /// Seeds the default product types for a freshly created tenant and returns
   /// a lowercased name -> id map so onboarding can link the seeded categories
@@ -3645,632 +3388,6 @@ class AppState extends ChangeNotifier {
       if (name != null && id != null) map[name] = id;
     }
     return map;
-  }
-
-
-  Future<String?> addEmployeeRole(EmployeeRole r) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (r.name.trim().isEmpty) return 'Role name is required.';
-    try {
-      final row = await supabase
-          .from('employee_roles')
-          .insert({
-            'tenant_id': tenantId,
-            'name': r.name.trim(),
-            'icon_name': r.iconName,
-            'permissions': r.permissions.toList(),
-            'requires_pin': r.requiresPin,
-            'is_system': false,
-            'sort_order': r.sortOrder,
-          })
-          .select(
-              'id, name, icon_name, permissions, requires_pin, is_system, sort_order')
-          .single();
-      _employeeRoles.add(EmployeeRole.fromRow(row));
-      _employeeRoles.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      if (e.code == '23505') {
-        return 'A role named "${r.name}" already exists.';
-      }
-      return 'Could not add role: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> updateEmployeeRole(EmployeeRole updated) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    if (updated.name.trim().isEmpty) return 'Role name is required.';
-    try {
-      await supabase.from('employee_roles').update({
-        'name': updated.name.trim(),
-        'icon_name': updated.iconName,
-        'permissions': updated.permissions.toList(),
-        'requires_pin': updated.requiresPin,
-        'sort_order': updated.sortOrder,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', updated.id);
-      final i = _employeeRoles.indexWhere((r) => r.id == updated.id);
-      if (i >= 0) {
-        _employeeRoles[i] = updated;
-        _employeeRoles.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      }
-      // Refresh denormalized role names on any employees holding this role.
-      for (final emp in _employees) {
-        if (emp.roleId == updated.id) emp.role = updated.name.trim();
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      if (e.code == '23505') {
-        return 'A role named "${updated.name}" already exists.';
-      }
-      return 'Could not update role: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> removeEmployeeRole(String id) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('employee_roles').delete().eq('id', id);
-      _employeeRoles.removeWhere((x) => x.id == id);
-      // Employees that held this role now have role_id = null (FK ON
-      // DELETE SET NULL). Clear the denormalized name too.
-      for (final emp in _employees) {
-        if (emp.roleId == id) {
-          emp.roleId = null;
-          emp.role = '';
-        }
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete role: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  // ───── employees (Supabase-backed) ─────
-
-  List<Employee> _employees = [];
-  List<Employee> get employees => List.unmodifiable(_employees);
-
-  /// Builds the row payload for insert/update. PIN is intentionally NOT
-  /// included here — cashier PINs are set via the [setCashierPin] RPC, never
-  /// stored as plaintext on the employees row.
-  Map<String, dynamic> _employeeRowPayload(Employee e, String tenantId) => {
-        'tenant_id': tenantId,
-        'role_id': e.roleId,
-        'name': e.name.trim(),
-        'gender': e.gender.dbValue,
-        'email': e.email.trim(),
-        'phone': e.phone.trim(),
-        'hire_date': e.hireDate.toIso8601String().substring(0, 10),
-        'status': e.status.dbValue,
-        'employment_type': e.employmentType.dbValue,
-        'compensation_type': e.compensationType.dbValue,
-        'hourly_rate_cents': (e.hourlyRate * 100).round(),
-        'daily_rate_cents': (e.dailyRate * 100).round(),
-        'monthly_salary_cents': (e.monthlySalary * 100).round(),
-        'branch_ids': e.branchIds.toList(),
-        'schedule': e.schedule.map((s) => s.toJson()).toList(),
-        'documents': e.documents.map((d) => d.toJson()).toList(),
-        'portal_enabled': e.portalEnabled,
-        'portal_gmail': e.portalGmail.trim(),
-        'portal_username': e.portalUsername.trim(),
-        'notes': e.notes,
-      };
-
-  /// Inserts the employee and, if [cashierPin] is supplied (only for roles
-  /// where [EmployeeRole.requiresPin] is true), sets it via the bcrypt RPC.
-  /// Returns null on success, or a user-safe error message.
-  Future<String?> addEmployee(Employee e, {String? cashierPin}) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (e.name.trim().isEmpty) return 'Employee name is required.';
-    try {
-      final row = await supabase
-          .from('employees')
-          .insert(_employeeRowPayload(e, tenantId))
-          .select('*, role:employee_roles(id, name)')
-          .single();
-      final saved = Employee.fromRow(row,
-          roleRow: row['role'] as Map<String, dynamic>?);
-      _employees.add(saved);
-      notifyListeners();
-
-      if (cashierPin != null && cashierPin.isNotEmpty) {
-        final pinErr = await setCashierPin(saved.id, cashierPin);
-        if (pinErr != null) return pinErr;
-      }
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not add employee: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> updateEmployee(Employee updated, {String? cashierPin}) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (updated.name.trim().isEmpty) return 'Employee name is required.';
-    try {
-      final row = await supabase
-          .from('employees')
-          .update(_employeeRowPayload(updated, tenantId)
-            ..['updated_at'] = DateTime.now().toIso8601String())
-          .eq('id', updated.id)
-          .select('*, role:employee_roles(id, name)')
-          .single();
-      final saved = Employee.fromRow(row,
-          roleRow: row['role'] as Map<String, dynamic>?);
-      final i = _employees.indexWhere((x) => x.id == saved.id);
-      if (i >= 0) _employees[i] = saved;
-      notifyListeners();
-
-      if (cashierPin != null && cashierPin.isNotEmpty) {
-        final pinErr = await setCashierPin(saved.id, cashierPin);
-        if (pinErr != null) return pinErr;
-      }
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update employee: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> removeEmployee(String id) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('employees').delete().eq('id', id);
-      _employees.removeWhere((e) => e.id == id);
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete employee: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  /// Stores a bcrypt-hashed PIN for a cashier-role employee. Returns null on
-  /// success. Mirrors [setOwnerPin] — 4–8 digits, atomic upsert.
-  Future<String?> setCashierPin(String employeeId, String pin) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    final p = pin.trim();
-    if (p.length < 4 || p.length > 8 ||
-        !RegExp(r'^[0-9]+$').hasMatch(p)) {
-      return 'Cashier PIN must be 4–8 digits.';
-    }
-    try {
-      await supabase.rpc('set_cashier_pin', params: {
-        'p_tenant_id': tenantId,
-        'p_employee_id': employeeId,
-        'p_pin': p,
-      });
-      // Keep an owner-visible plaintext copy in sync with the hash.
-      await supabase
-          .from('employees')
-          .update({'cashier_pin': p}).eq('id', employeeId);
-      final i = _employees.indexWhere((x) => x.id == employeeId);
-      if (i >= 0) _employees[i].cashierPin = p;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      // The server raises a `PIN_TAKEN:` prefixed error when the PIN
-      // collides with another user (owner or another cashier) inside the
-      // tenant. Strip the marker for a clean toast.
-      if (e.message.contains('PIN_TAKEN')) {
-        return e.message.replaceFirst('PIN_TAKEN: ', '');
-      }
-      return 'Could not save PIN: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  // ───── payroll rules + leave types + employment templates ─────────
-
-  PayrollRules _payrollRules = PayrollRules();
-  PayrollRules get payrollRules => _payrollRules;
-
-  List<LeaveType> _leaveTypes = [];
-  List<LeaveType> get leaveTypes => List.unmodifiable(_leaveTypes);
-
-  List<EmploymentTemplate> _employmentTemplates = [];
-  List<EmploymentTemplate> get employmentTemplates =>
-      List.unmodifiable(_employmentTemplates);
-
-  /// Convenience for the Add Employee modal: returns the template that
-  /// matches an employment type, or null if the owner deleted/never had one.
-  EmploymentTemplate? templateFor(EmploymentType t) {
-    for (final tpl in _employmentTemplates) {
-      if (tpl.employmentType == t) return tpl;
-    }
-    return null;
-  }
-
-  Future<String?> updatePayrollRules(PayrollRules updated) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    try {
-      await supabase
-          .from('payroll_rules')
-          .update(updated.toRow()
-            ..['updated_at'] = DateTime.now().toIso8601String())
-          .eq('tenant_id', tenantId);
-      _payrollRules = updated;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update rules: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> addLeaveType(LeaveType lt) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    if (lt.name.trim().isEmpty) return 'Leave type name is required.';
-    try {
-      final row = await supabase
-          .from('leave_types')
-          .insert({
-            'tenant_id': tenantId,
-            'name': lt.name.trim(),
-            'emoji': lt.emoji,
-            'icon_name': lt.iconName,
-            'annual_days': lt.annualDays,
-            'paid': lt.paid,
-            'notes': lt.notes,
-            'sort_order': lt.sortOrder,
-          })
-          .select('*')
-          .single();
-      _leaveTypes.add(LeaveType.fromRow(row));
-      _leaveTypes.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      if (e.code == '23505') {
-        return 'A leave type named "${lt.name}" already exists.';
-      }
-      return 'Could not add leave type: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> updateLeaveType(LeaveType updated) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('leave_types').update({
-        'name': updated.name.trim(),
-        'emoji': updated.emoji,
-        'icon_name': updated.iconName,
-        'annual_days': updated.annualDays,
-        'paid': updated.paid,
-        'notes': updated.notes,
-        'sort_order': updated.sortOrder,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', updated.id);
-      final i = _leaveTypes.indexWhere((l) => l.id == updated.id);
-      if (i >= 0) _leaveTypes[i] = updated;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update leave type: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> removeLeaveType(String id) async {
-    if (_currentTenantDbId == null) return 'No store selected.';
-    try {
-      await supabase.from('leave_types').delete().eq('id', id);
-      _leaveTypes.removeWhere((l) => l.id == id);
-      // Drop from any templates referencing it.
-      for (final tpl in _employmentTemplates) {
-        tpl.leaveTypeIds.remove(id);
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete leave type: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> updateEmploymentTemplate(EmploymentTemplate t) async {
-    final tenantId = _currentTenantDbId;
-    if (tenantId == null) return 'No store selected.';
-    try {
-      await supabase
-          .from('employment_templates')
-          .update(t.toRow(tenantId)
-            ..['updated_at'] = DateTime.now().toIso8601String())
-          .eq('id', t.id);
-      final i = _employmentTemplates.indexWhere((x) => x.id == t.id);
-      if (i >= 0) _employmentTemplates[i] = t;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update template: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  // ───── payroll (Supabase-backed) ────────────────────────────────
-  //
-  // Three tables: `time_entries`, `payroll_runs`, `payslips`. Tenant-
-  // scoped via RLS, so every query just filters by tenant_id and
-  // trusts the policy. The original in-memory maps remain as the
-  // local cache the UI binds to — server writes update both DB and
-  // cache so the UI repaints immediately while persistence happens
-  // in the background.
-
-  List<TimeEntry> get timeEntries {
-    final t = tenant;
-    if (t == null) return const [];
-    return _timeEntriesByTenant.putIfAbsent(t.id, () => <TimeEntry>[]);
-  }
-
-  List<PayrollRun> get payrollRuns {
-    final t = tenant;
-    if (t == null) return const [];
-    return _payrollRunsByTenant.putIfAbsent(t.id, () => <PayrollRun>[]);
-  }
-
-  /// Hours logged for [employeeId] between [from] (inclusive) and [to] (inclusive).
-  double hoursIn(String employeeId, DateTime from, DateTime to) {
-    final fromD = DateTime(from.year, from.month, from.day);
-    final toD = DateTime(to.year, to.month, to.day);
-    return timeEntries
-        .where((e) =>
-            e.employeeId == employeeId &&
-            !e.date.isBefore(fromD) &&
-            !e.date.isAfter(toD))
-        .fold(0.0, (acc, e) => acc + e.hours);
-  }
-
-  /// Insert / update / delete a single day's hours for an employee.
-  /// Returns null on success, a user-safe error message otherwise.
-  /// Persistence happens BEFORE the local cache is touched so a
-  /// failed write doesn't silently corrupt the UI.
-  Future<String?> upsertTimeEntry({
-    required String employeeId,
-    required DateTime date,
-    required double hours,
-    String? notes,
-  }) async {
-    final t = tenant;
-    final tenantId = _currentTenantDbId;
-    if (t == null || tenantId == null) return 'No store selected.';
-    final day = DateTime(date.year, date.month, date.day);
-    final dateStr =
-        '${day.year.toString().padLeft(4, '0')}-'
-        '${day.month.toString().padLeft(2, '0')}-'
-        '${day.day.toString().padLeft(2, '0')}';
-    final list =
-        _timeEntriesByTenant.putIfAbsent(t.id, () => <TimeEntry>[]);
-    final idx = list.indexWhere((e) =>
-        e.employeeId == employeeId &&
-        e.date.year == day.year &&
-        e.date.month == day.month &&
-        e.date.day == day.day);
-
-    try {
-      if (hours <= 0) {
-        // Zero hours = delete the row. Lets the cashier "clear" a
-        // shift without having to type 0.0 in two places.
-        if (idx >= 0) {
-          await supabase
-              .from('time_entries')
-              .delete()
-              .eq('id', list[idx].id);
-          list.removeAt(idx);
-        }
-      } else {
-        // Upsert keyed on (employee_id, entry_date) — relies on the
-        // unique index added in the migration.
-        final row = await supabase
-            .from('time_entries')
-            .upsert(
-              {
-                'tenant_id': tenantId,
-                'employee_id': employeeId,
-                'entry_date': dateStr,
-                'hours': hours,
-                'notes':
-                    (notes ?? '').isEmpty ? null : notes,
-              },
-              onConflict: 'employee_id,entry_date',
-            )
-            .select('*')
-            .single();
-        final fresh = TimeEntry.fromRow(row);
-        if (idx >= 0) {
-          list[idx] = fresh;
-        } else {
-          list.add(fresh);
-        }
-      }
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not save hours: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  /// Build a fresh payroll run snapshot for the given period. Pulls
-  /// each active employee's hours from [timeEntries] and freezes
-  /// their rate / salary at the time of generation. The run + each
-  /// slip persist to the DB so the period closes cleanly.
-  Future<({PayrollRun? run, String? error})> generatePayrollRun({
-    required DateTime start,
-    required DateTime end,
-    required PayPeriodKind kind,
-  }) async {
-    final t = tenant;
-    final tenantId = _currentTenantDbId;
-    if (t == null || tenantId == null) {
-      return (run: null, error: 'No store selected.');
-    }
-    final slips = <Payslip>[];
-    for (final emp in _employees) {
-      if (emp.status == EmployeeStatus.terminated) continue;
-      final hrs = hoursIn(emp.id, start, end);
-      slips.add(Payslip(
-        employeeId: emp.id,
-        employeeName: emp.name,
-        employeeRole: emp.role,
-        compensationType: emp.compensationType,
-        hoursWorked: hrs,
-        hourlyRate: emp.hourlyRate,
-        dailyRate: emp.dailyRate,
-        monthlySalary: emp.monthlySalary,
-      ));
-    }
-    final draft = PayrollRun(
-      periodStart: start,
-      periodEnd: end,
-      kind: kind,
-      slips: slips,
-    );
-    try {
-      // Insert the run header first to get its server-side id.
-      // We don't trust the model's local id since the DB DEFAULT is
-      // authoritative — wins on conflicts across devices.
-      final runRow = await supabase
-          .from('payroll_runs')
-          .insert(draft.toRowPayload(tenantId))
-          .select('*')
-          .single();
-      final runId = runRow['id'] as String;
-      // Bulk-insert all slips against the new run id.
-      final slipPayloads = slips
-          .map((s) => s.toRowPayload(
-              tenantId: tenantId, payrollRunId: runId))
-          .toList();
-      final slipRows = slipPayloads.isEmpty
-          ? <Map<String, dynamic>>[]
-          : (await supabase
-                  .from('payslips')
-                  .insert(slipPayloads)
-                  .select('*'))
-              .cast<Map<String, dynamic>>();
-      final hydrated = PayrollRun.fromRow(
-        runRow,
-        slips: slipRows.map(Payslip.fromRow).toList(),
-      );
-      _payrollRunsByTenant
-          .putIfAbsent(t.id, () => <PayrollRun>[])
-          .insert(0, hydrated);
-      notifyListeners();
-      return (run: hydrated, error: null);
-    } on sb.PostgrestException catch (e) {
-      return (run: null, error: 'Could not generate run: ${e.message}');
-    } catch (_) {
-      return (run: null, error: 'Could not reach the server. Please try again.');
-    }
-  }
-
-  /// Persist edits to a single payslip (bonus / deductions / hours
-  /// override). The DB row is the source of truth; the cache mirrors
-  /// it. Refuses to write once the parent run is marked paid.
-  Future<String?> updatePayslip(String runId, Payslip updated) async {
-    final t = tenant;
-    if (t == null) return 'No store selected.';
-    final runs = _payrollRunsByTenant[t.id];
-    if (runs == null) return 'No payroll runs yet.';
-    final ri = runs.indexWhere((r) => r.id == runId);
-    if (ri < 0) return 'That payroll run no longer exists.';
-    if (runs[ri].status == PayrollStatus.paid) {
-      return 'This run is already paid — payslips can\'t be edited.';
-    }
-    try {
-      await supabase
-          .from('payslips')
-          .update({
-            'hours_worked': updated.hoursWorked,
-            'hourly_rate': updated.hourlyRate,
-            'daily_rate': updated.dailyRate,
-            'monthly_salary': updated.monthlySalary,
-            'bonus': updated.bonus,
-            'deductions': updated.deductions,
-          })
-          .eq('id', updated.id);
-      final si = runs[ri].slips.indexWhere((s) => s.id == updated.id);
-      if (si >= 0) runs[ri].slips[si] = updated;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not save payslip: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> setPayrollStatus(
-      String runId, PayrollStatus status) async {
-    final t = tenant;
-    if (t == null) return 'No store selected.';
-    final runs = _payrollRunsByTenant[t.id];
-    if (runs == null) return 'No payroll runs yet.';
-    final i = runs.indexWhere((r) => r.id == runId);
-    if (i < 0) return 'That payroll run no longer exists.';
-    final paidAt =
-        status == PayrollStatus.paid ? DateTime.now() : null;
-    try {
-      await supabase
-          .from('payroll_runs')
-          .update({
-            'status': status.dbValue,
-            'paid_at': paidAt?.toUtc().toIso8601String(),
-          })
-          .eq('id', runId);
-      runs[i].status = status;
-      if (paidAt != null) runs[i].paidAt = paidAt;
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not update status: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
-  }
-
-  Future<String?> removePayrollRun(String runId) async {
-    final t = tenant;
-    if (t == null) return 'No store selected.';
-    final runs = _payrollRunsByTenant[t.id];
-    if (runs == null) return 'No payroll runs yet.';
-    try {
-      // Cascading FK deletes the slips automatically.
-      await supabase.from('payroll_runs').delete().eq('id', runId);
-      runs.removeWhere((r) => r.id == runId);
-      notifyListeners();
-      return null;
-    } on sb.PostgrestException catch (e) {
-      return 'Could not remove run: ${e.message}';
-    } catch (_) {
-      return 'Could not reach the server. Please try again.';
-    }
   }
 
   // ───── staff PIN session ─────

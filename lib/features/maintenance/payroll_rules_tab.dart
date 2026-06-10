@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -18,10 +18,10 @@ import '../../design_system/icons.dart'
 ///   3. Hours, undertime, gov  — standard hours + lateness + 13th-month etc.
 ///   4. Leave types            — buckets templates can draw from
 ///
-/// All four persist to Supabase via [AppState] (no more in-memory drafts).
+/// All four persist to Supabase via [HrStore] (no more in-memory drafts).
 class PayrollRulesTab extends StatefulWidget {
   const PayrollRulesTab({super.key, required this.state});
-  final AppState state;
+  final HrStore state;
 
   @override
   State<PayrollRulesTab> createState() => _PayrollRulesTabState();
@@ -583,7 +583,7 @@ class _TemplateRow extends StatelessWidget {
     required this.template,
     required this.onTap,
   });
-  final AppState state;
+  final HrStore state;
   final EmploymentTemplate template;
   final VoidCallback onTap;
 

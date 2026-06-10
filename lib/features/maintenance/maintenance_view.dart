@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../app/stores/bookings_store.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -111,8 +112,8 @@ class MaintenanceView extends StatelessWidget {
                   _AddOnsTab(state: state),
                   _InventoryCategoriesTab(state: state),
                   _ProductAreaTab(state: state),
-                  _RolesTab(state: state),
-                  PayrollRulesTab(state: state),
+                  const _RolesTab(),
+                  PayrollRulesTab(state: state.hr),
                   if (showBookable)
                     BookableResourcesTab(
                         state: context.watch<BookingsStore>()),
@@ -2318,11 +2319,11 @@ const List<_RoutePerm> _kRoutePerms = [
 ];
 
 class _RolesTab extends StatelessWidget {
-  const _RolesTab({required this.state});
-  final AppState state;
+  const _RolesTab();
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<HrStore>();
     final roles = state.employeeRoles;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -2390,7 +2391,7 @@ class _RolesTab extends StatelessWidget {
   }
 
   Future<void> _openRoleForm(
-      BuildContext context, AppState state, EmployeeRole? existing) async {
+      BuildContext context, HrStore state, EmployeeRole? existing) async {
     final saved = await showDialog<EmployeeRole>(
       context: context,
       barrierDismissible: false,
@@ -2415,7 +2416,7 @@ class _RolesTab extends StatelessWidget {
   }
 
   Future<void> _confirmRemoveRole(
-      BuildContext context, AppState state, EmployeeRole r) async {
+      BuildContext context, HrStore state, EmployeeRole r) async {
     final ok = await showConfirm(
       context,
       title: 'Remove ${r.name}?',

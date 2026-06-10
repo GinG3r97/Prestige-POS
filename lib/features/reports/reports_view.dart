@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -3405,7 +3406,7 @@ class _PayrollHeadline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final runs = state.payrollRuns;
+    final runs = context.watch<HrStore>().payrollRuns;
     final unpaidCents = runs
         .where((r) => r.status != PayrollStatus.paid)
         .fold<int>(0, (a, r) => a + (r.totalNet * 100).round());
@@ -3489,7 +3490,7 @@ class _PayrollKpiStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final runs = state.payrollRuns;
+    final runs = context.watch<HrStore>().payrollRuns;
     final draftCount = runs
         .where((r) => r.status == PayrollStatus.draft)
         .length;
@@ -3556,7 +3557,7 @@ class _PayrollRunsListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final runs = state.payrollRuns;
+    final runs = context.watch<HrStore>().payrollRuns;
     return _SectionCard(
       title: 'Recent payroll runs',
       subtitle: runs.isEmpty
@@ -3660,7 +3661,7 @@ class _PayrollByEmployeeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     // Aggregate net pay per employee across every run.
     final agg = <String, ({int cents, int slips})>{};
-    for (final r in state.payrollRuns) {
+    for (final r in context.watch<HrStore>().payrollRuns) {
       for (final s in r.slips) {
         final name = s.employeeName;
         final net = (s.netFor(r.kind) * 100).round();
@@ -3749,7 +3750,7 @@ class _PayrollDeductionsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     // Per-employee total deductions across all runs.
     final agg = <String, int>{};
-    for (final r in state.payrollRuns) {
+    for (final r in context.watch<HrStore>().payrollRuns) {
       for (final s in r.slips) {
         if (s.deductions <= 0) continue;
         agg[s.employeeName] =
@@ -3812,7 +3813,7 @@ class _StaffHeadline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emps = state.employees;
+    final emps = context.watch<HrStore>().employees;
     final active = emps.where((e) => e.status == EmployeeStatus.active).length;
     final onLeave =
         emps.where((e) => e.status == EmployeeStatus.onLeave).length;
@@ -3878,7 +3879,7 @@ class _StaffKpiStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emps = state.employees;
+    final emps = context.watch<HrStore>().employees;
     final hourly = emps
         .where((e) => e.compensationType == CompensationType.hourly)
         .length;
@@ -3957,7 +3958,7 @@ class _StaffRosterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emps = state.employees.toList()
+    final emps = context.watch<HrStore>().employees.toList()
       ..sort((a, b) =>
           a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return _SectionCard(
@@ -4101,7 +4102,7 @@ class _AttendanceHeadline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalHours = _hoursIn(state, range);
-    final activeStaff = state.employees
+    final activeStaff = context.watch<HrStore>().employees
         .where((e) => e.status == EmployeeStatus.active)
         .length;
     final daysInRange = range.span.inDays;
@@ -4242,7 +4243,7 @@ class _AttendanceLeaderboardSection extends StatelessWidget {
     for (final e in entries) {
       agg[e.employeeId] = (agg[e.employeeId] ?? 0) + e.hours;
     }
-    final empById = {for (final e in state.employees) e.id: e};
+    final empById = {for (final e in context.watch<HrStore>().employees) e.id: e};
     final rows = agg.entries
         .map((e) => (
               name: empById[e.key]?.name ?? 'Unknown',
@@ -4435,7 +4436,7 @@ class _AttendanceByDaySection extends StatelessWidget {
 /// of `start` and exclusive of `end` (same semantics as the rest of
 /// the report).
 List<TimeEntry> _entriesIn(AppState state, _DateRange range) {
-  return state.timeEntries
+  return state.hr.timeEntries
       .where((e) =>
           !e.date.isBefore(range.start) && e.date.isBefore(range.end))
       .toList();

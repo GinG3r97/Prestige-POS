@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -200,7 +201,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// pulling the template would silently overwrite the owner's manual edits.
   void _applyTemplateForType(EmploymentType t) {
     if (widget.initial != null) return;
-    final tpl = context.read<AppState>().templateFor(t);
+    final tpl = context.read<HrStore>().templateFor(t);
     if (tpl == null) return;
     setState(() {
       _compensationType = tpl.compensationType;
@@ -218,7 +219,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
 
   EmployeeRole? get _selectedRole {
     if (_roleId == null) return null;
-    final roles = context.read<AppState>().employeeRoles;
+    final roles = context.read<HrStore>().employeeRoles;
     for (final r in roles) {
       if (r.id == _roleId) return r;
     }
@@ -708,7 +709,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   }
 
   Widget _roleDropdown() {
-    final roles = context.watch<AppState>().employeeRoles;
+    final roles = context.watch<HrStore>().employeeRoles;
     return _themedDropdown<String?>(
       label: 'Role',
       value: _roleId,
@@ -913,7 +914,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// The template (if any) tied to the currently selected employment type —
   /// used to surface a "from {type} template" hint under the rate field.
   EmploymentTemplate? get _templateForType =>
-      context.read<AppState>().templateFor(_employmentType);
+      context.read<HrStore>().templateFor(_employmentType);
 
   Widget _templateHint() {
     final tpl = _templateForType!;

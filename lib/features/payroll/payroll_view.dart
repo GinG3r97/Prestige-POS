@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
@@ -80,7 +80,7 @@ class _PayrollViewState extends State<PayrollView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<HrStore>();
 
     return Container(
       color: YColor.surface2,
@@ -156,7 +156,7 @@ class _TimesheetPane extends StatelessWidget {
     required this.onShift,
   });
 
-  final AppState state;
+  final HrStore state;
   final PayPeriodKind period;
   final DateTime periodStart;
   final DateTime periodEnd;
@@ -553,7 +553,7 @@ class _PayRunPane extends StatelessWidget {
     required this.onGenerate,
   });
 
-  final AppState state;
+  final HrStore state;
   final PayPeriodKind period;
   final DateTime periodStart;
   final DateTime periodEnd;
@@ -738,7 +738,7 @@ class _PayRunPane extends StatelessWidget {
 
 class _RunDetail extends StatelessWidget {
   const _RunDetail({required this.state, required this.run});
-  final AppState state;
+  final HrStore state;
   final PayrollRun run;
 
   @override

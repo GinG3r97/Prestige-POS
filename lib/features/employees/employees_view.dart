@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/responsive.dart';
@@ -34,14 +34,14 @@ class _EmployeesViewState extends State<EmployeesView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final employees = state.employees;
+    final hr = context.watch<HrStore>();
+    final employees = hr.employees;
     final filtered = _filtered(employees);
 
     // Filter chips show every role defined for this tenant (in maintenance
     // sort order), plus any leftover role name still attached to an
     // employee whose role was deleted.
-    final tenantRoles = state.employeeRoles.map((r) => r.name).toList();
+    final tenantRoles = hr.employeeRoles.map((r) => r.name).toList();
     final usedRoles = employees.map((e) => e.role).where((r) => r.isNotEmpty).toSet();
     final availableRoles = [
       ...tenantRoles,
@@ -77,7 +77,7 @@ class _EmployeesViewState extends State<EmployeesView> {
               onSearch: (q) => setState(() => _query = q),
               onRoleFilter: (r) => setState(() => _roleFilter = r),
               onSelect: (id) => setState(() => _selectedId = id),
-              onAdd: () => _openForm(context, state, null),
+              onAdd: () => _openForm(context, hr, null),
             ),
           ),
           Container(width: 0.5, color: YColor.hairline),
@@ -86,8 +86,8 @@ class _EmployeesViewState extends State<EmployeesView> {
                 ? const _EmptyDetail()
                 : _DetailPane(
                     employee: selected,
-                    onEdit: () => _openForm(context, state, selected),
-                    onRemove: () => _confirmRemove(context, state, selected),
+                    onEdit: () => _openForm(context, hr, selected),
+                    onRemove: () => _confirmRemove(context, hr, selected),
                   ),
           ),
         ],
@@ -112,7 +112,7 @@ class _EmployeesViewState extends State<EmployeesView> {
   }
 
   Future<void> _openForm(
-      BuildContext context, AppState state, Employee? existing) async {
+      BuildContext context, HrStore hr, Employee? existing) async {
     final result = await showDialog<EmployeeFormResult>(
       context: context,
       barrierDismissible: false,
@@ -120,9 +120,9 @@ class _EmployeesViewState extends State<EmployeesView> {
     );
     if (result == null || !mounted) return;
     final err = existing == null
-        ? await state.addEmployee(result.employee,
+        ? await hr.addEmployee(result.employee,
             cashierPin: result.cashierPin)
-        : await state.updateEmployee(result.employee,
+        : await hr.updateEmployee(result.employee,
             cashierPin: result.cashierPin);
     if (!mounted) return;
     if (err != null) {
@@ -142,7 +142,7 @@ class _EmployeesViewState extends State<EmployeesView> {
   }
 
   Future<void> _confirmRemove(
-      BuildContext context, AppState state, Employee e) async {
+      BuildContext context, HrStore hr, Employee e) async {
     final ok = await showConfirm(
       context,
       title: 'Remove ${e.name}?',
@@ -153,7 +153,7 @@ class _EmployeesViewState extends State<EmployeesView> {
       icon: Icons.person_remove_outlined,
     );
     if (!ok) return;
-    final err = await state.removeEmployee(e.id);
+    final err = await hr.removeEmployee(e.id);
     if (!mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -709,8 +709,7 @@ class _DetailPaneState extends State<_DetailPane> {
       );
 
   Widget _accessCard(Employee e) {
-    final state = context.watch<AppState>();
-    final role = state.roleById(e.roleId);
+    final role = context.watch<HrStore>().roleById(e.roleId);
     final hasPin = role?.requiresPin == true;
     return _SectionCard(
       title: 'Access',
