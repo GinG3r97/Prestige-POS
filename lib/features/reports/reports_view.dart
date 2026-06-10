@@ -87,6 +87,7 @@ class ReportsView extends StatefulWidget {
 
 class _ReportsViewState extends State<ReportsView> {
   _ReportLens _lens = _ReportLens.all;
+  String _salesSubTab = 'general';
   _DateRange _range = _DateRange.today();
   bool _comparePrior = true;
 
@@ -482,7 +483,22 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
-  List<Widget> _salesSections(_ReportData data) => [
+  List<Widget> _salesSections(_ReportData data) {
+    final separated = _separatedSalesGroups(context.read<AppState>(), data);
+    return [
+      _salesSubTabBar(),
+      if (_salesSubTab == 'separated')
+        _CategoryBreakdownSection(
+          title: 'Separated sales',
+          subtitle:
+              'Consigned / separated groups (Books, Flowers…) and the products sold',
+          groups: separated,
+          emptyMessage:
+              'No separated sales groups yet. In Maintenance, turn on '
+              '"Separate in Sales reports" for a Product Type or Category '
+              '(e.g. consigned Books) to settle it here.',
+        )
+      else ...[
         _Headline(data: data, comparing: _comparePrior),
         _KpiStrip(data: data, comparing: _comparePrior),
         _SalesOverTime(data: data, comparing: _comparePrior),
@@ -495,7 +511,50 @@ class _ReportsViewState extends State<ReportsView> {
           right: _RefundsVoidsSection(data: data),
         ),
         _SalesGroupsSection(data: data),
-      ];
+      ],
+    ];
+  }
+
+  /// General vs Separated sub-tabs for the Sales lens.
+  Widget _salesSubTabBar() {
+    Widget chip(String key, String label, IconData icon) {
+      final on = _salesSubTab == key;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _salesSubTab = key),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 130),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: on ? YColor.brand : YColor.surface1,
+              borderRadius: BorderRadius.circular(999),
+              border:
+                  Border.all(color: on ? YColor.brand : YColor.hairline),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon,
+                  size: 15, color: on ? Colors.white : YColor.brandDeep),
+              const SizedBox(width: 7),
+              Text(label,
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 13,
+                      color: on ? Colors.white : YColor.ink)),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        chip('general', 'General', Icons.insights_outlined),
+        chip('separated', 'Separated', Icons.sell_outlined),
+      ]),
+    );
+  }
 
   List<Widget> _productSections(_ReportData data) => [
         _Headline(data: data, comparing: _comparePrior),
@@ -503,6 +562,12 @@ class _ReportsViewState extends State<ReportsView> {
         _TwoColRow(
           left: _TopItemsSection(data: data),
           right: _ByCategorySection(data: data),
+        ),
+        _CategoryBreakdownSection(
+          title: 'Products by category',
+          subtitle: 'Tap a category to see the products sold under it',
+          groups: data.categoryGroups,
+          emptyMessage: 'No products sold in this range yet.',
         ),
       ];
 
@@ -729,6 +794,10 @@ class _ReportData {
   /// Category buckets — name → revenue.
   late List<_CategoryRow> categories;
 
+  /// Categories with the individual products sold under each (for the
+  /// expandable per-category / per-sales-group breakdowns).
+  late List<_CatGroup> categoryGroups;
+
   /// Refunds + voids in the period.
   late List<o.Order> refundsAndVoids;
 
@@ -861,6 +930,38 @@ class _ReportData {
     categories = catAgg.values.toList()
       ..sort((a, b) => b.cents.compareTo(a.cents));
 
+    // Categories → products sold under each.
+    final catGroupAgg = <String, Map<String, _TopItem>>{};
+    for (final ord in paid) {
+      for (final l in ord.lines) {
+        final cat = (l.categoryName ?? '').trim().isEmpty
+            ? 'Uncategorised'
+            : l.categoryName!.trim();
+        final byName =
+            catGroupAgg.putIfAbsent(cat, () => <String, _TopItem>{});
+        final cur = byName[l.name];
+        byName[l.name] = _TopItem(
+          name: l.name,
+          emoji: cur == null
+              ? l.emoji
+              : (cur.emoji.isEmpty ? l.emoji : cur.emoji),
+          qty: (cur?.qty ?? 0) + l.quantity,
+          revenueCents: (cur?.revenueCents ?? 0) + l.lineTotalCents,
+        );
+      }
+    }
+    categoryGroups = catGroupAgg.entries.map((e) {
+      final items = e.value.values.toList()
+        ..sort((a, b) => b.revenueCents.compareTo(a.revenueCents));
+      return _CatGroup(
+        name: e.key,
+        cents: items.fold<int>(0, (s, i) => s + i.revenueCents),
+        qty: items.fold<int>(0, (s, i) => s + i.qty),
+        items: items,
+      );
+    }).toList()
+      ..sort((a, b) => b.cents.compareTo(a.cents));
+
     refundsAndVoids = _current
         .where((ord) =>
             ord.status == o.OrderStatus.refunded ||
@@ -915,6 +1016,190 @@ class _CategoryRow {
   final String name;
   final int qty;
   final int cents;
+}
+
+/// A category with the individual products sold under it.
+class _CatGroup {
+  _CatGroup({
+    required this.name,
+    required this.qty,
+    required this.cents,
+    required this.items,
+  });
+  final String name;
+  final int qty;
+  final int cents;
+  final List<_TopItem> items;
+}
+
+/// Re-buckets categories into sales groups for the "Separated" sales view —
+/// only the categories/types flagged `separateSales` (Books, Flowers, …),
+/// each carrying the products sold under it. General sales are excluded.
+List<_CatGroup> _separatedSalesGroups(AppState state, _ReportData data) {
+  final catByName = {
+    for (final c in state.categories) c.name.trim().toLowerCase(): c,
+  };
+  final typeById = {for (final t in state.productTypes) t.id: t};
+  final groups = <String, ({String name, Map<String, _TopItem> items})>{};
+  for (final cg in data.categoryGroups) {
+    final c = catByName[cg.name.trim().toLowerCase()];
+    final type = c?.typeId == null ? null : typeById[c!.typeId];
+    String key;
+    String name;
+    if (c != null && c.separateSales) {
+      key = 'sub:${c.id}';
+      name = c.name;
+    } else if (type != null && type.separateSales) {
+      key = 'type:${type.id}';
+      name = type.name;
+    } else {
+      continue; // General — not shown in Separated.
+    }
+    final g = groups.putIfAbsent(
+        key, () => (name: name, items: <String, _TopItem>{}));
+    for (final it in cg.items) {
+      final cur = g.items[it.name];
+      g.items[it.name] = _TopItem(
+        name: it.name,
+        emoji: it.emoji,
+        qty: (cur?.qty ?? 0) + it.qty,
+        revenueCents: (cur?.revenueCents ?? 0) + it.revenueCents,
+      );
+    }
+  }
+  return groups.values.map((g) {
+    final items = g.items.values.toList()
+      ..sort((a, b) => b.revenueCents.compareTo(a.revenueCents));
+    return _CatGroup(
+      name: g.name,
+      cents: items.fold<int>(0, (s, i) => s + i.revenueCents),
+      qty: items.fold<int>(0, (s, i) => s + i.qty),
+      items: items,
+    );
+  }).toList()
+    ..sort((a, b) => b.cents.compareTo(a.cents));
+}
+
+/// Expandable list of categories/sales-groups — tap a row to reveal the
+/// products sold under it (qty + revenue). Reused by the Products tab and the
+/// Sales "Separated" view.
+class _CategoryBreakdownSection extends StatefulWidget {
+  const _CategoryBreakdownSection({
+    required this.title,
+    required this.subtitle,
+    required this.groups,
+    required this.emptyMessage,
+  });
+  final String title;
+  final String subtitle;
+  final List<_CatGroup> groups;
+  final String emptyMessage;
+
+  @override
+  State<_CategoryBreakdownSection> createState() =>
+      _CategoryBreakdownSectionState();
+}
+
+class _CategoryBreakdownSectionState extends State<_CategoryBreakdownSection> {
+  final Set<String> _open = {};
+
+  String _peso(int cents) => '₱${(cents / 100).toStringAsFixed(0)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = widget.groups;
+    return _SectionCard(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      onExportCsv: () {
+        final buf = StringBuffer('Category,Product,Qty,Revenue (PHP)\n');
+        for (final g in groups) {
+          for (final it in g.items) {
+            final cat = g.name.replaceAll('"', '""');
+            final p = it.name.replaceAll('"', '""');
+            buf.writeln('"$cat","$p",${it.qty},'
+                '${(it.revenueCents / 100).toStringAsFixed(2)}');
+          }
+        }
+        return buf.toString();
+      },
+      child: groups.isEmpty
+          ? _empty(widget.emptyMessage)
+          : Column(children: [for (final g in groups) _tile(g)]),
+    );
+  }
+
+  Widget _tile(_CatGroup g) {
+    final open = _open.contains(g.name);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(YRadius.md),
+          onTap: () => setState(
+              () => open ? _open.remove(g.name) : _open.add(g.name)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+            child: Row(children: [
+              AnimatedRotation(
+                turns: open ? 0.25 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: const Icon(Icons.chevron_right,
+                    size: 20, color: YColor.inkMuted),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(g.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.bodyStrong().copyWith(fontSize: 13.5)),
+              ),
+              Text('${g.qty} sold',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              const SizedBox(width: 14),
+              Text(_peso(g.cents),
+                  style: YFont.bodyStrong()
+                      .copyWith(fontSize: 13.5, color: YColor.brandDeep)),
+            ]),
+          ),
+        ),
+        if (open)
+          Padding(
+            padding: const EdgeInsets.only(left: 26, bottom: 6),
+            child: Column(
+              children: [
+                for (final it in g.items)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(
+                            it.emoji.isEmpty
+                                ? it.name
+                                : '${it.emoji}  ${it.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.body().copyWith(fontSize: 13)),
+                      ),
+                      Text('${it.qty}×',
+                          style: YFont.caption()
+                              .copyWith(color: YColor.inkMuted)),
+                      const SizedBox(width: 14),
+                      SizedBox(
+                        width: 80,
+                        child: Text(_peso(it.revenueCents),
+                            textAlign: TextAlign.right,
+                            style: YFont.bodyStrong().copyWith(fontSize: 13)),
+                      ),
+                    ]),
+                  ),
+              ],
+            ),
+          ),
+        Container(height: 0.5, color: YColor.hairline.withValues(alpha: 0.5)),
+      ],
+    );
+  }
 }
 
 // ─────────────────────── Generic section card ──────────────────────
