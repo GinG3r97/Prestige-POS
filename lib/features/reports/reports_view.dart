@@ -489,10 +489,11 @@ class _ReportsViewState extends State<ReportsView> {
   List<Widget> _salesSections(_ReportData data) {
     final state = context.read<AppState>();
     final separated = _salesSubTab == 'separated';
-    // Same UI, different data — General = all categories, Separated = only the
-    // consigned/separated groups. (Full store analytics live in the All lens.)
-    final groups =
-        separated ? _separatedSalesGroups(state, data) : data.categoryGroups;
+    // Same UI, different data — General = everything EXCEPT separated
+    // categories; Separated = only those. (Full store analytics live in All.)
+    final groups = separated
+        ? _separatedSalesGroups(state, data)
+        : _generalSalesGroups(state, data);
     final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
@@ -555,11 +556,13 @@ class _ReportsViewState extends State<ReportsView> {
   List<Widget> _productSections(_ReportData data) {
     final state = context.read<AppState>();
     final separated = _productSubTab == 'separated';
-    // Same UI, different data — General = everything, Separated = only the
-    // separated groups / their catalog.
-    final groups =
-        separated ? _separatedSalesGroups(state, data) : data.categoryGroups;
-    final catalog = separated ? _separatedCatalog(state) : state.products;
+    // Same UI, different data — General excludes separated categories,
+    // Separated shows only them.
+    final groups = separated
+        ? _separatedSalesGroups(state, data)
+        : _generalSalesGroups(state, data);
+    final catalog =
+        separated ? _separatedCatalog(state) : _generalCatalog(state);
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
       ..._productMovementSections(groups, catalog),
@@ -589,6 +592,16 @@ class _ReportsViewState extends State<ReportsView> {
       ),
       _NotSellingSection(products: notSelling),
     ];
+  }
+
+  /// Catalog products NOT in a separated category (the General scope).
+  List<CafeItem> _generalCatalog(AppState state) {
+    return state.products.where((p) {
+      final c = state.categories
+          .where((x) => x.id == p.categoryId)
+          .firstOrNull;
+      return !(c?.separateSales ?? false);
+    }).toList();
   }
 
   /// Catalog products in a separated category (separate-sales is per Category).
@@ -1492,6 +1505,18 @@ class _CatGroup {
 /// Re-buckets categories into sales groups for the "Separated" sales view —
 /// only the categories/types flagged `separateSales` (Books, Flowers, …),
 /// each carrying the products sold under it. General sales are excluded.
+/// Category groups for the General view — everything EXCEPT the categories
+/// flagged `separateSales` (those are settled in the Separated view).
+List<_CatGroup> _generalSalesGroups(AppState state, _ReportData data) {
+  final catByName = {
+    for (final c in state.categories) c.name.trim().toLowerCase(): c,
+  };
+  return data.categoryGroups.where((cg) {
+    final c = catByName[cg.name.trim().toLowerCase()];
+    return !(c?.separateSales ?? false);
+  }).toList();
+}
+
 List<_CatGroup> _separatedSalesGroups(AppState state, _ReportData data) {
   final catByName = {
     for (final c in state.categories) c.name.trim().toLowerCase(): c,
