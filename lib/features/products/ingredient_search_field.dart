@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/responsive_scaler.dart';
-import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
 
