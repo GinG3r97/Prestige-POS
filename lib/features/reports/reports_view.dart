@@ -38,13 +38,14 @@ extension on _ReportLens {
         _ReportLens.attendance => 'Attendance',
       };
 
+  // Match the canonical app icons (see More / nav).
   IconData get icon => switch (this) {
-        _ReportLens.all => Icons.dashboard_customize_outlined,
-        _ReportLens.sales => Icons.payments_outlined,
-        _ReportLens.products => Icons.local_cafe_outlined,
+        _ReportLens.all => Icons.space_dashboard_outlined,
+        _ReportLens.sales => Icons.insights_outlined,
+        _ReportLens.products => Icons.coffee_outlined,
         _ReportLens.inventory => Icons.inventory_2_outlined,
         _ReportLens.payroll => Icons.account_balance_wallet_outlined,
-        _ReportLens.staff => Icons.badge_outlined,
+        _ReportLens.staff => Icons.person_outline,
         _ReportLens.attendance => Icons.event_available_outlined,
       };
 
