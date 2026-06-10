@@ -1269,6 +1269,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   /// Recipe lines that actually have an ingredient picked.
   List<RecipeLine> get _cleanRecipe =>
       _recipe.where((l) => l.inventoryItemId.isNotEmpty).toList();
+
+  /// Recipe rail selection: 'base' or a modifier option id.
+  String _recipeSel = 'base';
   late List<ModifierGroup> _modifierGroups;
   /// FK ids of master modifier groups this product opts into. Source of
   /// truth on save; [_modifierGroups] is derived from these for the
@@ -1359,6 +1362,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     required String optionId,
     required AdjustmentKind kind,
     double? multiplier,
+    Map<String, double>? lineMultipliers,
     List<RecipeLine>? addLines,
     Money? priceDelta,
   }) {
@@ -1370,6 +1374,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       optionId: optionId,
       kind: kind,
       multiplier: multiplier ?? (i >= 0 ? _adjustments[i].multiplier : 1.0),
+      lineMultipliers: lineMultipliers ??
+          (i >= 0 ? _adjustments[i].lineMultipliers : <String, double>{}),
       addLines: addLines ?? (i >= 0 ? _adjustments[i].addLines : <RecipeLine>[]),
       priceDelta: priceDelta ??
           (i >= 0 ? _adjustments[i].priceDelta : Money.zero),
@@ -1381,6 +1387,25 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         _adjustments.add(adj);
       }
     });
+  }
+
+  /// Set the multiplier for one base ingredient under one option. ×1 = no
+  /// change (we drop it so the override map stays minimal).
+  void _setLineMul(ModifierGroup group, ModifierOption option, String itemId,
+      double mul) {
+    final adj = _adjFor(group.id, option.id);
+    final map = Map<String, double>.from(adj?.lineMultipliers ?? const {});
+    if ((mul - 1.0).abs() < 0.001) {
+      map.remove(itemId);
+    } else {
+      map[itemId] = mul;
+    }
+    _setAdjustment(
+      groupId: group.id,
+      optionId: option.id,
+      kind: AdjustmentKind.multiplier,
+      lineMultipliers: map,
+    );
   }
 
   void _removeAdjustment(String groupId, String optionId) {
@@ -2430,63 +2455,406 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ]);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DefaultTabController(
-          length: 1 + groups.length,
-          child: Container(
-            decoration: BoxDecoration(
-              color: YColor.surface2,
-              borderRadius: BorderRadius.circular(YRadius.lg),
+    // No modifiers → just the base recipe editor.
+    if (groups.isEmpty) {
+      return Container(
+        height: 380,
+        decoration: BoxDecoration(
+          color: YColor.surface2,
+          borderRadius: BorderRadius.circular(YRadius.lg),
+        ),
+        child: _baseTab(),
+      );
+    }
+
+    // With modifiers → rail (Base + each option) | per-option ingredient editor.
+    return Container(
+      height: 380,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: YColor.surface2,
+        borderRadius: BorderRadius.circular(YRadius.lg),
+        border: Border.all(color: YColor.hairline.withValues(alpha: 0.6)),
+      ),
+      child: Row(children: [
+        SizedBox(width: 188, child: _recipeRail(groups)),
+        Container(width: 0.5, color: YColor.hairline),
+        Expanded(
+          child: _recipeSel == 'base'
+              ? _baseTab()
+              : _selectedOptionEditor(groups),
+        ),
+      ]),
+    );
+  }
+
+  Widget _selectedOptionEditor(List<ModifierGroup> groups) {
+    for (final g in groups) {
+      for (final o in g.options) {
+        if (o.id == _recipeSel) return _optionRecipeEditor(g, o);
+      }
+    }
+    return _baseTab();
+  }
+
+  /// Left rail — Base recipe + each modifier option (grouped).
+  Widget _recipeRail(List<ModifierGroup> groups) {
+    return Container(
+      color: YColor.surface1,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
+        children: [
+          _recipeRailRow(
+            label: 'Base recipe',
+            icon: Icons.science_outlined,
+            selected: _recipeSel == 'base',
+            onTap: () => setState(() => _recipeSel = 'base'),
+          ),
+          for (final g in groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 12, 8, 4),
+              child: Text(g.name.toUpperCase(),
+                  style: YFont.caption().copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: YColor.inkMuted,
+                  )),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                  child: TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    indicator: BoxDecoration(
-                      color: YColor.brand,
-                      borderRadius: BorderRadius.circular(YRadius.md),
-                    ),
-                    indicatorPadding:
-                        const EdgeInsets.symmetric(vertical: 4),
-                    dividerColor: Colors.transparent,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: YColor.ink,
-                    labelStyle: YFont.bodyStrong().copyWith(fontSize: 13),
-                    unselectedLabelStyle:
-                        YFont.bodyStrong().copyWith(fontSize: 13),
-                    tabs: [
-                      const Tab(text: 'Base'),
-                      ...groups.map((g) => Tab(text: g.name)),
-                    ],
-                  ),
+            for (final o in g.options)
+              _recipeRailRow(
+                label: o.name,
+                icon: Icons.tune,
+                selected: _recipeSel == o.id,
+                onTap: () => setState(() => _recipeSel = o.id),
+                customized:
+                    (_adjFor(g.id, o.id)?.lineMultipliers.isNotEmpty ?? false) ||
+                        (_adjFor(g.id, o.id)?.addLines.isNotEmpty ?? false),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _recipeRailRow({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    bool customized = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? YColor.brand : Colors.transparent,
+            borderRadius: BorderRadius.circular(YRadius.md),
+          ),
+          child: Row(children: [
+            Icon(icon,
+                size: 16,
+                color: selected ? Colors.white : YColor.brandDeep),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 13,
+                      color: selected ? Colors.white : YColor.ink)),
+            ),
+            if (customized)
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: selected ? Colors.white : YColor.brand,
+                  shape: BoxShape.circle,
                 ),
-                Container(
-                  height: 0.5,
-                  color: YColor.hairline.withValues(alpha: 0.6),
-                  margin: const EdgeInsets.only(top: 8),
-                ),
-                SizedBox(
-                  // tall-ish so the editor has room
-                  height: 360,
-                  child: TabBarView(
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  String _numStr(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  /// Right pane — per-ingredient multipliers + extra lines for one option.
+  Widget _optionRecipeEditor(ModifierGroup group, ModifierOption option) {
+    final adj = _adjFor(group.id, option.id);
+    final baseLines =
+        _recipe.where((l) => l.inventoryItemId.isNotEmpty).toList();
+    final extras = adj?.addLines ?? const <RecipeLine>[];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${group.name} · ${option.name}',
+              style: YFont.titleMD().copyWith(fontSize: 16)),
+          const SizedBox(height: 2),
+          Text('Scale each base ingredient for this option (×1 = no change).',
+              style: YFont.caption()),
+          const SizedBox(height: 12),
+          Expanded(
+            child: baseLines.isEmpty
+                ? Center(
+                    child: Text('Add base ingredients first.',
+                        style: YFont.caption()))
+                : ListView(
+                    padding: EdgeInsets.zero,
                     children: [
-                      _baseTab(),
-                      ...groups.map(_groupTab),
+                      for (final line in baseLines)
+                        _optionLineRow(group, option, line, adj),
+                      const SizedBox(height: 6),
+                      // Extra ingredients only this option adds (e.g. Ice).
+                      if (extras.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 6),
+                          child: Text('EXTRA FOR THIS OPTION',
+                              style: YFont.caption().copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                  color: YColor.inkMuted)),
+                        ),
+                        for (var i = 0; i < extras.length; i++)
+                          _extraLineRow(group, option, i),
+                      ],
+                      const SizedBox(height: 4),
+                      OutlinedButton.icon(
+                        onPressed: () => _addExtraLine(group, option),
+                        icon: const Icon(Icons.add, size: 15),
+                        label: const Text('Add extra ingredient'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: YColor.brand,
+                          side: const BorderSide(color: YColor.hairline),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          textStyle: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _optionLineRow(ModifierGroup group, ModifierOption option,
+      RecipeLine line, ModifierAdjustment? adj) {
+    final it = widget.inventory
+        .where((i) => i.id == line.inventoryItemId)
+        .firstOrNull;
+    if (it == null) return const SizedBox.shrink();
+    final unit = (it.unitLabel?.trim().isNotEmpty ?? false)
+        ? it.unitLabel!.trim()
+        : it.unit.label.split(' (').first;
+    final mul = adj?.lineMultipliers[line.inventoryItemId] ?? 1.0;
+    final result = line.quantity * mul;
+    final ctrl = _mulCtrl('${option.id}_${line.inventoryItemId}', mul);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: YColor.surface1,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(color: YColor.hairline),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: YColor.brandTint.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+              materialIconForName(it.name) ?? Icons.inventory_2_outlined,
+              size: 17,
+              color: YColor.brandDeep),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(it.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(fontSize: 13.5)),
+              Text('base ${_numStr(line.quantity)} $unit',
+                  style: YFont.caption()),
+            ],
           ),
         ),
-      ],
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 64,
+          child: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.center,
+            style: YFont.bodyStrong().copyWith(fontSize: 13),
+            decoration: InputDecoration(
+              prefixText: '×',
+              isDense: true,
+              filled: true,
+              fillColor: YColor.surface2,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(YRadius.md),
+                borderSide: const BorderSide(color: YColor.hairline),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(YRadius.md),
+                borderSide: const BorderSide(color: YColor.hairline),
+              ),
+            ),
+            onChanged: (v) => _setLineMul(group, option,
+                line.inventoryItemId, double.tryParse(v) ?? 1.0),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 86,
+          child: Text('= ${_numStr(result)} $unit',
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: YFont.bodyStrong()
+                  .copyWith(fontSize: 12.5, color: YColor.brandDeep)),
+        ),
+      ]),
+    );
+  }
+
+  void _addExtraLine(ModifierGroup group, ModifierOption option) {
+    final adj = _adjFor(group.id, option.id);
+    final lines = List<RecipeLine>.from(adj?.addLines ?? const []);
+    lines.add(RecipeLine(inventoryItemId: '', quantity: 1));
+    _setAdjustment(
+      groupId: group.id,
+      optionId: option.id,
+      kind: AdjustmentKind.multiplier,
+      addLines: lines,
+    );
+  }
+
+  Widget _extraLineRow(
+      ModifierGroup group, ModifierOption option, int index) {
+    final adj = _adjFor(group.id, option.id)!;
+    final line = adj.addLines[index];
+    final it = widget.inventory
+        .where((i) => i.id == line.inventoryItemId)
+        .firstOrNull;
+    final unit = it == null
+        ? ''
+        : ((it.unitLabel?.trim().isNotEmpty ?? false)
+            ? it.unitLabel!.trim()
+            : it.unit.label.split(' (').first);
+    void commit() {
+      _setAdjustment(
+        groupId: group.id,
+        optionId: option.id,
+        kind: AdjustmentKind.multiplier,
+        addLines: List<RecipeLine>.from(adj.addLines),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      decoration: BoxDecoration(
+        color: YColor.surface1,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        border: Border.all(color: YColor.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                adj.addLines.removeAt(index);
+                commit();
+              },
+              child: Text('Remove',
+                  style: YFont.caption().copyWith(
+                      color: YColor.danger, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(children: [
+            Expanded(
+              child: IngredientSearchField(
+                items: widget.inventory,
+                selectedId: line.inventoryItemId.isEmpty
+                    ? null
+                    : line.inventoryItemId,
+                onSelect: (id) {
+                  line.inventoryItemId = id;
+                  commit();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 98,
+              child: IgnorePointer(
+                ignoring: it == null,
+                child: Opacity(
+                  opacity: it == null ? 0.4 : 1,
+                  child: TextField(
+                    controller: _qtyCtrl(line),
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    style: YFont.bodyStrong().copyWith(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '0',
+                      isDense: true,
+                      filled: true,
+                      fillColor: YColor.surface2,
+                      suffixText: unit.isEmpty ? null : unit,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 11),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md),
+                        borderSide: const BorderSide(color: YColor.hairline),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md),
+                        borderSide: const BorderSide(color: YColor.hairline),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      line.quantity = double.tryParse(v) ?? 0;
+                      commit();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ],
+      ),
     );
   }
 
@@ -2571,367 +2939,6 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  Widget _groupTab(ModifierGroup group) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Set how each ${group.name.toLowerCase()} option changes the recipe',
-            style: YFont.caption(),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.separated(
-              padding: EdgeInsets.zero,
-              itemCount: group.options.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) =>
-                  _buildOptionCard(group, group.options[i]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOptionCard(ModifierGroup group, ModifierOption option) {
-    final adj = _adjFor(group.id, option.id);
-    final isMul = adj == null || adj.kind == AdjustmentKind.multiplier;
-    final mul = adj?.multiplier ?? 1.0;
-    final preview = _previewFor(group, option);
-    final hasCustom = adj != null;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: YColor.surface1,
-        borderRadius: BorderRadius.circular(YRadius.md),
-        border: Border.all(
-          color: hasCustom
-              ? YColor.brand.withValues(alpha: 0.6)
-              : YColor.hairline,
-          width: hasCustom ? 1.4 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(children: [
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: YColor.brandTint,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                option.name,
-                style: YFont.bodyStrong()
-                    .copyWith(fontSize: 13, color: YColor.brandDeep),
-              ),
-            ),
-            if (option.priceDelta.centavos > 0) ...[
-              const SizedBox(width: 6),
-              Text('+${option.priceDelta.compact}',
-                  style: YFont.caption()),
-            ],
-            const Spacer(),
-            // Mode toggle pill
-            _ModeToggle(
-              isMul: isMul,
-              onSelect: (m) {
-                _setAdjustment(
-                  groupId: group.id,
-                  optionId: option.id,
-                  kind: m
-                      ? AdjustmentKind.multiplier
-                      : AdjustmentKind.addLines,
-                  multiplier: m ? mul : 1.0,
-                  addLines: m
-                      ? const []
-                      : (adj?.addLines.toList() ?? <RecipeLine>[]),
-                );
-              },
-            ),
-            if (hasCustom) ...[
-              const SizedBox(width: 6),
-              IconButton(
-                iconSize: 16,
-                tooltip: 'Use base recipe as-is',
-                onPressed: () =>
-                    _removeAdjustment(group.id, option.id),
-                icon: const Icon(Icons.refresh,
-                    color: YColor.inkMuted),
-              ),
-            ],
-          ]),
-          const SizedBox(height: 10),
-
-          // (Per-option price lives in the Modifiers step now — this card is
-          // recipe-only.)
-
-          // Body — recipe behaviour. Multiplier scales all base lines,
-          // addLines tacks on extras.
-          if (isMul)
-            Row(children: [
-              SizedBox(
-                width: 110,
-                child: KeyboardAccessoryField(
-                  controller: _mulCtrl(
-                      '${group.id}_${option.id}', mul),
-                  accessoryLabel: '${option.name.toUpperCase()} MULTIPLIER',
-                  hint: '1.00',
-                  keyboardType: TextInputType.number,
-                  fillColor: YColor.surface2,
-                  borderColor: YColor.hairline,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
-                  onChanged: (v) {
-                    final n = double.tryParse(v) ?? 1.0;
-                    _setAdjustment(
-                      groupId: group.id,
-                      optionId: option.id,
-                      kind: AdjustmentKind.multiplier,
-                      multiplier: n,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text('×', style: TextStyle(fontSize: 14)),
-              const SizedBox(width: 10),
-              Expanded(child: _previewBox(preview)),
-            ])
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (adj.addLines.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      'No extra ingredients yet. Add lines to deduct beyond the base.',
-                      style: YFont.caption(),
-                    ),
-                  )
-                else
-                  for (var i = 0; i < adj.addLines.length; i++)
-                    _addLineEditor(group, option, adj, i),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      final lines =
-                          List<RecipeLine>.from(adj.addLines);
-                      lines.add(RecipeLine(
-                        inventoryItemId: widget.inventory.first.id,
-                        quantity: 1,
-                      ));
-                      _setAdjustment(
-                        groupId: group.id,
-                        optionId: option.id,
-                        kind: AdjustmentKind.addLines,
-                        addLines: lines,
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 14),
-                    label: const Text('Add ingredient'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: YColor.brand,
-                      side: const BorderSide(color: YColor.hairline),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(YRadius.md)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _previewBox(preview),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _previewBox(
-      List<({String name, double qty, String unit})> preview) {
-    if (preview.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: YColor.surface2,
-          borderRadius: BorderRadius.circular(YRadius.md),
-        ),
-        child: Text('No deductions for this option',
-            style: YFont.caption()),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: YColor.surface2,
-        borderRadius: BorderRadius.circular(YRadius.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Result',
-              style: YFont.caption().copyWith(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: YColor.brandDeep,
-              )),
-          const SizedBox(height: 4),
-          for (final p in preview)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(children: [
-                Text('• ${p.name}', style: YFont.caption()),
-                const Spacer(),
-                Text(
-                  '${_fmtQty(p.qty)} ${p.unit}',
-                  style: YFont.bodyStrong()
-                      .copyWith(fontSize: 12, color: YColor.brand),
-                ),
-              ]),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _fmtQty(double n) {
-    return n % 1 == 0 ? n.toStringAsFixed(0) : n.toStringAsFixed(1);
-  }
-
-  Widget _addLineEditor(
-    ModifierGroup group,
-    ModifierOption option,
-    ModifierAdjustment adj,
-    int idx,
-  ) {
-    final line = adj.addLines[idx];
-    final item = widget.inventory
-        .where((i) => i.id == line.inventoryItemId)
-        .firstOrNull;
-    final unit = item?.displayUnit ?? '';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: YColor.surface2,
-                  borderRadius: BorderRadius.circular(YRadius.md),
-                  border: Border.all(color: YColor.hairline),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: line.inventoryItemId,
-                    isExpanded: true,
-                    itemHeight: null,
-                    items: widget.inventory
-                        .map((it) => DropdownMenuItem(
-                              value: it.id,
-                              child: _ingredientMenuRow(
-                                  '${it.name} (${it.displayUnit})'),
-                            ))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      final lines = adj.addLines
-                          .map((l) => l.id == line.id
-                              ? RecipeLine(
-                                  id: l.id,
-                                  inventoryItemId: v,
-                                  quantity: l.quantity)
-                              : l)
-                          .toList();
-                      _setAdjustment(
-                        groupId: group.id,
-                        optionId: option.id,
-                        kind: AdjustmentKind.addLines,
-                        addLines: lines,
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 100,
-              child: KeyboardAccessoryField(
-                controller: _qtyCtrl(line),
-                accessoryLabel: 'QUANTITY',
-                hint: '0',
-                keyboardType: TextInputType.number,
-                fillColor: YColor.surface2,
-                borderColor: YColor.hairline,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 12),
-                onChanged: (v) {
-                  final n = double.tryParse(v) ?? 0;
-                  final lines = adj.addLines
-                      .map((l) => l.id == line.id
-                          ? RecipeLine(
-                              id: l.id,
-                              inventoryItemId: l.inventoryItemId,
-                              quantity: n)
-                          : l)
-                      .toList();
-                  _setAdjustment(
-                    groupId: group.id,
-                    optionId: option.id,
-                    kind: AdjustmentKind.addLines,
-                    addLines: lines,
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Center(
-                child: Text(unit,
-                    style: YFont.bodyStrong()
-                        .copyWith(color: YColor.inkMuted)),
-              ),
-            ),
-            IconButton(
-              iconSize: 18,
-              onPressed: () {
-                final lines = adj.addLines
-                    .where((l) => l.id != line.id)
-                    .toList();
-                _qtyCtrls.remove(line.id)?.dispose();
-                _setAdjustment(
-                  groupId: group.id,
-                  optionId: option.id,
-                  kind: AdjustmentKind.addLines,
-                  addLines: lines,
-                );
-              },
-              icon: const Icon(Icons.delete_outline,
-                  color: YColor.inkMuted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // Shared tight (~36px) menu row for the ingredient-picker dropdowns.
   // Kept here (not in design_system) because it's only used by the recipe

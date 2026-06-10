@@ -210,12 +210,21 @@ class CafeItem {
               }
             }
           }
+          final lineMul = <String, double>{};
+          final lmRaw = v['line_multipliers'];
+          if (lmRaw is Map) {
+            lmRaw.forEach((k, val) {
+              final d = (val as num?)?.toDouble();
+              if (d != null) lineMul[k.toString()] = d;
+            });
+          }
           adjustments.add(ModifierAdjustment(
             id: v['id'] as String?,
             groupId: (v['group_id'] ?? v['groupId'] ?? '').toString(),
             optionId: (v['option_id'] ?? v['optionId'] ?? '').toString(),
             kind: kind,
             multiplier: (v['multiplier'] as num?)?.toDouble() ?? 1.0,
+            lineMultipliers: lineMul,
             addLines: addLines,
             priceDelta: Money((v['price_delta_cents'] as int?) ?? 0),
           ));
@@ -340,6 +349,7 @@ Map<String, dynamic> productRowPayload(CafeItem p, String tenantId) => {
             'kind':
                 a.kind == AdjustmentKind.addLines ? 'addLines' : 'multiplier',
             'multiplier': a.multiplier,
+            'line_multipliers': a.lineMultipliers,
             'price_delta_cents': a.priceDelta.centavos,
             'add_lines': [
               for (final l in a.addLines)
@@ -562,8 +572,15 @@ class ModifierAdjustment {
   String optionId;
   AdjustmentKind kind;
 
-  /// For [AdjustmentKind.multiplier]. e.g., 1.4 for Grande.
+  /// For [AdjustmentKind.multiplier] — the default factor applied to every
+  /// base line that doesn't have a per-ingredient override in
+  /// [lineMultipliers]. e.g., 1.4 for Grande.
   double multiplier;
+
+  /// Per-base-ingredient multiplier overrides, keyed by inventory item id.
+  /// Lets one option scale ingredients differently (Large = Espresso ×1.5,
+  /// Milk ×2). A base line not present here falls back to [multiplier].
+  Map<String, double> lineMultipliers;
 
   /// For [AdjustmentKind.addLines].
   List<RecipeLine> addLines;
@@ -581,9 +598,11 @@ class ModifierAdjustment {
     required this.optionId,
     required this.kind,
     this.multiplier = 1.0,
+    Map<String, double>? lineMultipliers,
     List<RecipeLine>? addLines,
     this.priceDelta = Money.zero,
   })  : id = id ?? _uuid.v4(),
+        lineMultipliers = lineMultipliers ?? <String, double>{},
         addLines = addLines ?? <RecipeLine>[];
 }
 

@@ -3005,29 +3005,28 @@ class AppState extends ChangeNotifier {
     Map<String, int>? addOnQuantities,
   }) {
     final result = <RecipeLine>[];
-    var multiplier = 1.0;
-    final extraLines = <RecipeLine>[];
 
-    for (final adj in product.modifierAdjustments) {
-      final selectedOpt = selections[adj.groupId];
-      if (selectedOpt != adj.optionId) continue;
-      switch (adj.kind) {
-        case AdjustmentKind.multiplier:
-          multiplier *= adj.multiplier;
-          break;
-        case AdjustmentKind.addLines:
-          extraLines.addAll(adj.addLines);
-          break;
-      }
-    }
+    // Adjustments for the selected options. Each one can BOTH scale base
+    // ingredients (per-ingredient [lineMultipliers], or its default
+    // [multiplier]) AND add extra lines — so an option like "Large" scales
+    // and "Iced" adds ice, and an option can do both.
+    final activeAdj = product.modifierAdjustments
+        .where((adj) => selections[adj.groupId] == adj.optionId)
+        .toList();
 
     for (final line in product.recipe) {
+      var m = 1.0;
+      for (final adj in activeAdj) {
+        m *= adj.lineMultipliers[line.inventoryItemId] ?? adj.multiplier;
+      }
       result.add(RecipeLine(
         inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity * multiplier,
+        quantity: line.quantity * m,
       ));
     }
-    result.addAll(extraLines);
+    for (final adj in activeAdj) {
+      result.addAll(adj.addLines);
+    }
 
     if (addOnQuantities != null) {
       for (final entry in addOnQuantities.entries) {
