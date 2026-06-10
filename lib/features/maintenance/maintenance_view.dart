@@ -2829,7 +2829,6 @@ class _ProductTypeDialog extends StatefulWidget {
 class _ProductTypeDialogState extends State<_ProductTypeDialog> {
   late final TextEditingController _name;
   String? _iconName;
-  late bool _separateSales;
 
   @override
   void initState() {
@@ -2837,7 +2836,6 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
     final t = widget.initial;
     _name = TextEditingController(text: t?.name ?? '');
     _iconName = t?.iconName ?? (t == null ? 'label_outlined' : null);
-    _separateSales = t?.separateSales ?? false;
   }
 
   @override
@@ -2857,7 +2855,8 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
       deductsStock: widget.initial?.deductsStock ?? true,
       isSystem: widget.initial?.isSystem ?? false,
       sortOrder: widget.initial?.sortOrder ?? 1000,
-      separateSales: _separateSales,
+      // Separate-in-sales is per Category only now — types never separate.
+      separateSales: false,
     ));
   }
 
@@ -2934,21 +2933,6 @@ class _ProductTypeDialogState extends State<_ProductTypeDialog> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      value: _separateSales,
-                      onChanged: (v) => setState(() => _separateSales = v),
-                      activeThumbColor: YColor.brand,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('Separate in Sales reports',
-                          style: YFont.bodyStrong().copyWith(fontSize: 14)),
-                      subtitle: Text(
-                        'Settle this type as its own line in Reports → Sales '
-                        '(e.g. consigned goods), instead of merging into '
-                        'General.',
-                        style: YFont.caption(),
-                      ),
                     ),
                   ],
               ),

@@ -590,17 +590,13 @@ class _ReportsViewState extends State<ReportsView> {
     ];
   }
 
-  /// Catalog products that belong to a separated category / type.
+  /// Catalog products in a separated category (separate-sales is per Category).
   List<CafeItem> _separatedCatalog(AppState state) {
     return state.products.where((p) {
       final c = state.categories
           .where((x) => x.id == p.categoryId)
           .firstOrNull;
-      if (c != null && c.separateSales) return true;
-      final t = c?.typeId == null
-          ? null
-          : state.productTypes.where((x) => x.id == c!.typeId).firstOrNull;
-      return t?.separateSales ?? false;
+      return c?.separateSales ?? false;
     }).toList();
   }
 
@@ -1423,22 +1419,13 @@ List<_CatGroup> _separatedSalesGroups(AppState state, _ReportData data) {
   final catByName = {
     for (final c in state.categories) c.name.trim().toLowerCase(): c,
   };
-  final typeById = {for (final t in state.productTypes) t.id: t};
   final groups = <String, ({String name, Map<String, _TopItem> items})>{};
   for (final cg in data.categoryGroups) {
     final c = catByName[cg.name.trim().toLowerCase()];
-    final type = c?.typeId == null ? null : typeById[c!.typeId];
-    String key;
-    String name;
-    if (c != null && c.separateSales) {
-      key = 'sub:${c.id}';
-      name = c.name;
-    } else if (type != null && type.separateSales) {
-      key = 'type:${type.id}';
-      name = type.name;
-    } else {
-      continue; // General — not shown in Separated.
-    }
+    // Separate-in-sales is per Category only.
+    if (c == null || !c.separateSales) continue;
+    final key = 'sub:${c.id}';
+    final name = c.name;
     final g = groups.putIfAbsent(
         key, () => (name: name, items: <String, _TopItem>{}));
     for (final it in cg.items) {
