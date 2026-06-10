@@ -245,7 +245,8 @@ class AppState extends ChangeNotifier {
         () async {
           final categoriesRes = await supabase
               .from('categories')
-              .select('id, name, emoji, icon_name, sort_order, type_id, is_system')
+              .select(
+                  'id, name, emoji, icon_name, sort_order, type_id, is_system, separate_sales')
               .eq('tenant_id', tid)
               .order('sort_order');
           _categories = (categoriesRes as List)
@@ -981,7 +982,8 @@ class AppState extends ChangeNotifier {
         final inserted = await supabase
             .from('categories')
             .insert(categoryPayload)
-            .select('id, name, emoji, icon_name, sort_order, type_id, is_system');
+            .select(
+                'id, name, emoji, icon_name, sort_order, type_id, is_system, separate_sales');
         fetchedCategories.addAll((inserted as List)
             .map((r) => cat.Category.fromRow(r as Map<String, dynamic>)));
       }
