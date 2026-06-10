@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'app/app_state.dart';
+import 'app/stores/members_store.dart';
 import 'models/cart.dart';
 import 'data/supabase_client.dart';
 import 'design_system/colors.dart';
@@ -160,6 +161,14 @@ class YosefPOSApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AppState, CartStore>(
           create: (ctx) => ctx.read<AppState>().cart,
           update: (_, app, __) => app.cart,
+        ),
+        // Scope the Members domain to its own store so member/plan edits
+        // repaint only member-watching widgets, not every
+        // context.watch<AppState>() consumer. Same MembersStore instance
+        // AppState owns (provided by value via the proxy, never recreated).
+        ChangeNotifierProxyProvider<AppState, MembersStore>(
+          create: (ctx) => ctx.read<AppState>().members,
+          update: (_, app, __) => app.members,
         ),
       ],
       child: MaterialApp(

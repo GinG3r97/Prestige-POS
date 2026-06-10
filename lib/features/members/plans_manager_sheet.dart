@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/members_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart'
     show iconFromKey, IconPickerField;
@@ -41,7 +41,7 @@ class PlansManagerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<MembersStore>();
     final plans = state.memberPlans;
     final size = MediaQuery.sizeOf(context);
     return Padding(
@@ -179,7 +179,7 @@ class PlansManagerSheet extends StatelessWidget {
       builder: (_) => _PlanFormDialog(existing: existing),
     );
     if (saved == null || !context.mounted) return;
-    final state = context.read<AppState>();
+    final state = context.read<MembersStore>();
     final err = existing == null
         ? await state.addMemberPlan(saved)
         : await state.updateMemberPlan(saved);
@@ -303,7 +303,7 @@ class _PlanRow extends StatelessWidget {
   }
 
   Future<void> _confirmRemove(BuildContext context, MemberPlan plan) async {
-    final state = context.read<AppState>();
+    final state = context.read<MembersStore>();
     final inUse = state.members.where((m) => m.planId == plan.id).length;
     final ok = await showConfirm(
       context,

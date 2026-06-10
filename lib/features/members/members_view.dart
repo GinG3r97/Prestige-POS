@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/members_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart'
     show iconFromKey, NameIconOrEmoji;
@@ -74,7 +74,7 @@ class _MembersViewState extends State<MembersView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<MembersStore>();
     final members = state.members;
     final filtered = _filtered(members);
     final hasMembers = members.isNotEmpty;
@@ -98,7 +98,7 @@ class _MembersViewState extends State<MembersView> {
     );
   }
 
-  Widget _header(AppState state) {
+  Widget _header(MembersStore state) {
     return Container(
       padding: const EdgeInsets.fromLTRB(28, 22, 28, 16),
       decoration: const BoxDecoration(
@@ -172,7 +172,7 @@ class _MembersViewState extends State<MembersView> {
     );
   }
 
-  Widget _statsHero(AppState state) {
+  Widget _statsHero(MembersStore state) {
     final mrr = state.monthlyRecurringRevenueCents / 100.0;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
@@ -398,7 +398,7 @@ class _MembersViewState extends State<MembersView> {
     );
   }
 
-  Widget _grid(List<Member> members, AppState state) {
+  Widget _grid(List<Member> members, MembersStore state) {
     return LayoutBuilder(builder: (_, c) {
       final cols = (c.maxWidth / 380).floor().clamp(1, 4);
       const gap = 14.0;
@@ -427,7 +427,7 @@ class _MembersViewState extends State<MembersView> {
     });
   }
 
-  Widget _firstTimeEmpty(AppState state) {
+  Widget _firstTimeEmpty(MembersStore state) {
     final hasPlans = state.memberPlans.isNotEmpty;
     return Center(
       child: Padding(

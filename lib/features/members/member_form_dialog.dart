@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/app_state.dart';
+import '../../app/stores/members_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart' show iconFromKey;
 import '../../design_system/spacing.dart';
@@ -65,7 +65,7 @@ class _MemberFormDialogState extends State<MemberFormDialog> {
       _busy = true;
       _error = null;
     });
-    final state = context.read<AppState>();
+    final state = context.read<MembersStore>();
     String? err;
     if (_isEdit) {
       final original = widget.existing!;
@@ -133,7 +133,7 @@ class _MemberFormDialogState extends State<MemberFormDialog> {
       icon: Icons.delete_outline,
     );
     if (!ok || !mounted) return;
-    final state = context.read<AppState>();
+    final state = context.read<MembersStore>();
     final err = await state.removeMember(widget.existing!.id);
     if (!mounted) return;
     if (err != null) {
@@ -152,7 +152,7 @@ class _MemberFormDialogState extends State<MemberFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<MembersStore>();
     final plans =
         state.memberPlans.where((p) => p.isActive).toList();
     final size = MediaQuery.sizeOf(context);
