@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/glass.dart';
 import '../../design_system/icons.dart';
@@ -70,6 +71,10 @@ class _SellViewState extends State<SellView> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    // Catalog data (products / types / sub-types) lives in CatalogStore; the
+    // coordinator bits (arrangeMode, shift, cart, buildableCount) stay on
+    // AppState.
+    final catalog = context.watch<CatalogStore>();
     // Arrange mode is shared via AppState so the cart panel can react; mirror
     // it into the local flag the build + helpers read.
     _editMode = state.arrangeMode;
@@ -77,7 +82,7 @@ class _SellViewState extends State<SellView> {
     // that are short on ingredient stock — instead the tile stays visible
     // with a "Not available" badge so the cashier can answer "do you have
     // Alfredo?" at a glance. (Selling is blocked on out-of-stock tiles.)
-    final items = state.products.where((p) => p.available).toList();
+    final items = catalog.products.where((p) => p.available).toList();
 
     // ── Level 1: bucket products by their effective Product Type (the
     // product's own type, else its sub-type's type, else null = "Other").
@@ -85,12 +90,12 @@ class _SellViewState extends State<SellView> {
     // crash anything because they simply don't appear.
     final typeBuckets = <String?, List<CafeItem>>{};
     for (final p in items) {
-      (typeBuckets[state.effectiveTypeId(p)] ??= <CafeItem>[]).add(p);
+      (typeBuckets[catalog.effectiveTypeId(p)] ??= <CafeItem>[]).add(p);
     }
     // Sort by sortOrder so the normal Sell view matches Customize/edit mode
     // (which sorts the same way) — otherwise the in-memory list order can drift
     // and the two views show types in a different order.
-    final orderedTypes = [...state.productTypes]
+    final orderedTypes = [...catalog.productTypes]
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     final typeBoxes = <_TypeEntry>[
       for (final t in orderedTypes)
@@ -108,7 +113,7 @@ class _SellViewState extends State<SellView> {
     // empty type to add categories to it (without the selection bouncing back).
     final selectableTypeIds = <String>{
       ...typeBoxes.map((t) => t.id),
-      if (_editMode) ...state.productTypes.map((t) => t.id),
+      if (_editMode) ...catalog.productTypes.map((t) => t.id),
     };
     if (selectableTypeIds.isEmpty) {
       _filterTypeId = null;
@@ -116,7 +121,7 @@ class _SellViewState extends State<SellView> {
         !selectableTypeIds.contains(_filterTypeId)) {
       _filterTypeId = typeBoxes.isNotEmpty
           ? typeBoxes.first.id
-          : state.productTypes.first.id;
+          : catalog.productTypes.first.id;
       _filterCategoryId = null;
     }
 
@@ -133,7 +138,7 @@ class _SellViewState extends State<SellView> {
     var hasOrphanCats = false;
     if (_filterTypeId != null && _filterTypeId != _kOtherType) {
       final catsOfType =
-          state.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
+          catalog.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
       final present = <String>{};
       for (final p in inType) {
         final cid = p.categoryId;
@@ -143,7 +148,7 @@ class _SellViewState extends State<SellView> {
           hasOrphanCats = true;
         }
       }
-      subTypes.addAll(state
+      subTypes.addAll(catalog
           .categoriesForType(_filterTypeId)
           .where((c) => present.contains(c.id)));
     }
@@ -155,13 +160,13 @@ class _SellViewState extends State<SellView> {
       ...subTypes.map((c) => c.id),
       if (hasOrphanCats) _kOtherCat,
       if (_editMode && _realTypeSelected)
-        ...state.categoriesForType(_filterTypeId).map((c) => c.id),
+        ...catalog.categoriesForType(_filterTypeId).map((c) => c.id),
     };
     if (_filterCategoryId != null && !validCatIds.contains(_filterCategoryId)) {
       _filterCategoryId = null;
     }
 
-    final filtered = _filterItems(items, inType, state);
+    final filtered = _filterItems(items, inType, catalog);
 
     // The sub-type rail shows when browsing a type that has sub-types — or, in
     // edit mode on a real type, always (so you can add the first sub-type).
@@ -206,7 +211,7 @@ class _SellViewState extends State<SellView> {
   /// can find anything regardless of the selected type/sub-type. Otherwise
   /// filter the already-type-scoped [inType] by the selected sub-type chip.
   List<CafeItem> _filterItems(
-      List<CafeItem> all, List<CafeItem> inType, AppState state) {
+      List<CafeItem> all, List<CafeItem> inType, CatalogStore catalog) {
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
       // Match the product NAME only — not sub-type or subtitle.
@@ -216,7 +221,7 @@ class _SellViewState extends State<SellView> {
     if (_filterCategoryId == _kOtherCat) {
       // Products in this type with no sub-type, or one that belongs elsewhere.
       final catsOfType =
-          state.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
+          catalog.categoriesForType(_filterTypeId).map((c) => c.id).toSet();
       return inType
           .where((p) =>
               p.categoryId == null || !catsOfType.contains(p.categoryId))
@@ -272,14 +277,14 @@ class _SellViewState extends State<SellView> {
       List<_TypeEntry> typeBoxes, bool searching, List<CafeItem> items) {
     const h = 84.0;
     if (_editMode) {
-      final state = context.watch<AppState>();
+      final catalog = context.watch<CatalogStore>();
       // Types with products come first; empty ones (dimmed) sink to the end.
       final nonEmpty = <String>{};
-      for (final p in state.products) {
-        final id = state.effectiveTypeId(p);
+      for (final p in catalog.products) {
+        final id = catalog.effectiveTypeId(p);
         if (id != null) nonEmpty.add(id);
       }
-      final types = [...state.productTypes]
+      final types = [...catalog.productTypes]
         ..sort((a, b) {
           final ea = nonEmpty.contains(a.id) ? 0 : 1;
           final eb = nonEmpty.contains(b.id) ? 0 : 1;
@@ -402,13 +407,13 @@ class _SellViewState extends State<SellView> {
   /// (tap = edit), then a dashed "+" to add one.
   Widget _subTypeRail(List<cat.Category> subTypes, bool hasOrphanCats) {
     if (_editMode && _realTypeSelected) {
-      final state = context.watch<AppState>();
+      final catalog = context.watch<CatalogStore>();
       final nonEmpty = <String>{};
-      for (final p in state.products
-          .where((p) => state.effectiveTypeId(p) == _filterTypeId)) {
+      for (final p in catalog.products
+          .where((p) => catalog.effectiveTypeId(p) == _filterTypeId)) {
         if (p.categoryId != null) nonEmpty.add(p.categoryId!);
       }
-      final all = [...state.categoriesForType(_filterTypeId)]
+      final all = [...catalog.categoriesForType(_filterTypeId)]
         ..sort((a, b) {
           final ea = nonEmpty.contains(a.id) ? 0 : 1;
           final eb = nonEmpty.contains(b.id) ? 0 : 1;
@@ -594,21 +599,21 @@ class _SellViewState extends State<SellView> {
       List<ProductType> shown, int from, int to) async {
     final list = List<ProductType>.from(shown);
     list.insert(to, list.removeAt(from));
-    _toastIfFailed(await context.read<AppState>().reorderProductTypes(list));
+    _toastIfFailed(await context.read<CatalogStore>().reorderProductTypes(list));
   }
 
   Future<void> _onReorderSubTypes(
       List<cat.Category> shown, int from, int to) async {
     final list = List<cat.Category>.from(shown);
     list.insert(to, list.removeAt(from));
-    _toastIfFailed(await context.read<AppState>().reorderCategories(list));
+    _toastIfFailed(await context.read<CatalogStore>().reorderCategories(list));
   }
 
   Future<void> _onReorderProductsMove(
       List<CafeItem> shown, int from, int to) async {
     final list = List<CafeItem>.from(shown);
     list.insert(to, list.removeAt(from));
-    _toastIfFailed(await context.read<AppState>().reorderProducts(list));
+    _toastIfFailed(await context.read<CatalogStore>().reorderProducts(list));
   }
 
   // Add / edit — all reuse the real Maintenance/Products editors (DB-wired).

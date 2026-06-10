@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../printing/print_jobs.dart';
@@ -1031,7 +1032,7 @@ Future<void> _reprintReceipt(BuildContext context, String orderId) async {
 /// Maintenance icon (food → restaurant, books → book, coffee → cup). Falls
 /// back to a name-keyword icon, then a generic bag — never a colourful emoji.
 IconData _lineCategoryIcon(BuildContext context, MockOrderLine line) {
-  final cats = context.read<AppState>().categories;
+  final cats = context.read<CatalogStore>().categories;
   final cat =
       cats.where((c) => c.name == line.categoryName).firstOrNull;
   return resolveIcon(

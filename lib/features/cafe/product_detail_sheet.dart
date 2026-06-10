@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
@@ -86,7 +87,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   Money get unitPrice {
     // Custom-price product — the typed amount is the price.
     if (widget.item.openPrice) return Money(_customPriceCents);
-    final addOnsCatalog = context.read<AppState>().addOns;
+    final addOnsCatalog = context.read<CatalogStore>().addOns;
     var total = widget.item.basePrice;
     for (final g in widget.item.modifierGroups) {
       final optId = selections[g.id];
@@ -455,7 +456,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
 
   /// Add-ons that apply to this product's DB category.
   List<AddOn> _visibleAddOns(BuildContext ctx) {
-    final all = ctx.watch<AppState>().addOns;
+    final all = ctx.watch<CatalogStore>().addOns;
     return all
         .where((a) => a.appliesToCategory(widget.item.categoryId))
         .toList();
@@ -665,11 +666,12 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
 
   void _addToCart() {
     final state = context.read<AppState>();
+    final addOns = context.read<CatalogStore>().addOns;
     final addOnSnapshots = <CartAddOn>[];
     for (final entry in addOnQuantities.entries) {
       if (entry.value <= 0) continue;
       final addOn =
-          state.addOns.where((a) => a.id == entry.key).firstOrNull;
+          addOns.where((a) => a.id == entry.key).firstOrNull;
       if (addOn == null) continue;
       addOnSnapshots.add(CartAddOn(addOn, entry.value));
     }

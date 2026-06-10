@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/icons.dart';
@@ -492,13 +493,13 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   List<Widget> _salesSections(_ReportData data) {
-    final state = context.read<AppState>();
+    final catalog = context.read<CatalogStore>();
     final separated = _salesSubTab == 'separated';
     // Same UI, different data — General = everything EXCEPT separated
     // categories; Separated = only those. (Full store analytics live in All.)
     final groups = separated
-        ? _separatedSalesGroups(state, data)
-        : _generalSalesGroups(state, data);
+        ? _separatedSalesGroups(catalog, data)
+        : _generalSalesGroups(catalog, data);
     final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
@@ -560,15 +561,16 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   List<Widget> _productSections(_ReportData data) {
-    final state = context.read<AppState>();
+    final catalogStore = context.read<CatalogStore>();
     final separated = _productSubTab == 'separated';
     // Same UI, different data — General excludes separated categories,
     // Separated shows only them.
     final groups = separated
-        ? _separatedSalesGroups(state, data)
-        : _generalSalesGroups(state, data);
-    final catalog =
-        separated ? _separatedCatalog(state) : _generalCatalog(state);
+        ? _separatedSalesGroups(catalogStore, data)
+        : _generalSalesGroups(catalogStore, data);
+    final catalog = separated
+        ? _separatedCatalog(catalogStore)
+        : _generalCatalog(catalogStore);
     return [
       _subTabBar(_productSubTab, (v) => setState(() => _productSubTab = v)),
       ..._productMovementSections(groups, catalog, separated),
@@ -606,9 +608,9 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   /// Catalog products NOT in a separated category (the General scope).
-  List<CafeItem> _generalCatalog(AppState state) {
-    return state.products.where((p) {
-      final c = state.categories
+  List<CafeItem> _generalCatalog(CatalogStore catalog) {
+    return catalog.products.where((p) {
+      final c = catalog.categories
           .where((x) => x.id == p.categoryId)
           .firstOrNull;
       return !(c?.separateSales ?? false);
@@ -616,9 +618,9 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   /// Catalog products in a separated category (separate-sales is per Category).
-  List<CafeItem> _separatedCatalog(AppState state) {
-    return state.products.where((p) {
-      final c = state.categories
+  List<CafeItem> _separatedCatalog(CatalogStore catalog) {
+    return catalog.products.where((p) {
+      final c = catalog.categories
           .where((x) => x.id == p.categoryId)
           .firstOrNull;
       return c?.separateSales ?? false;
@@ -1083,9 +1085,9 @@ class _ProductIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<AppState>();
+    final catalog = context.read<CatalogStore>();
     final lower = name.trim().toLowerCase();
-    final p = state.products
+    final p = catalog.products
         .where((x) => x.name.trim().toLowerCase() == lower)
         .firstOrNull;
     // The product's own icon, else the icon of its category (product icons
@@ -1093,7 +1095,7 @@ class _ProductIcon extends StatelessWidget {
     String? iconName =
         (p?.iconName?.isNotEmpty ?? false) ? p!.iconName : null;
     if (iconName == null && p != null) {
-      iconName = state.categories
+      iconName = catalog.categories
           .where((c) => c.id == p.categoryId)
           .firstOrNull
           ?.iconName;
@@ -1128,7 +1130,7 @@ class _CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final lower = name.trim().toLowerCase();
     final c = context
-        .read<AppState>()
+        .read<CatalogStore>()
         .categories
         .where((x) => x.name.trim().toLowerCase() == lower)
         .firstOrNull;
@@ -1683,9 +1685,9 @@ class _CatGroup {
 /// each carrying the products sold under it. General sales are excluded.
 /// Category groups for the General view — everything EXCEPT the categories
 /// flagged `separateSales` (those are settled in the Separated view).
-List<_CatGroup> _generalSalesGroups(AppState state, _ReportData data) {
+List<_CatGroup> _generalSalesGroups(CatalogStore catalog, _ReportData data) {
   final catByName = {
-    for (final c in state.categories) c.name.trim().toLowerCase(): c,
+    for (final c in catalog.categories) c.name.trim().toLowerCase(): c,
   };
   return data.categoryGroups.where((cg) {
     final c = catByName[cg.name.trim().toLowerCase()];
@@ -1693,9 +1695,9 @@ List<_CatGroup> _generalSalesGroups(AppState state, _ReportData data) {
   }).toList();
 }
 
-List<_CatGroup> _separatedSalesGroups(AppState state, _ReportData data) {
+List<_CatGroup> _separatedSalesGroups(CatalogStore catalog, _ReportData data) {
   final catByName = {
-    for (final c in state.categories) c.name.trim().toLowerCase(): c,
+    for (final c in catalog.categories) c.name.trim().toLowerCase(): c,
   };
   final groups = <String, ({String name, Map<String, _TopItem> items})>{};
   for (final cg in data.categoryGroups) {

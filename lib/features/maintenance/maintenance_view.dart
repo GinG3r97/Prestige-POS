@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../app/stores/bookings_store.dart';
 import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
@@ -143,14 +144,17 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final types = state.productTypes;
+    // Catalog sections (product types + sub-types) read from CatalogStore; the
+    // inventory-tracking master switch below stays on AppState.
+    final catalog = context.watch<CatalogStore>();
+    final types = catalog.productTypes;
     if (_typeId == null || !types.any((t) => t.id == _typeId)) {
       _typeId = types.isNotEmpty ? types.first.id : null;
     }
-    final selType = _typeId == null ? null : state.productTypeById(_typeId);
+    final selType = _typeId == null ? null : catalog.productTypeById(_typeId);
     final subs = _typeId == null
         ? const <cat.Category>[]
-        : state.categoriesForType(_typeId);
+        : catalog.categoriesForType(_typeId);
 
     return Row(
       // Top-align both panes so the detail header sits up with the rail
@@ -532,7 +536,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
         danger: true,
         icon: Icons.delete_outline);
     if (!ok || !context.mounted) return;
-    final err = await state.removeProductType(t.id);
+    final err = await context.read<CatalogStore>().removeProductType(t.id);
     if (!context.mounted) return;
     PushToast.show(context,
         title: err == null ? 'Type removed' : 'Could not remove',
@@ -551,7 +555,7 @@ class _ProductAreaTabState extends State<_ProductAreaTab> {
         danger: true,
         icon: Icons.delete_outline);
     if (!ok || !context.mounted) return;
-    final err = await state.removeCategory(c.id);
+    final err = await context.read<CatalogStore>().removeCategory(c.id);
     if (!context.mounted) return;
     PushToast.show(context,
         title: err == null ? 'Category removed' : 'Could not remove',
@@ -569,7 +573,7 @@ class _ModifierGroupsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groups = state.modifierGroups;
+    final groups = context.watch<CatalogStore>().modifierGroups;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Center(
@@ -643,9 +647,10 @@ class _ModifierGroupsTab extends StatelessWidget {
       builder: (_) => _ModifierGroupDialog(initial: existing),
     );
     if (saved == null || !context.mounted) return;
+    final catalog = context.read<CatalogStore>();
     final err = existing == null
-        ? await state.addModifierGroup(saved)
-        : await state.updateModifierGroup(saved);
+        ? await catalog.addModifierGroup(saved)
+        : await catalog.updateModifierGroup(saved);
     if (!context.mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -672,7 +677,7 @@ class _ModifierGroupsTab extends StatelessWidget {
       icon: Icons.delete_outline,
     );
     if (!ok || !context.mounted) return;
-    final err = await state.removeModifierGroup(g.id);
+    final err = await context.read<CatalogStore>().removeModifierGroup(g.id);
     if (!context.mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -1225,7 +1230,7 @@ class _AddOnsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final addOns = state.addOns;
+    final addOns = context.watch<CatalogStore>().addOns;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Center(
@@ -1313,19 +1318,20 @@ class _AddOnsTab extends StatelessWidget {
 
   Future<void> _openForm(
       BuildContext context, AppState state, AddOn? existing) async {
+    final catalog = context.read<CatalogStore>();
     final saved = await showDialog<AddOn>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AddOnFormDialog(
         initial: existing,
         inventory: state.inventory,
-        categories: state.categories,
+        categories: catalog.categories,
       ),
     );
     if (saved == null || !context.mounted) return;
     final err = existing == null
-        ? await state.addAddOn(saved)
-        : await state.updateAddOn(saved);
+        ? await catalog.addAddOn(saved)
+        : await catalog.updateAddOn(saved);
     if (!context.mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -1356,7 +1362,7 @@ class _AddOnsTab extends StatelessWidget {
       icon: Icons.delete_outline,
     );
     if (!ok || !context.mounted) return;
-    final err = await state.removeAddOn(addOn.id);
+    final err = await context.read<CatalogStore>().removeAddOn(addOn.id);
     if (!context.mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -1493,7 +1499,7 @@ class _AddOnRow extends StatelessWidget {
                             ),
                             child: Text(
                               context
-                                      .read<AppState>()
+                                      .read<CatalogStore>()
                                       .categories
                                       .where((c) => c.id == catId)
                                       .firstOrNull
@@ -1877,7 +1883,7 @@ class _InventoryCategoryDialogState extends State<_InventoryCategoryDialog> {
 /// everywhere). Reusable from the Sell "arrange mode".
 Future<void> showProductTypeEditor(BuildContext context,
     {ProductType? initial}) async {
-  final state = context.read<AppState>();
+  final catalog = context.read<CatalogStore>();
   final saved = await showDialog<ProductType>(
     context: context,
     barrierDismissible: false,
@@ -1885,8 +1891,8 @@ Future<void> showProductTypeEditor(BuildContext context,
   );
   if (saved == null || !context.mounted) return;
   final err = initial == null
-      ? await state.addProductType(saved)
-      : await state.updateProductType(saved);
+      ? await catalog.addProductType(saved)
+      : await catalog.updateProductType(saved);
   if (!context.mounted) return;
   if (err != null) {
     PushToast.show(context,
@@ -1906,7 +1912,7 @@ Future<void> showProductTypeEditor(BuildContext context,
 /// from the Sell "arrange mode".
 Future<void> showSubTypeEditor(BuildContext context,
     {cat.Category? initial, String? presetTypeId}) async {
-  final state = context.read<AppState>();
+  final catalog = context.read<CatalogStore>();
   final saved = await showDialog<cat.Category>(
     context: context,
     builder: (_) =>
@@ -1914,7 +1920,7 @@ Future<void> showSubTypeEditor(BuildContext context,
   );
   if (saved == null || !context.mounted) return;
   final err = initial == null
-      ? await state.addCategory(
+      ? await catalog.addCategory(
           name: saved.name,
           emoji: saved.emoji,
           iconName: saved.iconName,
@@ -1922,7 +1928,7 @@ Future<void> showSubTypeEditor(BuildContext context,
           typeId: saved.typeId,
           separateSales: saved.separateSales,
         )
-      : await state.updateCategory(saved);
+      : await catalog.updateCategory(saved);
   if (!context.mounted) return;
   if (err != null) {
     PushToast.show(context,
@@ -2159,7 +2165,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   /// type that's already chosen (the Maintenance rail or the Sell page), so the
   /// owner doesn't pick it twice.
   Widget _presetTypeRow(BuildContext context) {
-    final type = context.read<AppState>().productTypeById(_typeId);
+    final type = context.read<CatalogStore>().productTypeById(_typeId);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2198,9 +2204,9 @@ class _CategoryDialogState extends State<_CategoryDialog> {
 
   /// Picks which Product Type this sub-type belongs to. Optional — tapping the
   /// selected chip again clears it (the sub-type then lives under "Other" on
-  /// the Sell page). Reads the live product-type list from AppState.
+  /// the Sell page). Reads the live product-type list from CatalogStore.
   Widget _typePicker(BuildContext context) {
-    final types = context.watch<AppState>().productTypes;
+    final types = context.watch<CatalogStore>().productTypes;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

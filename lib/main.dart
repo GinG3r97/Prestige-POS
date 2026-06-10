@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app/app_state.dart';
 import 'app/stores/bookings_store.dart';
+import 'app/stores/catalog_store.dart';
 import 'app/stores/hr_store.dart';
 import 'app/stores/members_store.dart';
 import 'models/cart.dart';
@@ -189,6 +190,16 @@ class YosefPOSApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AppState, HrStore>(
           create: (ctx) => ctx.read<AppState>().hr,
           update: (_, app, __) => app.hr,
+        ),
+        // Scope the Catalog domain (product types, sub-type categories, master
+        // modifier groups, add-ons, products) to its own store so catalog edits
+        // repaint only catalog-watching widgets (Sell, Products, cart, product
+        // detail, Maintenance catalog sections, Reports, Orders), not every
+        // context.watch<AppState>() consumer. Same CatalogStore instance
+        // AppState owns (provided by value via the proxy, never recreated).
+        ChangeNotifierProxyProvider<AppState, CatalogStore>(
+          create: (ctx) => ctx.read<AppState>().catalog,
+          update: (_, app, __) => app.catalog,
         ),
       ],
       child: MaterialApp(

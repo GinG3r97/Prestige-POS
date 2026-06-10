@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import '../../app/stores/catalog_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/responsive.dart';
 import '../../design_system/icons.dart'
@@ -63,7 +64,10 @@ class _ProductsViewState extends State<ProductsView> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final products = state.products;
+    // Catalog data (products/categories/types/modifier groups) lives in
+    // CatalogStore; inventory + cross-domain reads stay on AppState.
+    final catalog = context.watch<CatalogStore>();
+    final products = catalog.products;
     final filtered = _filtered(products);
     final selected = _selectedId == null
         ? null
@@ -135,7 +139,7 @@ class _ProductsViewState extends State<ProductsView> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
                     child: Row(children: [
-                      Expanded(child: _categoryFilterDropdown(state)),
+                      Expanded(child: _categoryFilterDropdown(catalog)),
                       const SizedBox(width: 8),
                       Expanded(child: _statusFilterDropdown()),
                     ]),
@@ -313,13 +317,13 @@ class _ProductsViewState extends State<ProductsView> {
     return result;
   }
 
-  Widget _categoryFilterDropdown(AppState state) {
-    final usedIds = state.products
+  Widget _categoryFilterDropdown(CatalogStore catalog) {
+    final usedIds = catalog.products
         .map((p) => p.categoryId)
         .where((id) => id != null && id.isNotEmpty)
         .cast<String>()
         .toSet();
-    final cats = state.categories
+    final cats = catalog.categories
         .where((c) => usedIds.contains(c.id))
         .toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -390,6 +394,7 @@ class _ProductsViewState extends State<ProductsView> {
 
   Future<void> _openForm(
       BuildContext context, AppState state, CafeItem? existing) async {
+    final catalog = context.read<CatalogStore>();
     final saved = await showDialog<CafeItem>(
       context: context,
       barrierDismissible: false,
@@ -400,8 +405,8 @@ class _ProductsViewState extends State<ProductsView> {
     );
     if (saved == null || !mounted) return;
     final err = existing == null
-        ? await state.addProduct(saved)
-        : await state.updateProduct(saved);
+        ? await catalog.addProduct(saved)
+        : await catalog.updateProduct(saved);
     if (!mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -411,12 +416,12 @@ class _ProductsViewState extends State<ProductsView> {
       return;
     }
     if (existing == null) {
-      final fresh = state.products.lastOrNull;
+      final fresh = catalog.products.lastOrNull;
       setState(() => _selectedId = fresh?.id ?? saved.id);
     }
     // Pick the freshest record so toast image reflects what was saved
     // (uploaded photo URLs only exist after the server roundtrip).
-    final fresh = state.products
+    final fresh = catalog.products
             .where((p) => p.id == saved.id)
             .firstOrNull ??
         saved;
@@ -442,7 +447,7 @@ class _ProductsViewState extends State<ProductsView> {
       icon: Icons.delete_outline,
     );
     if (!ok || !mounted) return;
-    final err = await state.removeProduct(product.id);
+    final err = await context.read<CatalogStore>().removeProduct(product.id);
     if (!mounted) return;
     if (err != null) {
       PushToast.show(context,
@@ -471,6 +476,7 @@ class _ProductsViewState extends State<ProductsView> {
 Future<void> showProductEditor(BuildContext context,
     {String? presetTypeId, String? presetCategoryId}) async {
   final state = context.read<AppState>();
+  final catalog = context.read<CatalogStore>();
   final saved = await showDialog<CafeItem>(
     context: context,
     barrierDismissible: false,
@@ -481,7 +487,7 @@ Future<void> showProductEditor(BuildContext context,
     ),
   );
   if (saved == null || !context.mounted) return;
-  final err = await state.addProduct(saved);
+  final err = await catalog.addProduct(saved);
   if (!context.mounted) return;
   PushToast.show(context,
       title: err == null ? 'Product added' : 'Could not save',
@@ -501,11 +507,10 @@ Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
     builder: (_) => _ProductQuickEditDialog(item: item),
   );
   if (result == null || !context.mounted) return;
-  final state = context.read<AppState>();
   item.name = result.name;
   item.basePrice = Money(result.priceCents);
   item.openPrice = result.openPrice;
-  final err = await state.updateProduct(item);
+  final err = await context.read<CatalogStore>().updateProduct(item);
   if (!context.mounted) return;
   PushToast.show(context,
       title: err == null ? 'Product updated' : 'Could not save',
@@ -959,9 +964,9 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     final priceN = double.tryParse(_price.text) ?? 0;
     // Resolve behavior flags from the picked DB ProductType when available,
     // otherwise fall back to the legacy enum on the in-memory CafeItem.
-    final state = context.read<AppState>();
-    final type = state.productTypeById(_typeId);
-    final cat = state.categories
+    final catalog = context.read<CatalogStore>();
+    final type = catalog.productTypeById(_typeId);
+    final cat = catalog.categories
         .where((c) => c.id == _categoryId)
         .firstOrNull;
 
@@ -978,7 +983,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     String? finalUrl = _imageUrl;
     if (_pendingImageBytes != null) {
       try {
-        finalUrl = await state.uploadProductImage(_pendingImageBytes!);
+        finalUrl = await catalog.uploadProductImage(_pendingImageBytes!);
       } catch (e) {
         if (!mounted) return;
         setState(() => _saving = false);
@@ -1021,7 +1026,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     if (!mounted) return;
     // Inline editor saves in place; the dialog returns the item to its caller.
     if (widget.embedded) {
-      final err = await context.read<AppState>().updateProduct(saved);
+      final err = await context.read<CatalogStore>().updateProduct(saved);
       if (!mounted) return;
       setState(() => _saving = false);
       PushToast.show(context,
@@ -1594,12 +1599,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
   Widget _categoryDropdown() {
     return Builder(builder: (ctx) {
-      final state = ctx.watch<AppState>();
+      final catalog = ctx.watch<CatalogStore>();
       // ONLY the chosen Product Type's categories — empty until a type is
       // picked, so you can't mismatch a category to the wrong type.
       final cats = _typeId == null
           ? const <cat.Category>[]
-          : state.categoriesForType(_typeId);
+          : catalog.categoriesForType(_typeId);
       return ThemedDropdown<String>(
         label: 'Category',
         value: _categoryId,
@@ -1627,8 +1632,8 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
   Widget _typeDropdown() {
     return Builder(builder: (ctx) {
-      final state = ctx.watch<AppState>();
-      final types = state.productTypes;
+      final catalog = ctx.watch<CatalogStore>();
+      final types = catalog.productTypes;
       return ThemedDropdown<String>(
         label: 'Product type',
         value: _typeId,
@@ -1648,7 +1653,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           _typeId = v;
           // Drop the category if it no longer belongs to the new type.
           final ok = v != null &&
-              state.categoriesForType(v).any((c) => c.id == _categoryId);
+              catalog.categoriesForType(v).any((c) => c.id == _categoryId);
           if (!ok) _categoryId = null;
         }),
       );
@@ -1661,10 +1666,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   /// cashier never sees size pickers.
   Widget _modifierGroupsSection() {
     return Builder(builder: (ctx) {
-      final state = ctx.watch<AppState>();
+      final catalog = ctx.watch<CatalogStore>();
       // Per-product: any product can opt into modifier groups (a product
       // "supports modifiers" simply when groups are toggled on here).
-      final groups = state.modifierGroups;
+      final groups = catalog.modifierGroups;
       if (groups.isEmpty) {
         return _section('Modifiers', [
           Padding(
