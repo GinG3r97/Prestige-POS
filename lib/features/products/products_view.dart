@@ -2555,10 +2555,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                   )
                 : GridView.builder(
                     padding: EdgeInsets.zero,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      mainAxisExtent: 126,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      // 1 item → full width, 2 → halves, 3+ → thirds.
+                      crossAxisCount: _recipe.length.clamp(1, 3),
+                      mainAxisExtent: 84,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
                     ),
@@ -2989,46 +2989,54 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ),
           ),
           const SizedBox(height: 2),
-          // Sell-style search picker (glass card above the keyboard).
-          IngredientSearchField(
-            items: widget.inventory,
-            selectedId:
-                line.inventoryItemId.isEmpty ? null : line.inventoryItemId,
-            onSelect: (id) => setState(() => line.inventoryItemId = id),
-          ),
-          const SizedBox(height: 8),
-          // Quantity with the unit inside the input — disabled until picked.
-          IgnorePointer(
-            ignoring: item == null,
-            child: Opacity(
-              opacity: item == null ? 0.4 : 1,
-              child: KeyboardAccessoryField(
-                controller: _qtyCtrl(line),
-                accessoryLabel: 'QUANTITY',
-                hint: '0',
-                keyboardType: TextInputType.number,
-                fillColor: YColor.surface2,
-                borderColor: YColor.hairline,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-                suffix: unit.isEmpty
-                    ? null
-                    : Center(
-                        widthFactor: 1.0,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4, right: 10),
-                          child: Text(unit,
-                              style: YFont.bodyStrong().copyWith(
-                                  color: YColor.inkMuted, fontSize: 12)),
-                        ),
-                      ),
-                onChanged: (v) {
-                  line.quantity = double.tryParse(v) ?? 0;
-                  setState(() {});
-                },
+          // Ingredient (icon + name) and quantity on one line.
+          Row(children: [
+            Expanded(
+              child: IngredientSearchField(
+                items: widget.inventory,
+                selectedId:
+                    line.inventoryItemId.isEmpty ? null : line.inventoryItemId,
+                onSelect: (id) => setState(() => line.inventoryItemId = id),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // Quantity with the unit inside — disabled until an item is picked.
+            SizedBox(
+              width: 128,
+              child: IgnorePointer(
+                ignoring: item == null,
+                child: Opacity(
+                  opacity: item == null ? 0.4 : 1,
+                  child: KeyboardAccessoryField(
+                    controller: _qtyCtrl(line),
+                    accessoryLabel: 'QUANTITY',
+                    hint: '0',
+                    keyboardType: TextInputType.number,
+                    fillColor: YColor.surface2,
+                    borderColor: YColor.hairline,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 11),
+                    suffix: unit.isEmpty
+                        ? null
+                        : Center(
+                            widthFactor: 1.0,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 4, right: 10),
+                              child: Text(unit,
+                                  style: YFont.bodyStrong().copyWith(
+                                      color: YColor.inkMuted, fontSize: 12)),
+                            ),
+                          ),
+                    onChanged: (v) {
+                      line.quantity = double.tryParse(v) ?? 0;
+                      setState(() {});
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ]),
         ],
       ),
     );

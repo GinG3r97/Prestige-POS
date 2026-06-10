@@ -206,9 +206,18 @@ class _IngredientSearchFieldState extends State<IngredientSearchField>
                             style:
                                 YFont.body().copyWith(color: YColor.inkMuted)),
                       )
+                    else if (matches.length <= 4)
+                      // Few results — size exactly to the rows (no gap).
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final it in matches) _resultCell(it),
+                        ],
+                      )
                     else
+                      // Many — cap the height and scroll.
                       SizedBox(
-                        height: matches.length <= 2 ? 116 : 210,
+                        height: 216,
                         child: ListView.builder(
                           padding: EdgeInsets.zero,
                           itemCount: matches.length,
