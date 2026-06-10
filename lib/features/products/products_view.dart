@@ -2494,49 +2494,57 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     );
   }
 
-  /// Top tabs — Base recipe + each modifier group (Size / Temp / …).
+  /// Top tabs — Base recipe + each modifier group (Size / Temp / …), as pills.
   Widget _recipeTabBar(List<ModifierGroup> groups) {
-    Widget tab(String key, String label) {
-      final on =
-          key == 'base' ? !groups.any((g) => g.id == _recipeTab) : _recipeTab == key;
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() {
-          _recipeTab = key;
-          if (key != 'base') {
-            final g = groups.firstWhere((g) => g.id == key);
-            if (!g.options.any((o) => o.id == _recipeSel) &&
-                g.options.isNotEmpty) {
-              _recipeSel = g.options.first.id;
+    Widget tab(String key, String label, IconData icon) {
+      final on = key == 'base'
+          ? !groups.any((g) => g.id == _recipeTab)
+          : _recipeTab == key;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() {
+            _recipeTab = key;
+            if (key != 'base') {
+              final g = groups.firstWhere((g) => g.id == key);
+              if (!g.options.any((o) => o.id == _recipeSel) &&
+                  g.options.isNotEmpty) {
+                _recipeSel = g.options.first.id;
+              }
             }
-          }
-        }),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: on ? YColor.brand : Colors.transparent,
-                width: 2.5,
-              ),
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 130),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: on ? YColor.brand : YColor.surface2,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                  color: on ? YColor.brand : YColor.hairline),
             ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon,
+                  size: 15, color: on ? Colors.white : YColor.brandDeep),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: YFont.bodyStrong().copyWith(
+                      fontSize: 12.5,
+                      color: on ? Colors.white : YColor.ink)),
+            ]),
           ),
-          child: Text(label,
-              style: YFont.bodyStrong().copyWith(
-                  fontSize: 13.5,
-                  color: on ? YColor.brandDeep : YColor.inkMuted)),
         ),
       );
     }
 
     return Container(
       color: YColor.surface1,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(children: [
-          tab('base', 'Base recipe'),
-          for (final g in groups) tab(g.id, g.name),
+          tab('base', 'Base recipe', Icons.science_outlined),
+          for (final g in groups) tab(g.id, g.name, Icons.tune),
         ]),
       ),
     );
