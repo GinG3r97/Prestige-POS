@@ -24,6 +24,10 @@ import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 import 'ingredient_search_field.dart';
 
+/// Shared 0.5px hairline divider — const so it never rebuilds.
+const Widget _hairline =
+    SizedBox(height: 0.5, child: ColoredBox(color: YColor.hairline));
+
 class ProductsView extends StatefulWidget {
   const ProductsView({super.key});
 
@@ -136,7 +140,7 @@ class _ProductsViewState extends State<ProductsView> {
                       Expanded(child: _statusFilterDropdown()),
                     ]),
                   ),
-                  Container(height: 0.5, color: YColor.hairline),
+                  _hairline,
                   Expanded(
                     child: filtered.isEmpty
                         ? Center(
@@ -154,8 +158,7 @@ class _ProductsViewState extends State<ProductsView> {
                         : ListView.separated(
                             padding: EdgeInsets.zero,
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) => Container(
-                                height: 0.5, color: YColor.hairline),
+                            separatorBuilder: (_, __) => _hairline,
                             itemBuilder: (_, i) {
                               final p = filtered[i];
                               final selected = p.id == _selectedId;
@@ -1051,7 +1054,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     ),
                   ]),
                 ),
-          Container(height: 0.5, color: YColor.hairline),
+          _hairline,
           _stepBar(),
           Expanded(
             child: SingleChildScrollView(
@@ -1140,7 +1143,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ),
           ),
           if (!widget.embedded) ...[
-            Container(height: 0.5, color: YColor.hairline),
+            _hairline,
             Padding(
                   padding: const EdgeInsets.all(20),
                   child: Row(children: [
@@ -1828,7 +1831,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
             ),
           ]),
         ),
-        Container(height: 0.5, color: YColor.hairline),
+        _hairline,
         Expanded(
           child: on
               ? ListView(
@@ -1945,7 +1948,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
       ),
       child: Column(children: [
         _recipeTabBar(groups),
-        Container(height: 0.5, color: YColor.hairline),
+        _hairline,
         Expanded(
           child: onBase
               ? _baseTab()

@@ -44,6 +44,7 @@ class TopBar extends StatelessWidget {
               child: Image.network(
                 state.tenant!.logoUrl!,
                 fit: BoxFit.cover,
+                cacheWidth: 180,
                 errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),

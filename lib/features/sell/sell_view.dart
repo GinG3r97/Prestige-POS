@@ -19,6 +19,10 @@ import 'reorder_grid.dart';
 import 'sell_search_field.dart';
 import 'shift_bar.dart';
 
+/// Shared 0.5px hairline divider — const so it never rebuilds.
+const Widget _hairline =
+    SizedBox(height: 0.5, child: ColoredBox(color: YColor.hairline));
+
 /// Unified storefront for the coffee shop. Search + category chips on top,
 /// product grid below. Tapping a drink opens the modifier sheet, tapping a
 /// food item adds it straight to the cart.
@@ -176,7 +180,7 @@ class _SellViewState extends State<SellView> {
           // Open Cashier entry point — stays on the page.
           if (!state.hasOpenShift) ...[
             const ShiftBar(),
-            Container(height: 0.5, color: YColor.hairline),
+            _hairline,
             Expanded(child: _cashierClosed(context)),
           ] else ...[
             _header(typeBoxes: typeBoxes, items: items),

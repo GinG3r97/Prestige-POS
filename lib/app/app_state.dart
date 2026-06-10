@@ -397,6 +397,7 @@ class AppState extends ChangeNotifier {
       // list so the Sell view + product detail sheet can render Size /
       // Temperature / Strength pickers without rewriting their data
       // sources. DB stores only the ids; this is the in-memory join.
+      final categoriesById = {for (final c in _categories) c.id: c};
       for (final p in _products) {
         p.modifierGroups = _runtimeModifierGroups(p.modifierGroupIds);
         // Fall back to the category's picked icon (from the "Pick an icon"
@@ -405,8 +406,7 @@ class AppState extends ChangeNotifier {
         // across Sell / Orders / Products / cart.
         if ((p.iconName == null || p.iconName!.isEmpty) &&
             p.categoryId != null) {
-          final c =
-              _categories.where((c) => c.id == p.categoryId).firstOrNull;
+          final c = categoriesById[p.categoryId];
           if (c != null && c.iconName != null && c.iconName!.isNotEmpty) {
             p.iconName = c.iconName;
           }

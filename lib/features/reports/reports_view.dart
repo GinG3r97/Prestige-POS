@@ -16,6 +16,10 @@ import '../../models/order.dart' as o;
 import '../../models/payroll.dart';
 import '../widgets/push_toast.dart';
 
+/// Shared 0.5px hairline divider — const so it never rebuilds.
+const Widget _hairline =
+    SizedBox(height: 0.5, child: ColoredBox(color: YColor.hairline));
+
 /// What slice of the data the owner wants to focus on. Each lens
 /// hides irrelevant sections and skips fetches that aren't relevant
 /// to the chosen perspective.
@@ -222,7 +226,7 @@ class _ReportsViewState extends State<ReportsView> {
                     children: [
                       if (_lens.usesDateRange) ...[
                         _rangeBar(),
-                        Container(height: 0.5, color: YColor.hairline),
+                        _hairline,
                       ],
                       Expanded(
                         child: RefreshIndicator(
@@ -1272,7 +1276,7 @@ class _SeparatedRailSectionState extends State<_SeparatedRailSection> {
                   .copyWith(fontSize: 15, color: YColor.brandDeep)),
         ]),
       ),
-      Container(height: 0.5, color: YColor.hairline),
+      _hairline,
       Expanded(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
@@ -1311,12 +1315,23 @@ class _SeparatedRailSectionState extends State<_SeparatedRailSection> {
 
 /// Products in the catalog with NO sales in the period — the "dead" menu
 /// items the owner should review. Movement report, no money.
-class _NotSellingSection extends StatelessWidget {
+class _NotSellingSection extends StatefulWidget {
   const _NotSellingSection({required this.products});
   final List<CafeItem> products;
 
   @override
+  State<_NotSellingSection> createState() => _NotSellingSectionState();
+}
+
+class _NotSellingSectionState extends State<_NotSellingSection> {
+  static const _collapsedCount = 8;
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final products = widget.products;
+    final showAll = _expanded || products.length <= _collapsedCount;
+    final visible = showAll ? products : products.take(_collapsedCount);
     return _SectionCard(
       title: 'Not selling',
       subtitle: products.isEmpty
@@ -1334,7 +1349,7 @@ class _NotSellingSection extends StatelessWidget {
           ? _empty('Everything sold at least once 🎉')
           : Column(
               children: [
-                for (final p in products.take(60))
+                for (final p in visible)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(children: [
@@ -1351,11 +1366,23 @@ class _NotSellingSection extends StatelessWidget {
                               .copyWith(color: YColor.danger)),
                     ]),
                   ),
-                if (products.length > 60)
+                if (products.length > _collapsedCount)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text('+ ${products.length - 60} more',
-                        style: YFont.caption()),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _expanded = !_expanded),
+                        child: Text(
+                          _expanded
+                              ? 'Show less'
+                              : 'Show all ${products.length}',
+                          style: YFont.caption()
+                              .copyWith(color: YColor.brandDeep),
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),

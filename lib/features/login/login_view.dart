@@ -226,6 +226,7 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
             ? Image.network(
                 logoUrl,
                 fit: BoxFit.cover,
+                cacheWidth: 1080,
                 errorBuilder: (_, __, ___) => const Icon(Icons.storefront,
                     color: Colors.white, size: 24),
               )

@@ -1323,6 +1323,8 @@ Widget _logoLeading(String? url) {
         width: 28,
         height: 28,
         fit: BoxFit.cover,
+        cacheWidth: 84,
+        cacheHeight: 84,
         errorBuilder: (_, __, ___) =>
             const Icon(Icons.image_outlined, color: YColor.brandDeep),
       ),
@@ -1430,7 +1432,9 @@ class _LogoDialogState extends State<_LogoDialog> {
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(18),
                       child: Image.network(url, fit: BoxFit.cover,
-                          width: 120, height: 120, errorBuilder: (_, __, ___) {
+                          width: 120, height: 120,
+                          cacheWidth: 360, cacheHeight: 360,
+                          errorBuilder: (_, __, ___) {
                         return const Icon(Icons.storefront_outlined,
                             size: 44, color: YColor.inkMuted);
                       }),

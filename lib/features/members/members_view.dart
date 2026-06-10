@@ -738,6 +738,8 @@ class _MemberCard extends StatelessWidget {
           width: 44,
           height: 44,
           fit: BoxFit.cover,
+          cacheWidth: 120,
+          cacheHeight: 120,
           errorBuilder: (_, _, _) => _initialsTile(),
         ),
       );
