@@ -7,6 +7,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/responsive_scaler.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../auth/otp_numpad.dart';
 
 /// A quick-action chip shown inside the floating accessory.
 class KeyboardQuickAction {
@@ -63,6 +64,7 @@ class KeyboardAccessoryField extends StatefulWidget {
     this.onFocusLost,
     this.isDense = false,
     this.inputFormatters,
+    this.numpad,
   });
 
   final TextEditingController controller;
@@ -130,6 +132,11 @@ class KeyboardAccessoryField extends StatefulWidget {
   /// only-with-decimal fields like payroll bonuses & hours.
   final List<TextInputFormatter>? inputFormatters;
 
+  /// Forces (true) or disables (false) the in-app numeric pad. When null
+  /// the pad is auto-enabled for numeric [keyboardType]s (number / decimal),
+  /// so the system keyboard — and the iOS 10-key popup pad — never appears.
+  final bool? numpad;
+
   @override
   State<KeyboardAccessoryField> createState() => _KeyboardAccessoryFieldState();
 }
@@ -141,7 +148,23 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
   // (so the cursor, selection, copy/paste + multi-line scroll all work up
   // there). Money/preview fields keep the read-only formatted preview instead.
   final FocusNode _cardFocus = FocusNode();
-  bool get _cardEditable => widget.formatPreview == null && !widget.obscure;
+
+  /// True when this field should drive an in-app numpad instead of the
+  /// system keyboard. Auto-detected from the numeric [keyboardType] unless
+  /// the caller forces it via [widget.numpad].
+  bool get _isNumpad {
+    if (widget.numpad != null) return widget.numpad!;
+    final s = widget.keyboardType?.toString() ?? '';
+    // matches TextInputType.number and numberWithOptions(...), not phone/text.
+    return s.contains('number');
+  }
+
+  /// True when the numpad should expose a decimal "." key (money / hours).
+  bool get _numpadDecimal =>
+      widget.keyboardType?.toString().contains('decimal: true') ?? false;
+
+  bool get _cardEditable =>
+      !_isNumpad && widget.formatPreview == null && !widget.obscure;
   late final AnimationController _anim;
   OverlayEntry? _entry;
 
@@ -199,6 +222,39 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
         }
       });
     }
+  }
+
+  // ── In-app numpad input ────────────────────────────────────────────────
+  // The pad edits the controller directly (the field is read-only so the
+  // system keyboard never opens). Honours maxLength and a single decimal.
+  void _numTap(String key) {
+    final c = widget.controller;
+    var t = c.text;
+    if (key == '.') {
+      if (!_numpadDecimal || t.contains('.')) return;
+      t = t.isEmpty ? '0.' : '$t.';
+    } else {
+      final digitCount = t.replaceAll('.', '').length;
+      if (widget.maxLength != null && digitCount >= widget.maxLength!) return;
+      // avoid leading zeros like "007" for whole-number fields
+      if (t == '0' && !t.contains('.')) t = '';
+      t = '$t$key';
+    }
+    _numSet(t);
+  }
+
+  void _numBackspace() {
+    final c = widget.controller;
+    if (c.text.isEmpty) return;
+    _numSet(c.text.substring(0, c.text.length - 1));
+  }
+
+  void _numSet(String t) {
+    widget.controller.value = TextEditingValue(
+      text: t,
+      selection: TextSelection.collapsed(offset: t.length),
+    );
+    widget.onChanged?.call(t);
   }
 
   void _show() {
@@ -417,6 +473,16 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
                       );
                     },
                   ),
+                if (_isNumpad) ...[
+                  const SizedBox(height: 16),
+                  OtpNumpad(
+                    onDigit: _numTap,
+                    onBackspace: _numBackspace,
+                    decimalKey: _numpadDecimal,
+                    keyWidth: 74,
+                    keyHeight: 50,
+                  ),
+                ],
                 if (widget.quickActions != null &&
                     widget.quickActions!.isNotEmpty) ...[
                   const SizedBox(height: 14),
@@ -492,6 +558,11 @@ class _KeyboardAccessoryFieldState extends State<KeyboardAccessoryField>
           maxLines: widget.obscure ? 1 : widget.maxLines,
           maxLength: widget.maxLength,
           style: widget.textStyle,
+          // Numpad fields are read-only so the OS keyboard (and the iOS 10-key
+          // popup pad) never opens; tapping just focuses → raises our pad.
+          readOnly: _isNumpad,
+          showCursor: _isNumpad ? true : null,
+          enableInteractiveSelection: !_isNumpad,
           autocorrect: false,
           enableSuggestions: false,
           autovalidateMode: AutovalidateMode.onUserInteraction,
