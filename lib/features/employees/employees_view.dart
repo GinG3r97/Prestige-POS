@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../app/stores/hr_store.dart';
-import '../attendance/attendance_view.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/responsive.dart';
@@ -248,47 +247,33 @@ class _ListPane extends StatelessWidget {
           // Role dropdown + search button + Add — one row.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Row 1: search + attendance + add
-                Row(
-                  children: [
-                    const Spacer(),
-                    EmployeeSearchField(
-                      controller: searchController,
-                      activeQuery: query,
-                      onShowMore: onSearch,
-                      onClear: () => onSearch(''),
-                    ),
-                    const SizedBox(width: 10),
-                    _squareBtn(
-                      icon: Icons.fact_check_outlined,
-                      filled: false,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const AttendanceView()),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
-                  ],
+                Expanded(
+                  child: availableRoles.isEmpty
+                      ? const SizedBox(height: 46)
+                      : ThemedDropdown<String>(
+                          label: 'Role',
+                          value: roleFilter ?? '__all__',
+                          items: ['__all__', ...availableRoles],
+                          labelOf: (r) => r == '__all__' ? 'All roles' : r,
+                          iconOf: (r) => r == '__all__'
+                              ? Icons.groups_outlined
+                              : Icons.badge_outlined,
+                          onChanged: (r) => onRoleFilter(
+                              (r == null || r == '__all__') ? null : r),
+                        ),
                 ),
-                // Row 2: role dropdown, full width below the buttons
-                if (availableRoles.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  ThemedDropdown<String>(
-                    label: 'Role',
-                    value: roleFilter ?? '__all__',
-                    items: ['__all__', ...availableRoles],
-                    labelOf: (r) => r == '__all__' ? 'All roles' : r,
-                    iconOf: (r) => r == '__all__'
-                        ? Icons.groups_outlined
-                        : Icons.badge_outlined,
-                    onChanged: (r) => onRoleFilter(
-                        (r == null || r == '__all__') ? null : r),
-                  ),
-                ],
+                const SizedBox(width: 10),
+                EmployeeSearchField(
+                  controller: searchController,
+                  activeQuery: query,
+                  onShowMore: onSearch,
+                  onClear: () => onSearch(''),
+                ),
+                const SizedBox(width: 10),
+                _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
               ],
             ),
           ),
@@ -788,19 +773,20 @@ class _DetailPaneState extends State<_DetailPane> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'COMING SOON',
+                  'OFF',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.6,
-                    color: YColor.brandDeep,
+                    color: YColor.inkMuted,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Staff portal accounts are coming soon.',
+                  'Not set up. Tap Edit → Portal account to give this '
+                  'employee web access (attendance, leave, OT/UT filing).',
                   style: YFont.caption(),
                 ),
               ),
@@ -809,36 +795,20 @@ class _DetailPaneState extends State<_DetailPane> {
         ],
       );
     }
+    final loggedIn = e.portalLastLoginAt != null;
     return _SectionCard(
       title: 'Portal account',
       icon: Icons.account_circle_outlined,
       children: [
         _DetailRow(
           icon: Icons.alternate_email,
-          label: 'Gmail',
+          label: 'Login email',
           value: e.portalGmail.isEmpty ? '—' : e.portalGmail,
           trailing: _smallPill(
-            icon: Icons.check_circle,
-            label: 'Active',
-            color: YColor.success,
+            icon: loggedIn ? Icons.check_circle : Icons.schedule,
+            label: loggedIn ? 'Active' : 'Pending',
+            color: loggedIn ? YColor.success : YColor.brandDeep,
           ),
-        ),
-        _DetailRow(
-          icon: Icons.person_outline,
-          label: 'Username',
-          value: e.portalUsername.isEmpty ? '—' : e.portalUsername,
-        ),
-        _DetailRow(
-          icon: Icons.lock_outline,
-          label: 'Password',
-          value: 'Encrypted',
-        ),
-        _DetailRow(
-          icon: Icons.login_outlined,
-          label: 'Last sign-in',
-          value: e.portalLastLoginAt == null
-              ? 'Never signed in'
-              : _formatDate(e.portalLastLoginAt!),
         ),
       ],
     );

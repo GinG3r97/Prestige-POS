@@ -8,6 +8,7 @@ import 'nav_controller.dart';
 import '../bookings/bookings_view.dart';
 import '../cart/cart_panel.dart';
 import '../dashboard/dashboard_view.dart';
+import '../attendance/attendance_hub_view.dart';
 import '../employees/employees_view.dart';
 import '../inventory/inventory_view.dart';
 import '../maintenance/maintenance_view.dart';
@@ -188,6 +189,8 @@ class _ShellViewState extends State<ShellView> {
         return const EmployeesView();
       case AppRoute.payroll:
         return const PayrollView();
+      case AppRoute.attendance:
+        return const AttendanceHubView();
       case AppRoute.products:
         return const ProductsView();
       case AppRoute.inventory:

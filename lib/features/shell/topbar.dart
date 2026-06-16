@@ -25,12 +25,6 @@ class TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       child: Row(
         children: [
-          // Back-to-More button — only visible while the active route is one
-          // of the secondary destinations hosted inside the More hub.
-          if (_isMoreChild(state.selectedRoute)) ...[
-            _BackToMoreButton(onTap: () => state.selectRoute(AppRoute.more)),
-            const SizedBox(width: 10),
-          ],
           if (state.tenant?.logoUrl?.isNotEmpty ?? false) ...[
             Container(
               width: 34,
@@ -166,18 +160,6 @@ class TopBar extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static bool _isMoreChild(AppRoute r) {
-    const inMore = <AppRoute>{
-      AppRoute.reports,
-      AppRoute.employees,
-      AppRoute.payroll,
-      AppRoute.products,
-      AppRoute.maintenance,
-      AppRoute.settings,
-    };
-    return inMore.contains(r);
   }
 }
 
@@ -347,31 +329,3 @@ class _PrinterStatusChipState extends State<_PrinterStatusChip> {
   }
 }
 
-class _BackToMoreButton extends StatelessWidget {
-  const _BackToMoreButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: YColor.surface3,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.arrow_back, size: 14),
-            const SizedBox(width: 6),
-            Text('More',
-                style: YFont.bodyStrong().copyWith(fontSize: 12)),
-          ]),
-        ),
-      ),
-    );
-  }
-}

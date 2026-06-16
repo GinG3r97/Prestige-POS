@@ -872,7 +872,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             ),
             const SizedBox(height: 6),
             Text(
-              'They sign in at prestigeitsolutions.tech/portal with this email (one-time code — no password).',
+              'They sign in at pos.prestigeitsolutions.tech/portal with this email (one-time code — no password).',
               style: YFont.caption().copyWith(color: YColor.inkSubtle),
             ),
           ],

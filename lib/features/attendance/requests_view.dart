@@ -6,10 +6,16 @@ import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../widgets/push_toast.dart';
 
 /// Owner review + approval of employee requests (leave / OT / undertime).
+/// [kind] filters to one type ('leave'|'ot'|'undertime'); [embedded] drops the
+/// Scaffold so the Attendance hub can host it in a rail panel.
 class RequestsView extends StatefulWidget {
-  const RequestsView({super.key});
+  const RequestsView({super.key, this.kind, this.embedded = false});
+
+  final String? kind;
+  final bool embedded;
 
   @override
   State<RequestsView> createState() => _RequestsViewState();
@@ -65,11 +71,18 @@ class _RequestsViewState extends State<RequestsView> {
       await supabase.rpc('decide_request',
           params: {'p_id': id, 'p_approved': approved, 'p_note': null});
       await _load();
+      if (mounted) {
+        PushToast.show(context,
+            title: approved ? 'Request approved' : 'Request rejected',
+            subtitle: 'The employee has been notified in their portal.',
+            leadingIcon: approved ? Icons.check_circle : Icons.cancel_outlined);
+      }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Could not save. Try again.'),
-            behavior: SnackBarBehavior.floating));
+        PushToast.show(context,
+            title: 'Couldn’t save',
+            subtitle: 'Something went wrong. Please try again.',
+            leadingIcon: Icons.error_outline);
       }
     } finally {
       if (mounted) setState(() => _busy.remove(id));
@@ -78,17 +91,12 @@ class _RequestsViewState extends State<RequestsView> {
 
   @override
   Widget build(BuildContext context) {
-    final pending = _rows.where((r) => r['status'] == 'pending').toList();
-    final decided = _rows.where((r) => r['status'] != 'pending').toList();
-    return Scaffold(
-      backgroundColor: YColor.surface2,
-      appBar: AppBar(
-        title: const Text('Requests'),
-        backgroundColor: YColor.surface1,
-        foregroundColor: YColor.ink,
-        elevation: 0,
-      ),
-      body: _loading
+    final rows = widget.kind == null
+        ? _rows
+        : _rows.where((r) => r['kind'] == widget.kind).toList();
+    final pending = rows.where((r) => r['status'] == 'pending').toList();
+    final decided = rows.where((r) => r['status'] != 'pending').toList();
+    final body = _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
@@ -101,7 +109,7 @@ class _RequestsViewState extends State<RequestsView> {
                     children: [
                       _sectionHeader('To approve (${pending.length})'),
                       if (pending.isEmpty)
-                        _emptyCard('Nothing waiting. 🎉')
+                        _emptyCard('Nothing waiting.')
                       else
                         ...pending.map((r) => _card(r, actionable: true)),
                       if (decided.isNotEmpty) ...[
@@ -111,7 +119,17 @@ class _RequestsViewState extends State<RequestsView> {
                       ],
                     ],
                   ),
-                ),
+                );
+    if (widget.embedded) return body;
+    return Scaffold(
+      backgroundColor: YColor.surface2,
+      appBar: AppBar(
+        title: const Text('Requests'),
+        backgroundColor: YColor.surface1,
+        foregroundColor: YColor.ink,
+        elevation: 0,
+      ),
+      body: body,
     );
   }
 

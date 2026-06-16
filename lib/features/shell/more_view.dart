@@ -87,6 +87,8 @@ class _MoreViewState extends State<MoreView> {
       _Section('People', Color(0xFF7C8F65), [
         _Tile(AppRoute.employees, Icons.person_outline, 'Staff',
             'Employees, roles, schedules'),
+        _Tile(AppRoute.attendance, Icons.fact_check_outlined, 'Attendance',
+            'DTR, overtime, undertime, leave'),
         _Tile(AppRoute.payroll, Icons.account_balance_wallet_outlined,
             'Payroll', 'Pay runs, timesheets, payslips'),
       ]),
@@ -158,6 +160,7 @@ Color _accentForRoute(AppRoute r) {
       return YColor.brand;
     case AppRoute.employees:
     case AppRoute.payroll:
+    case AppRoute.attendance:
       return const Color(0xFF7C8F65); // muted olive — People
     case AppRoute.products:
       return const Color(0xFFB07C4F); // warm tan — Catalog

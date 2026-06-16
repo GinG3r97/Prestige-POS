@@ -40,6 +40,7 @@ enum AppRoute {
   reports,
   employees,
   payroll,
+  attendance,
   products,
   inventory,
   /// The "More" hub — a single primary-nav tile that opens a grouped grid
@@ -464,7 +465,7 @@ class AppState extends ChangeNotifier {
   bool canAccess(AppRoute route) {
     if (route == AppRoute.more) {
       const childKeys = <String>{
-        'reports', 'employees', 'payroll', 'products',
+        'reports', 'employees', 'payroll', 'attendance', 'products',
         'maintenance', 'settings',
       };
       return currentPermissions.any(childKeys.contains);

@@ -45,7 +45,7 @@ class _SubscriptionViewState extends State<SubscriptionView> {
   /// happens on the web (never in-app).
   Future<void> _openUpgrade(BuildContext context, AppState state) async {
     final email = state.currentOwner?.email ?? '';
-    final uri = Uri.https('prestigeitsolutions.tech', '/upgrade', {
+    final uri = Uri.https('pos.prestigeitsolutions.tech', '/upgrade', {
       if (state.storeCode != null) 'code': state.storeCode!,
       if (email.isNotEmpty) 'email': email,
     });
@@ -53,7 +53,7 @@ class _SubscriptionViewState extends State<SubscriptionView> {
     if (!ok && context.mounted) {
       PushToast.show(context,
           title: 'Could not open',
-          subtitle: 'Visit prestigeitsolutions.tech/upgrade',
+          subtitle: 'Visit pos.prestigeitsolutions.tech/upgrade',
           leadingIcon: Icons.error_outline);
     }
   }

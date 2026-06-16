@@ -13,11 +13,16 @@ import 'requests_view.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../widgets/push_toast.dart';
 
 /// Owner-facing attendance review: per-day punches with selfies, geofence
 /// flags, and computed hours. Reads attendance_punches (owner RLS).
 class AttendanceView extends StatefulWidget {
-  const AttendanceView({super.key});
+  const AttendanceView({super.key, this.embedded = false});
+
+  /// When embedded in the Attendance hub, render just the body (the hub owns
+  /// the app bar + the OT/UT/Leave rail).
+  final bool embedded;
 
   @override
   State<AttendanceView> createState() => _AttendanceViewState();
@@ -128,6 +133,35 @@ class _AttendanceViewState extends State<AttendanceView> {
   @override
   Widget build(BuildContext context) {
     final names = _byEmployee.keys.toList()..sort();
+    final body = Column(
+      children: [
+        _setupBar(),
+        _dateBar(),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? Center(
+                      child: Text(_error!,
+                          style: YFont.body().copyWith(color: YColor.inkMuted)))
+                  : names.isEmpty
+                      ? Center(
+                          child: Text('No punches on this day.',
+                              style: YFont.body()
+                                  .copyWith(color: YColor.inkSubtle)))
+                      : ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            for (final name in names)
+                              _employeeCard(name, _byEmployee[name]!),
+                          ],
+                        ),
+        ),
+      ],
+    );
+    if (widget.embedded) {
+      return Container(color: YColor.surface2, child: body);
+    }
     return Scaffold(
       backgroundColor: YColor.surface2,
       appBar: AppBar(
@@ -145,32 +179,7 @@ class _AttendanceViewState extends State<AttendanceView> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _setupBar(),
-          _dateBar(),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: Text(_error!,
-                            style: YFont.body().copyWith(color: YColor.inkMuted)))
-                    : names.isEmpty
-                        ? Center(
-                            child: Text('No punches on this day.',
-                                style: YFont.body()
-                                    .copyWith(color: YColor.inkSubtle)))
-                        : ListView(
-                            padding: const EdgeInsets.all(16),
-                            children: [
-                              for (final name in names)
-                                _employeeCard(name, _byEmployee[name]!),
-                            ],
-                          ),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -256,7 +265,9 @@ class _AttendanceViewState extends State<AttendanceView> {
     setState(() => _settingLoc = true);
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        _toast('Turn on location services, then try again.');
+        _toast('Location is off',
+            subtitle: 'Turn on location services, then try again.',
+            icon: Icons.location_disabled);
         return;
       }
       var perm = await Geolocator.checkPermission();
@@ -265,7 +276,9 @@ class _AttendanceViewState extends State<AttendanceView> {
       }
       if (perm == LocationPermission.denied ||
           perm == LocationPermission.deniedForever) {
-        _toast('Location permission needed to set the store.');
+        _toast('Permission needed',
+            subtitle: 'Allow location access to set the store.',
+            icon: Icons.location_disabled);
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
@@ -277,10 +290,14 @@ class _AttendanceViewState extends State<AttendanceView> {
         'p_radius': radius,
       });
       if (!mounted) return;
-      _toast('Store location saved. Geofence is on.');
+      _toast('Geofence is on',
+          subtitle: 'Store location saved. Staff can only clock in here.',
+          icon: Icons.check_circle);
       await _load();
     } catch (_) {
-      _toast('Could not set location. Try again.');
+      _toast('Couldn’t save location',
+          subtitle: 'Something went wrong. Please try again.',
+          icon: Icons.error_outline);
     } finally {
       if (mounted) setState(() => _settingLoc = false);
     }
@@ -288,11 +305,9 @@ class _AttendanceViewState extends State<AttendanceView> {
 
   void _showQr() {
     final code = context.read<AppState>().storeCode;
-    if (code == null) {
-      _toast('Store code not ready yet.');
-      return;
-    }
-    final url = 'https://prestigeitsolutions.tech/attend?s=$code';
+    final url = code != null
+        ? 'https://pos.prestigeitsolutions.tech/portal?store=$code'
+        : 'https://pos.prestigeitsolutions.tech/portal';
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -303,7 +318,7 @@ class _AttendanceViewState extends State<AttendanceView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Scan to clock in / out',
+              Text('Scan to open the portal',
                   style: YFont.titleMD().copyWith(fontSize: 16)),
               const SizedBox(height: 16),
               Container(
@@ -316,11 +331,13 @@ class _AttendanceViewState extends State<AttendanceView> {
                 child: QrImageView(data: url, size: 220),
               ),
               const SizedBox(height: 12),
-              Text('Store ID $code',
-                  style: YFont.caption()
-                      .copyWith(color: YColor.inkSubtle, fontFamily: 'Menlo')),
-              const SizedBox(height: 4),
-              Text('Staff scan this, pick their name, enter PIN.',
+              if (code != null) ...[
+                Text('Store ID $code',
+                    style: YFont.caption()
+                        .copyWith(color: YColor.inkSubtle, fontFamily: 'Menlo')),
+                const SizedBox(height: 4),
+              ],
+              Text('Staff scan this, then sign in with their email (one-time code).',
                   textAlign: TextAlign.center,
                   style: YFont.caption().copyWith(color: YColor.inkMuted)),
             ],
@@ -330,11 +347,9 @@ class _AttendanceViewState extends State<AttendanceView> {
     );
   }
 
-  void _toast(String msg) {
+  void _toast(String title, {String? subtitle, IconData icon = Icons.place_outlined}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-    );
+    PushToast.show(context, title: title, subtitle: subtitle, leadingIcon: icon);
   }
 
   Widget _dateBar() {
