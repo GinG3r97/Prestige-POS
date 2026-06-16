@@ -847,6 +847,42 @@ class HrStore extends ChangeNotifier {
     }
   }
 
+  /// Pulls actual hours from attendance into the timesheet for [start]..[end]
+  /// (inclusive). Calls the server bridge (sync_attendance_to_timesheet) which
+  /// applies the schedule-aware engine + premiums, then re-hydrates the local
+  /// time-entries cache so the grid + pay run reflect it immediately.
+  Future<({int count, String? error})> syncTimesheetFromAttendance(
+      DateTime start, DateTime end) async {
+    final key = _cacheKey;
+    final tenantId = _tenantId;
+    if (key == null || tenantId == null) {
+      return (count: 0, error: 'No store selected.');
+    }
+    String d(DateTime x) => '${x.year.toString().padLeft(4, '0')}-'
+        '${x.month.toString().padLeft(2, '0')}-'
+        '${x.day.toString().padLeft(2, '0')}';
+    try {
+      final res = await supabase.rpc('sync_attendance_to_timesheet',
+          params: {'p_start': d(start), 'p_end': d(end)});
+      final count = (res as int?) ?? 0;
+      final teRows = await supabase
+          .from('time_entries')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .order('entry_date', ascending: false)
+          .limit(2000);
+      _timeEntriesByTenant[key] = (teRows as List)
+          .map((r) => TimeEntry.fromRow(r as Map<String, dynamic>))
+          .toList();
+      notifyListeners();
+      return (count: count, error: null);
+    } on sb.PostgrestException catch (e) {
+      return (count: 0, error: e.message);
+    } catch (_) {
+      return (count: 0, error: 'Could not reach the server. Please try again.');
+    }
+  }
+
   /// Build a fresh payroll run snapshot for the given period. Pulls
   /// each active employee's hours from [timeEntries] and freezes
   /// their rate / salary at the time of generation. The run + each

@@ -176,7 +176,7 @@ class _TimesheetPane extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(),
+          _header(context),
           const SizedBox(height: 16),
           Expanded(
             child: Container(
@@ -207,7 +207,7 @@ class _TimesheetPane extends StatelessWidget {
     );
   }
 
-  Widget _header() {
+  Widget _header(BuildContext context) {
     final fmt = DateFormat('MMM d');
     return Row(
       children: [
@@ -236,6 +236,30 @@ class _TimesheetPane extends StatelessWidget {
           onTap: periodOffset > 0 ? () => onShift(-1) : null,
         ),
         const Spacer(),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final res =
+                await state.syncTimesheetFromAttendance(periodStart, periodEnd);
+            if (!context.mounted) return;
+            PushToast.show(
+              context,
+              title: res.error == null
+                  ? 'Pulled ${res.count} day(s) from attendance'
+                  : 'Could not sync',
+              subtitle: res.error ?? 'Timesheet updated from clock-ins',
+              leadingIcon: res.error == null
+                  ? Icons.check_circle_outline
+                  : Icons.error_outline,
+            );
+          },
+          icon: const Icon(Icons.download_done, size: 16),
+          label: const Text('Pull from attendance'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: YColor.brandDeep,
+            side: const BorderSide(color: YColor.hairline),
+          ),
+        ),
+        const SizedBox(width: 12),
         DropdownButtonHideUnderline(
           child: DropdownButton<PayPeriodKind>(
             value: period,
