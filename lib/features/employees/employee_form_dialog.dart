@@ -76,6 +76,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   late List<WorkShift> _schedule;
   late List<EmployeeDocument> _documents;
   bool _showPin = true;
+  bool _portalEnabled = false;
+  late final TextEditingController _portalEmail;
 
   @override
   void initState() {
@@ -99,6 +101,11 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             ? ''
             : e.monthlySalary.toStringAsFixed(0));
     _notes = TextEditingController(text: e?.notes ?? '');
+    _portalEnabled = e?.portalEnabled ?? false;
+    _portalEmail = TextEditingController(
+        text: (e?.portalGmail.isNotEmpty ?? false)
+            ? e!.portalGmail
+            : (e?.email ?? ''));
 
     _roleId = e?.roleId;
     _gender = e?.gender ?? Gender.male;
@@ -152,6 +159,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     _dailyRate.dispose();
     _monthlySalary.dispose();
     _notes.dispose();
+    _portalEmail.dispose();
     for (final c in _shiftCtrls.values) {
       c.dispose();
     }
@@ -273,9 +281,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       monthlySalary: double.tryParse(_monthlySalary.text) ?? 0,
       schedule: _schedule,
       documents: _documents,
-      // Portal stays locked for this turn — keep whatever was there.
-      portalEnabled: widget.initial?.portalEnabled ?? false,
-      portalGmail: widget.initial?.portalGmail ?? '',
+      // Employee Portal: owner enables + sets the login email.
+      portalEnabled: _portalEnabled,
+      portalGmail: _portalEmail.text.trim(),
       portalUsername: widget.initial?.portalUsername ?? '',
       portalInvitedAt: widget.initial?.portalInvitedAt,
       portalLastLoginAt: widget.initial?.portalLastLoginAt,
@@ -794,64 +802,93 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   }
 
   Widget _lockedPortalSection() {
-    return Stack(children: [
-      Opacity(
-        opacity: 0.55,
-        child: AbsorbPointer(
-          absorbing: true,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-            decoration: BoxDecoration(
-              color: YColor.surface2,
-              borderRadius: BorderRadius.circular(YRadius.lg),
+    final loggedIn = widget.initial?.portalLastLoginAt != null;
+    final statusText = !_portalEnabled
+        ? "Off — employee can't log in to the portal."
+        : loggedIn
+            ? 'Active · employee has logged in'
+            : 'Enabled — waiting for their first login';
+    final statusColor = !_portalEnabled
+        ? YColor.inkMuted
+        : loggedIn
+            ? YColor.success
+            : YColor.brandDeep;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: YColor.surface2,
+        borderRadius: BorderRadius.circular(YRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Text('EMPLOYEE PORTAL ACCOUNT',
+                style: YFont.caption().copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                  color: YColor.brandDeep,
+                )),
+            const Spacer(),
+            Switch(
+              value: _portalEnabled,
+              activeColor: YColor.brand,
+              onChanged: (v) => setState(() => _portalEnabled = v),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(children: [
-                  Text('EMPLOYEE PORTAL ACCOUNT',
-                      style: YFont.caption().copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        color: YColor.brandDeep,
-                      )),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: YColor.inkMuted.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text('COMING SOON',
-                        style: YFont.caption().copyWith(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.9,
-                          color: YColor.inkMuted,
-                        )),
-                  ),
-                ]),
-                const SizedBox(height: 10),
-                Text(
-                  'Lets the employee log in to a self-serve portal — schedule, payslips, document uploads. Disabled until the portal is built.',
-                  style: YFont.caption(),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            'Lets the employee log in to the web portal to clock in/out, '
+            'file leave / OT / undertime, and see their schedule.',
+            style: YFont.caption(),
+          ),
+          if (_portalEnabled) ...[
+            const SizedBox(height: 14),
+            Text('LOGIN EMAIL',
+                style: YFont.caption().copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                  color: YColor.inkMuted,
+                )),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _portalEmail,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                hintText: 'employee@email.com',
+                filled: true,
+                fillColor: YColor.surface1,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(YRadius.md),
+                  borderSide: BorderSide.none,
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+            const SizedBox(height: 6),
+            Text(
+              'They sign in at prestigeitsolutions.tech/portal with this email (one-time code — no password).',
+              style: YFont.caption().copyWith(color: YColor.inkSubtle),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(children: [
+            Icon(Icons.circle, size: 8, color: statusColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(statusText,
+                  style: YFont.caption().copyWith(
+                      color: statusColor, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+        ],
       ),
-      Positioned.fill(
-        child: IgnorePointer(
-          child: Center(
-            child: Icon(Icons.lock_outline,
-                size: 28, color: YColor.inkMuted.withValues(alpha: 0.5)),
-          ),
-        ),
-      ),
-    ]);
+    );
   }
 
   Widget _employmentTypeDropdown() {

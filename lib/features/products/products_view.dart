@@ -397,6 +397,16 @@ class _ProductsViewState extends State<ProductsView> {
 
   Future<void> _openForm(
       BuildContext context, AppState state, CafeItem? existing) async {
+    if (existing == null) {
+      final capMsg = state.planCapMessage('products');
+      if (capMsg != null) {
+        PushToast.show(context,
+            title: 'Upgrade needed',
+            subtitle: capMsg,
+            leadingIcon: Icons.workspace_premium_outlined);
+        return;
+      }
+    }
     final catalog = context.read<CatalogStore>();
     final inventory = context.read<InventoryStore>().inventory;
     final saved = await showDialog<CafeItem>(
@@ -479,6 +489,14 @@ class _ProductsViewState extends State<ProductsView> {
 /// the Sell "arrange mode" + box.
 Future<void> showProductEditor(BuildContext context,
     {String? presetTypeId, String? presetCategoryId}) async {
+  final capMsg = context.read<AppState>().planCapMessage('products');
+  if (capMsg != null) {
+    PushToast.show(context,
+        title: 'Upgrade needed',
+        subtitle: capMsg,
+        leadingIcon: Icons.workspace_premium_outlined);
+    return;
+  }
   final catalog = context.read<CatalogStore>();
   final inventory = context.read<InventoryStore>().inventory;
   final saved = await showDialog<CafeItem>(

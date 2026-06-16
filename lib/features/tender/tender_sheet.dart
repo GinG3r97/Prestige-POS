@@ -58,6 +58,16 @@ class _TenderSheetState extends State<TenderSheet> {
   String _reference = '';
   final TextEditingController _refController = TextEditingController();
 
+  @override
+  void initState() {
+    super.initState();
+    // Refresh today's order count so the daily-cap meter + lock are accurate
+    // the moment the tender sheet opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppState>().refreshOrdersToday();
+    });
+  }
+
   // Senior Citizen / PWD discount (whole-order). type: 'senior' | 'pwd'.
   String? _scType;
   String _scName = '';
@@ -246,7 +256,33 @@ class _TenderSheetState extends State<TenderSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Payment', style: YFont.titleMD()),
+                Row(
+                  children: [
+                    Text('Payment', style: YFont.titleMD()),
+                    if (state.ordersCap != null) ...[
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: state.atOrderCap
+                              ? YColor.danger.withValues(alpha: 0.12)
+                              : YColor.surface2,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${state.ordersToday} / ${state.ordersCap} today',
+                          style: YFont.caption().copyWith(
+                            color: state.atOrderCap
+                                ? YColor.danger
+                                : YColor.inkMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 12),
                 Expanded(
                   child: ListView.separated(
@@ -611,7 +647,7 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || !isEnough || entered <= 0)
+              onPressed: (_busy || !isEnough || entered <= 0 || state.atOrderCap)
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -631,9 +667,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      isEnough
-                          ? 'Complete'
-                          : 'Enter at least ${total.formatted}',
+                      state.atOrderCap
+                          ? 'Daily limit reached'
+                          : isEnough
+                              ? 'Complete'
+                              : 'Enter at least ${total.formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white),
                     ),
@@ -733,7 +771,7 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || _reference.trim().isEmpty)
+              onPressed: (_busy || _reference.trim().isEmpty || state.atOrderCap)
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -752,7 +790,10 @@ class _TenderSheetState extends State<TenderSheet> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white),
                     )
-                  : Text('Charge ${_amountDue(state).formatted}',
+                  : Text(
+                      state.atOrderCap
+                          ? 'Daily limit reached'
+                          : 'Charge ${_amountDue(state).formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white)),
             ),

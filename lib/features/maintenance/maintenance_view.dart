@@ -1921,6 +1921,16 @@ Future<void> showProductTypeEditor(BuildContext context,
 /// from the Sell "arrange mode".
 Future<void> showSubTypeEditor(BuildContext context,
     {cat.Category? initial, String? presetTypeId}) async {
+  if (initial == null) {
+    final capMsg = context.read<AppState>().planCapMessage('categories');
+    if (capMsg != null) {
+      PushToast.show(context,
+          title: 'Upgrade needed',
+          subtitle: capMsg,
+          leadingIcon: Icons.workspace_premium_outlined);
+      return;
+    }
+  }
   final catalog = context.read<CatalogStore>();
   final saved = await showDialog<cat.Category>(
     context: context,

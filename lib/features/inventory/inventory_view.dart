@@ -382,6 +382,16 @@ class _InventoryViewState extends State<InventoryView> {
 
   Future<void> _openForm(
       BuildContext context, AppState state, InventoryItem? existing) async {
+    if (existing == null) {
+      final capMsg = state.planCapMessage('inventory');
+      if (capMsg != null) {
+        PushToast.show(context,
+            title: 'Upgrade needed',
+            subtitle: capMsg,
+            leadingIcon: Icons.workspace_premium_outlined);
+        return;
+      }
+    }
     final saved = await showDialog<InventoryItem>(
       context: context,
       barrierDismissible: false,

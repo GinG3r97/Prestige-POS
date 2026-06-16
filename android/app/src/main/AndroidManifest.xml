@@ -8,6 +8,11 @@
          can show a clearer "not on the same network" message. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+    <!-- Owner sets the store's attendance geofence from the POS tablet (at the
+         store), so we capture the device location once on demand. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
     <!-- Bluetooth thermal printing (PT-210 / Goojprt / generic ESC-POS).
          We connect to PAIRED (bonded) printers only — never active discovery —
          so NO location permission is needed on any Android version.

@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import 'subscription_view.dart';
 import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/image_util.dart';
@@ -94,6 +95,26 @@ class _SettingsViewState extends State<SettingsView> {
                 if (_query.trim().isNotEmpty) _searchResults(context, state),
                 if (_query.trim().isEmpty) ...[
                 const SizedBox(height: 28),
+
+                // ── Subscription (kept on top — it's the upsell)
+                _SectionHeader(title: 'Subscription', subtitle: 'Plan & usage'),
+                _Card(children: [
+                  _Row(
+                    leading: const Icon(Icons.workspace_premium_outlined,
+                        color: YColor.brandDeep),
+                    title: '${state.planLabel} plan',
+                    subtitle: state.storeCode != null
+                        ? 'Store ID ${state.storeCode}'
+                        : 'View plan & usage',
+                    trailing: _Badge(text: state.planLabel.toUpperCase()),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const SubscriptionView()),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 32),
 
                 // ── Account
                 _SectionHeader(title: 'Account', subtitle: 'Owner profile'),
@@ -856,6 +877,14 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _addBranch(BuildContext context, AppState state) async {
+    final capMsg = state.planCapMessage('branches');
+    if (capMsg != null) {
+      PushToast.show(context,
+          title: 'Upgrade needed',
+          subtitle: capMsg,
+          leadingIcon: Icons.workspace_premium_outlined);
+      return;
+    }
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,

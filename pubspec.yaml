@@ -45,6 +45,9 @@ dependencies:
   print_bluetooth_thermal: ^1.1.1  # BLE thermal printing — iOS (BLE) + Android. Drives PT-210 etc.
   shared_preferences: ^2.5.0   # small device-local settings (e.g. cash-drawer pin)
   reorderable_grid_view: ^2.2.8  # drag-to-reorder product grid in Sell "arrange mode"
+  url_launcher: ^6.3.2
+  geolocator: ^14.0.3
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
@@ -9,6 +8,7 @@ import '../../design_system/colors.dart';
 import '../printing/bt_printer.dart';
 import '../printing/printer_setup_sheet.dart';
 import '../sell/shift_bar.dart';
+import '../settings/subscription_view.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
@@ -50,22 +50,9 @@ class TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
           ],
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Topbar title is the store name, not the route name — the
-              // active page already shows its own H1, so doubling up was
-              // redundant. Falls back to "Store" while the tenant is still
-              // loading on cold start.
-              Text(
-                state.tenant?.businessName.isNotEmpty == true
-                    ? state.tenant!.businessName
-                    : 'Store',
-                style: YFont.titleLG(),
-              ),
-              Text(_dateString(), style: YFont.caption()),
-            ],
-          ),
+          // Plan + live daily-order usage, with a tappable Upgrade for
+          // Free/Basic. Replaces the store name (each page shows its own H1).
+          const _PlanUsageChip(),
           // Cashier-shift status lives here beside the store name: full
           // float/sales/orders + Close on the Sell tab, a compact "still open"
           // reminder elsewhere. Expanded so the right-side controls stay right.
@@ -181,8 +168,6 @@ class TopBar extends StatelessWidget {
     );
   }
 
-  String _dateString() => DateFormat('EEEE, MMM d · h:mm a').format(DateTime.now());
-
   static bool _isMoreChild(AppRoute r) {
     const inMore = <AppRoute>{
       AppRoute.reports,
@@ -193,6 +178,94 @@ class TopBar extends StatelessWidget {
       AppRoute.settings,
     };
     return inMore.contains(r);
+  }
+}
+
+/// Top-bar chip: current plan + today's order usage as a green/amber/red bar.
+/// Free & Basic show an "Upgrade" affordance; Pro shows a full green bar.
+/// Tapping anywhere opens Settings → Subscription.
+class _PlanUsageChip extends StatelessWidget {
+  const _PlanUsageChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final isPro = state.plan == 'pro';
+    final cap = state.ordersCap;
+    final used = state.ordersToday;
+    final frac = (cap == null || cap == 0) ? 1.0 : (used / cap).clamp(0.0, 1.0);
+    final Color bar = isPro
+        ? YColor.success
+        : frac >= 1.0
+            ? YColor.danger
+            : frac >= 0.7
+                ? Colors.amber.shade700
+                : YColor.success;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SubscriptionView()),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('${state.planLabel} Plan',
+                  style: YFont.titleMD().copyWith(fontSize: 15)),
+              if (!isPro) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: YColor.brand,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.arrow_upward_rounded,
+                        size: 11, color: Colors.white),
+                    const SizedBox(width: 3),
+                    Text('Upgrade',
+                        style: YFont.bodyStrong().copyWith(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        )),
+                  ]),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 5),
+            SizedBox(
+              width: 154,
+              child: Row(children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: isPro ? 1.0 : frac,
+                      minHeight: 5,
+                      backgroundColor: YColor.surface3,
+                      color: bar,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isPro ? '∞' : (cap == null ? '—' : '$used/$cap'),
+                  style: YFont.caption()
+                      .copyWith(fontWeight: FontWeight.w700, color: bar),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

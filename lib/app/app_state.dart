@@ -289,6 +289,8 @@ class AppState extends ChangeNotifier {
               ? cat.TenantFeatures()
               : cat.TenantFeatures.fromRow(featRow);
         }(),
+        _loadPlanCaps(tid as String),
+        refreshOrdersToday(),
         () async {
           final pinRow = await supabase
               .from('owner_pins')
@@ -498,6 +500,122 @@ class AppState extends ChangeNotifier {
 
   /// Live sub-type categories for the active tenant. Delegates to [catalog].
   List<cat.Category> get categories => catalog.categories;
+
+  // ── Subscription plan & caps ─────────────────────────────────────────────
+  // Caps come from the DB (plan_limits, read-only) so a store can never raise
+  // its own. NULL cap = unlimited (Pro). Enforcement is also server-side via
+  // BEFORE INSERT triggers; these client-side checks just give a friendly
+  // toast before the round-trip.
+  String _plan = 'trial';
+  Map<String, int?> _planCaps = const {};
+  int _ordersToday = 0;
+  String? _storeCode;
+
+  /// Human-friendly unique Store ID (e.g. "PR-M33TSV") shown in the
+  /// Subscription screen and used to identify the store when upgrading on web.
+  String? get storeCode => _storeCode;
+
+  String get plan => _plan;
+  String get planLabel => _plan == 'trial'
+      ? 'Free'
+      : _plan == 'basic'
+          ? 'Basic'
+          : _plan == 'pro'
+              ? 'Pro'
+              : _plan;
+  int? planCap(String entity) => _planCaps[entity];
+  int get ordersToday => _ordersToday;
+  int? get ordersCap => _planCaps['orders'];
+  bool get atOrderCap {
+    final cap = _planCaps['orders'];
+    return cap != null && _ordersToday >= cap;
+  }
+
+  int planCount(String entity) {
+    switch (entity) {
+      case 'employees':
+        return employees.length;
+      case 'products':
+        return products.length;
+      case 'categories':
+        return categories.length;
+      case 'inventory':
+        return inventory.length;
+      case 'branches':
+        return tenant?.branches.length ?? 0;
+      default:
+        return 0;
+    }
+  }
+
+  String _entityLabel(String e) {
+    switch (e) {
+      case 'employees':
+        return 'staff';
+      case 'inventory':
+        return 'inventory items';
+      default:
+        return e; // products / categories / branches read fine as-is
+    }
+  }
+
+  /// Friendly upgrade message if adding another [entity] would exceed the plan
+  /// cap, else null. Pro (null cap) never blocks.
+  String? planCapMessage(String entity) {
+    final cap = _planCaps[entity];
+    if (cap == null) return null;
+    if (planCount(entity) >= cap) {
+      return 'Your $planLabel plan allows up to $cap ${_entityLabel(entity)}. '
+          'Upgrade to add more.';
+    }
+    return null;
+  }
+
+  Future<void> _loadPlanCaps(String tid) async {
+    try {
+      final sub = await supabase
+          .from('tenant_subscriptions')
+          .select('plan')
+          .eq('tenant_id', tid)
+          .maybeSingle();
+      final plan = (sub?['plan'] as String?) ?? 'trial';
+      final pl = await supabase
+          .from('plan_limits')
+          .select()
+          .eq('plan', plan)
+          .maybeSingle();
+      final tRow = await supabase
+          .from('tenants')
+          .select('store_code')
+          .eq('id', tid)
+          .maybeSingle();
+      _storeCode = tRow?['store_code'] as String?;
+      _plan = plan;
+      _planCaps = {
+        'orders': pl?['daily_order_limit'] as int?,
+        'employees': pl?['max_employees'] as int?,
+        'products': pl?['max_products'] as int?,
+        'categories': pl?['max_categories'] as int?,
+        'inventory': pl?['max_inventory'] as int?,
+        'branches': pl?['max_branches'] as int?,
+      };
+    } catch (_) {
+      // Never block selling because a caps fetch failed — default to unlimited.
+      _plan = 'pro';
+      _planCaps = const {};
+    }
+  }
+
+  /// Refreshes today's order count (tenant timezone) for the tender meter.
+  Future<void> refreshOrdersToday() async {
+    final tid = _currentTenantDbId;
+    if (tid == null) return;
+    try {
+      final n = await supabase.rpc('orders_today', params: {'p_tenant': tid});
+      _ordersToday = (n as int?) ?? 0;
+      notifyListeners();
+    } catch (_) {/* meter is best-effort; server still enforces */}
+  }
 
   /// Live add-ons for the active tenant. Delegates to [catalog].
   List<AddOn> get addOns => catalog.addOns;
@@ -2588,9 +2706,13 @@ class AppState extends ChangeNotifier {
         'p_sc_pwd_name': scPwdName,
         'p_sc_pwd_id': scPwdId,
       });
+      _ordersToday += 1; // keep the top-bar usage meter live after each sale
+      notifyListeners();
       return (id: id as String?, error: null);
     } on sb.PostgrestException catch (e) {
-      return (id: null, error: 'Could not save order: ${e.message}');
+      // Business-rule blocks (subscription gate, daily order cap) are raised
+      // by the server as ready-to-show sentences — surface them as-is.
+      return (id: null, error: e.message);
     } catch (_) {
       return (id: null, error: 'Could not reach the server. Please try again.');
     }

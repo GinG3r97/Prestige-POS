@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/app_state.dart';
 import '../../app/stores/hr_store.dart';
+import '../attendance/attendance_view.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/themed_dropdown.dart';
 import '../../design_system/responsive.dart';
@@ -113,6 +115,16 @@ class _EmployeesViewState extends State<EmployeesView> {
 
   Future<void> _openForm(
       BuildContext context, HrStore hr, Employee? existing) async {
+    if (existing == null) {
+      final capMsg = context.read<AppState>().planCapMessage('employees');
+      if (capMsg != null) {
+        PushToast.show(context,
+            title: 'Upgrade needed',
+            subtitle: capMsg,
+            leadingIcon: Icons.workspace_premium_outlined);
+        return;
+      }
+    }
     final result = await showDialog<EmployeeFormResult>(
       context: context,
       barrierDismissible: false,
@@ -236,34 +248,47 @@ class _ListPane extends StatelessWidget {
           // Role dropdown + search button + Add — one row.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: availableRoles.isEmpty
-                      ? const SizedBox(height: 46)
-                      : ThemedDropdown<String>(
-                          label: 'Role',
-                          value: roleFilter ?? '__all__',
-                          items: ['__all__', ...availableRoles],
-                          labelOf: (r) =>
-                              r == '__all__' ? 'All roles' : r,
-                          iconOf: (r) => r == '__all__'
-                              ? Icons.groups_outlined
-                              : Icons.badge_outlined,
-                          onChanged: (r) => onRoleFilter(
-                              (r == null || r == '__all__') ? null : r),
-                        ),
+                // Row 1: search + attendance + add
+                Row(
+                  children: [
+                    const Spacer(),
+                    EmployeeSearchField(
+                      controller: searchController,
+                      activeQuery: query,
+                      onShowMore: onSearch,
+                      onClear: () => onSearch(''),
+                    ),
+                    const SizedBox(width: 10),
+                    _squareBtn(
+                      icon: Icons.fact_check_outlined,
+                      filled: false,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const AttendanceView()),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                EmployeeSearchField(
-                  controller: searchController,
-                  activeQuery: query,
-                  onShowMore: onSearch,
-                  onClear: () => onSearch(''),
-                ),
-                const SizedBox(width: 10),
-                _squareBtn(icon: Icons.add, onTap: onAdd, filled: true),
+                // Row 2: role dropdown, full width below the buttons
+                if (availableRoles.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ThemedDropdown<String>(
+                    label: 'Role',
+                    value: roleFilter ?? '__all__',
+                    items: ['__all__', ...availableRoles],
+                    labelOf: (r) => r == '__all__' ? 'All roles' : r,
+                    iconOf: (r) => r == '__all__'
+                        ? Icons.groups_outlined
+                        : Icons.badge_outlined,
+                    onChanged: (r) => onRoleFilter(
+                        (r == null || r == '__all__') ? null : r),
+                  ),
+                ],
               ],
             ),
           ),
