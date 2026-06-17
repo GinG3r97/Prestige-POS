@@ -137,7 +137,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     // will reapply with the new template.
     if (widget.initial == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _applyTemplateForType(_employmentType);
+        // Don't overwrite a rate the owner may have typed before this frame.
+        if (mounted) _applyTemplateForType(_employmentType, overwrite: false);
       });
     }
   }
@@ -207,21 +208,29 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// type + rate from Maintenance → Payroll. Only fires for new employees:
   /// editing an existing employee keeps their saved overrides intact, since
   /// pulling the template would silently overwrite the owner's manual edits.
-  void _applyTemplateForType(EmploymentType t) {
+  void _applyTemplateForType(EmploymentType t, {bool overwrite = true}) {
     if (widget.initial != null) return;
     final tpl = context.read<HrStore>().templateFor(t);
     if (tpl == null) return;
     setState(() {
       _compensationType = tpl.compensationType;
-      _hourlyRate.text = tpl.defaultHourlyRate == 0
-          ? ''
-          : tpl.defaultHourlyRate.toStringAsFixed(0);
-      _dailyRate.text = tpl.defaultDailyRate == 0
-          ? ''
-          : tpl.defaultDailyRate.toStringAsFixed(0);
-      _monthlySalary.text = tpl.defaultMonthlySalary == 0
-          ? ''
-          : tpl.defaultMonthlySalary.toStringAsFixed(0);
+      // When [overwrite] is false (initial pre-fill), keep anything the owner
+      // already typed; only fill empty rate fields.
+      if (overwrite || _hourlyRate.text.isEmpty) {
+        _hourlyRate.text = tpl.defaultHourlyRate == 0
+            ? ''
+            : tpl.defaultHourlyRate.toStringAsFixed(0);
+      }
+      if (overwrite || _dailyRate.text.isEmpty) {
+        _dailyRate.text = tpl.defaultDailyRate == 0
+            ? ''
+            : tpl.defaultDailyRate.toStringAsFixed(0);
+      }
+      if (overwrite || _monthlySalary.text.isEmpty) {
+        _monthlySalary.text = tpl.defaultMonthlySalary == 0
+            ? ''
+            : tpl.defaultMonthlySalary.toStringAsFixed(0);
+      }
     });
   }
 

@@ -241,16 +241,26 @@ class _TimesheetPane extends StatelessWidget {
             final res =
                 await state.syncTimesheetFromAttendance(periodStart, periodEnd);
             if (!context.mounted) return;
-            PushToast.show(
-              context,
-              title: res.error == null
-                  ? 'Pulled ${res.count} day(s) from attendance'
-                  : 'Could not sync',
-              subtitle: res.error ?? 'Timesheet updated from clock-ins',
-              leadingIcon: res.error == null
-                  ? Icons.check_circle_outline
-                  : Icons.error_outline,
-            );
+            final String title;
+            final String subtitle;
+            final IconData icon;
+            if (res.error != null) {
+              title = 'Could not sync';
+              subtitle = res.error!;
+              icon = Icons.error_outline;
+            } else if (res.count == 0) {
+              title = 'No hours to pull';
+              subtitle =
+                  'No completed shifts with payable hours in this period. '
+                  'Make sure staff clocked OUT (open shifts count as 0).';
+              icon = Icons.info_outline;
+            } else {
+              title = 'Pulled ${res.count} day(s) from attendance';
+              subtitle = 'Timesheet updated from clock-ins';
+              icon = Icons.check_circle_outline;
+            }
+            PushToast.show(context,
+                title: title, subtitle: subtitle, leadingIcon: icon);
           },
           icon: const Icon(Icons.download_done, size: 16),
           label: const Text('Pull from attendance'),

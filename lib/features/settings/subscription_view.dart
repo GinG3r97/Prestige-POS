@@ -72,195 +72,380 @@ class _SubscriptionViewState extends State<SubscriptionView> {
         elevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
         children: [
-          // Current plan
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [YColor.brandDeep, YColor.brand],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(YRadius.lg),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('CURRENT PLAN',
-                    style: YFont.caption().copyWith(
-                        color: Colors.white70,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Text(state.planLabel,
-                    style: YFont.titleLG()
-                        .copyWith(color: Colors.white, fontSize: 30)),
-                const SizedBox(height: 4),
-                Text(
-                  isPro
-                      ? 'Everything unlocked, unlimited.'
-                      : 'Upgrade for higher limits and more features.',
-                  style: YFont.body().copyWith(color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
+          _hero(context, state, isPro),
           const SizedBox(height: 16),
-
-          // Store ID
-          _CardSection(
-            title: 'Store ID',
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    state.storeCode ?? '—',
-                    style: YFont.titleMD().copyWith(
-                        fontFamily: 'Menlo', letterSpacing: 1, fontSize: 18),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: state.storeCode == null
-                      ? null
-                      : () {
-                          Clipboard.setData(
-                              ClipboardData(text: state.storeCode!));
-                          PushToast.show(context,
-                              title: 'Copied',
-                              subtitle: state.storeCode!,
-                              leadingIcon: Icons.check_circle_outline);
-                        },
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('Copy'),
-                  style: TextButton.styleFrom(foregroundColor: YColor.brandDeep),
-                ),
-              ],
-            ),
-          ),
+          _usageCard(state),
           const SizedBox(height: 16),
-
-          // Usage meters
-          _CardSection(
-            title: 'Your usage',
-            child: Column(
-              children: [
-                _Meter(label: 'Orders today', used: state.ordersToday, cap: state.ordersCap),
-                _Meter(label: 'Staff', used: state.planCount('employees'), cap: state.planCap('employees')),
-                _Meter(label: 'Products', used: state.planCount('products'), cap: state.planCap('products')),
-                _Meter(label: 'Categories', used: state.planCount('categories'), cap: state.planCap('categories')),
-                _Meter(label: 'Inventory items', used: state.planCount('inventory'), cap: state.planCap('inventory')),
-                _Meter(label: 'Branches', used: state.planCount('branches'), cap: state.planCap('branches'), last: true),
-              ],
-            ),
-          ),
+          _compareCard(state, isPro),
           const SizedBox(height: 16),
-
-          // Plan comparison
-          _CardSection(
-            title: 'Compare plans',
-            child: Column(
-              children: [
-                _CompareRow(
-                  label: '',
-                  free: 'Free',
-                  basic: 'Basic',
-                  pro: 'Pro',
-                  header: true,
-                  current: state.plan,
-                ),
-                const _Divider(),
-                for (final r in _compare) ...[
-                  _CompareRow(
-                    label: r.$1,
-                    free: r.$2,
-                    basic: r.$3,
-                    pro: r.$4,
-                    current: state.plan,
-                  ),
-                  const _Divider(),
-                ],
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Pro also unlocks payroll & timekeeping, bookings, customer subscriptions, and multi-branch.',
-                    style: YFont.caption().copyWith(color: YColor.inkMuted),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Upgrade — Android deep-links to the pre-filled web payment page.
-          // iOS must NOT surface external payment (App Store 3.1.1), so the
-          // button is hidden there; a neutral note shows instead (below).
-          if (!isPro && !Platform.isIOS)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: YColor.brandTint,
-                borderRadius: BorderRadius.circular(YRadius.md),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.public, size: 18, color: YColor.brandDeep),
-                    const SizedBox(width: 8),
-                    Text('Upgrade your plan',
-                        style: YFont.bodyStrong()
-                            .copyWith(color: YColor.brandDeep)),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Opens your secure GCash payment page with your Store ID '
-                    'and email already filled in — no copy/paste needed.',
-                    style: YFont.body().copyWith(color: YColor.ink, height: 1.4),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _openUpgrade(context, state),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Open payment page'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: YColor.brand,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(YRadius.md)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          // iOS-only neutral note (App Store-safe: no external payment).
-          if (!isPro && Platform.isIOS)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: YColor.brandTint,
-                borderRadius: BorderRadius.circular(YRadius.md),
-              ),
-              child: Row(children: [
-                const Icon(Icons.info_outline, size: 18, color: YColor.brandDeep),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Your plan is managed by Prestige IT Solutions. '
-                    'Contact us to change it.',
-                    style: YFont.body().copyWith(color: YColor.ink, height: 1.4),
-                  ),
-                ),
-              ]),
-            ),
-          const SizedBox(height: 32),
+          if (!isPro && !Platform.isIOS) _upgradeCta(context, state),
+          if (!isPro && Platform.isIOS) _iosNote(),
         ],
       ),
+    );
+  }
+
+  // ── Hero: current plan + integrated Store ID ──────────────────────────────
+  Widget _hero(BuildContext context, AppState state, bool isPro) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [YColor.ink, YColor.brandDeep],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(YRadius.lg),
+        boxShadow: [
+          BoxShadow(
+            color: YColor.brandDeep.withValues(alpha: 0.35),
+            blurRadius: 26,
+            offset: const Offset(0, 14),
+            spreadRadius: -10,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('CURRENT PLAN',
+                  style: YFont.caption().copyWith(
+                      color: Colors.white.withValues(alpha: 0.55),
+                      letterSpacing: 1.6,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11)),
+              const Spacer(),
+              _statusPill(isPro),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(state.planLabel,
+                  style: YFont.titleLG().copyWith(
+                      color: Colors.white,
+                      fontSize: 32,
+                      letterSpacing: -0.5)),
+              if (isPro) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.workspace_premium,
+                    size: 22, color: Colors.amber.shade300),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isPro
+                ? 'Everything unlocked, unlimited.'
+                : 'Upgrade for higher limits and more features.',
+            style: YFont.body()
+                .copyWith(color: Colors.white.withValues(alpha: 0.72)),
+          ),
+          const SizedBox(height: 18),
+          _storeIdChip(context, state),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(bool isPro) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: isPro ? Colors.greenAccent.shade400 : Colors.amber.shade300,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 7),
+        Text(isPro ? 'ACTIVE' : 'FREE TIER',
+            style: YFont.caption().copyWith(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6)),
+      ]),
+    );
+  }
+
+  Widget _storeIdChip(BuildContext context, AppState state) {
+    final code = state.storeCode;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.storefront_outlined,
+              size: 17, color: Colors.white.withValues(alpha: 0.7)),
+          const SizedBox(width: 10),
+          Text('STORE ID',
+              style: YFont.caption().copyWith(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              code ?? '—',
+              style: YFont.titleMD().copyWith(
+                  color: Colors.white,
+                  fontFamily: 'Menlo',
+                  fontSize: 15,
+                  letterSpacing: 1),
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: code == null
+                  ? null
+                  : () {
+                      Clipboard.setData(ClipboardData(text: code));
+                      PushToast.show(context,
+                          title: 'Store ID copied',
+                          subtitle: code,
+                          leadingIcon: Icons.check_circle_outline);
+                    },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.copy, size: 14, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text('Copy',
+                      style: YFont.bodyStrong()
+                          .copyWith(color: Colors.white, fontSize: 12)),
+                ]),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Usage meters (icon-led) ───────────────────────────────────────────────
+  Widget _usageCard(AppState state) {
+    return _CardSection(
+      title: 'Your usage',
+      child: Column(
+        children: [
+          _Meter(
+              icon: Icons.receipt_long_outlined,
+              label: 'Orders today',
+              used: state.ordersToday,
+              cap: state.ordersCap),
+          _Meter(
+              icon: Icons.people_alt_outlined,
+              label: 'Staff',
+              used: state.planCount('employees'),
+              cap: state.planCap('employees')),
+          _Meter(
+              icon: Icons.inventory_2_outlined,
+              label: 'Products',
+              used: state.planCount('products'),
+              cap: state.planCap('products')),
+          _Meter(
+              icon: Icons.category_outlined,
+              label: 'Categories',
+              used: state.planCount('categories'),
+              cap: state.planCap('categories')),
+          _Meter(
+              icon: Icons.warehouse_outlined,
+              label: 'Inventory items',
+              used: state.planCount('inventory'),
+              cap: state.planCap('inventory')),
+          _Meter(
+              icon: Icons.location_city_outlined,
+              label: 'Branches',
+              used: state.planCount('branches'),
+              cap: state.planCap('branches'),
+              last: true),
+        ],
+      ),
+    );
+  }
+
+  // ── Compare plans (current column highlighted) ────────────────────────────
+  Widget _compareCard(AppState state, bool isPro) {
+    return _CardSection(
+      title: 'Compare plans',
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Stack(
+              children: [
+                // Highlight strip behind the current plan's column.
+                Positioned.fill(
+                  child: Row(
+                    children: [
+                      const Expanded(flex: 4, child: SizedBox()),
+                      _highlight('trial', state.plan),
+                      _highlight('basic', state.plan),
+                      _highlight('pro', state.plan),
+                    ],
+                  ),
+                ),
+                Column(
+                  children: [
+                    _CompareRow(
+                      label: '',
+                      free: 'Free',
+                      basic: 'Basic',
+                      pro: 'Pro',
+                      header: true,
+                      current: state.plan,
+                    ),
+                    _Divider(),
+                    for (var i = 0; i < _compare.length; i++) ...[
+                      _CompareRow(
+                        label: _compare[i].$1,
+                        free: _compare[i].$2,
+                        basic: _compare[i].$3,
+                        pro: _compare[i].$4,
+                        current: state.plan,
+                      ),
+                      if (i < _compare.length - 1) _Divider(),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: YColor.surface2,
+              borderRadius: BorderRadius.circular(YRadius.md),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.workspace_premium,
+                    size: 16, color: Colors.amber.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pro also unlocks payroll & timekeeping, bookings, customer '
+                    'subscriptions, multi-branch, and selfie-verified attendance '
+                    '(anti-buddy-punch).',
+                    style: YFont.caption()
+                        .copyWith(color: YColor.inkMuted, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _highlight(String key, String current) {
+    final on = key == current;
+    return Expanded(
+      flex: 3,
+      child: on
+          ? Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: YColor.brandTint,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: YColor.brand.withValues(alpha: 0.4)),
+              ),
+            )
+          : const SizedBox(),
+    );
+  }
+
+  // ── Upgrade CTA (Android) / iOS note ──────────────────────────────────────
+  Widget _upgradeCta(BuildContext context, AppState state) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [YColor.brand, YColor.brandDeep],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(YRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.rocket_launch_outlined,
+                size: 18, color: Colors.white),
+            const SizedBox(width: 8),
+            Text('Upgrade your plan',
+                style: YFont.bodyStrong()
+                    .copyWith(color: Colors.white, fontSize: 15)),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            'Opens your secure GCash payment page with your Store ID and email '
+            'already filled in — no copy/paste needed.',
+            style: YFont.body().copyWith(
+                color: Colors.white.withValues(alpha: 0.85), height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _openUpgrade(context, state),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Open payment page'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: YColor.brandDeep,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _iosNote() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: YColor.brandTint,
+        borderRadius: BorderRadius.circular(YRadius.md),
+      ),
+      child: Row(children: [
+        const Icon(Icons.info_outline, size: 18, color: YColor.brandDeep),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Your plan is managed by Prestige IT Solutions. Contact us to change it.',
+            style: YFont.body().copyWith(color: YColor.ink, height: 1.4),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -287,7 +472,7 @@ class _CardSection extends StatelessWidget {
                   color: YColor.brandDeep,
                   letterSpacing: 1.2,
                   fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -297,11 +482,13 @@ class _CardSection extends StatelessWidget {
 
 class _Meter extends StatelessWidget {
   const _Meter({
+    required this.icon,
     required this.label,
     required this.used,
     required this.cap,
     this.last = false,
   });
+  final IconData icon;
   final String label;
   final int used;
   final int? cap;
@@ -310,35 +497,67 @@ class _Meter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unlimited = cap == null;
-    final frac = unlimited ? 0.0 : (cap == 0 ? 1.0 : (used / cap!).clamp(0.0, 1.0));
+    final frac =
+        unlimited ? 1.0 : (cap == 0 ? 1.0 : (used / cap!).clamp(0.0, 1.0));
     final atCap = !unlimited && used >= cap!;
+    final near = !unlimited && !atCap && frac >= 0.7;
+    final Color bar = unlimited
+        ? YColor.success
+        : atCap
+            ? YColor.danger
+            : near
+                ? Colors.amber.shade600
+                : YColor.brand;
+
     return Padding(
-      padding: EdgeInsets.only(bottom: last ? 0 : 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.only(bottom: last ? 0 : 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Expanded(
-                  child: Text(label,
-                      style: YFont.body().copyWith(fontWeight: FontWeight.w600))),
-              Text(
-                unlimited ? '$used · ∞' : '$used / $cap',
-                style: YFont.body().copyWith(
-                  color: atCap ? YColor.danger : YColor.inkMuted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: atCap
+                  ? YColor.danger.withValues(alpha: 0.12)
+                  : YColor.brandTint,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon,
+                size: 19, color: atCap ? YColor.danger : YColor.brandDeep),
           ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: unlimited ? null : frac,
-              minHeight: 6,
-              backgroundColor: YColor.surface3,
-              color: atCap ? YColor.danger : YColor.brand,
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                        child: Text(label,
+                            style: YFont.body()
+                                .copyWith(fontWeight: FontWeight.w600))),
+                    Text(
+                      unlimited ? '$used · ∞' : '$used / $cap',
+                      style: YFont.body().copyWith(
+                        color: atCap ? YColor.danger : YColor.inkMuted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: frac,
+                    minHeight: 6,
+                    backgroundColor: YColor.surface3,
+                    color: bar,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -367,14 +586,45 @@ class _CompareRow extends StatelessWidget {
           (plan == 'basic' && current == 'basic') ||
           (plan == 'pro' && current == 'pro');
       return YFont.caption().copyWith(
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: header || isCurrent ? FontWeight.w800 : FontWeight.w500,
         color: isCurrent ? YColor.brandDeep : YColor.ink,
       );
     }
 
+    Widget planCell(String text, String plan) {
+      final isCurrent = (plan == 'trial' && current == 'trial') ||
+          (plan == 'basic' && current == 'basic') ||
+          (plan == 'pro' && current == 'pro');
+      return Expanded(
+        flex: 3,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (header && plan == 'pro') ...[
+              Icon(Icons.workspace_premium,
+                  size: 12, color: Colors.amber.shade700),
+              const SizedBox(width: 3),
+            ],
+            Flexible(
+              child: Text(text,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: cell(plan)),
+            ),
+            if (header && isCurrent) ...[
+              const SizedBox(width: 3),
+              const Icon(Icons.check_circle,
+                  size: 12, color: YColor.brandDeep),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Expanded(
@@ -383,9 +633,9 @@ class _CompareRow extends StatelessWidget {
                 style: YFont.caption()
                     .copyWith(fontSize: 12, color: YColor.inkMuted)),
           ),
-          Expanded(flex: 3, child: Text(free, textAlign: TextAlign.center, style: cell('trial'))),
-          Expanded(flex: 3, child: Text(basic, textAlign: TextAlign.center, style: cell('basic'))),
-          Expanded(flex: 3, child: Text(pro, textAlign: TextAlign.center, style: cell('pro'))),
+          planCell(free, 'trial'),
+          planCell(basic, 'basic'),
+          planCell(pro, 'pro'),
         ],
       ),
     );

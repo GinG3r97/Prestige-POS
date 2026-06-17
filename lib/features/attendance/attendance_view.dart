@@ -45,8 +45,23 @@ class _AttendanceViewState extends State<AttendanceView> {
   final Map<String, List<_Punch>> _byEmployee = {};
 
   bool _geoSet = false;
-  int _radius = 200;
+  int _radius = 50;
   bool _settingLoc = false;
+
+  // Days in the visible week that have at least one punch (for the strip dots).
+  Set<String> _weekDots = {};
+  static const _wd = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  DateTime get _weekStart {
+    final d = DateTime(_day.year, _day.month, _day.day);
+    return d.subtract(Duration(days: d.weekday - 1)); // Monday
+  }
+
+  DateTime get _thisWeekStart {
+    final n = DateTime.now();
+    final d = DateTime(n.year, n.month, n.day);
+    return d.subtract(Duration(days: d.weekday - 1));
+  }
 
   @override
   void initState() {
@@ -99,7 +114,8 @@ class _AttendanceViewState extends State<AttendanceView> {
           .eq('id', tid)
           .maybeSingle();
       _geoSet = t != null && t['geo_lat'] != null;
-      _radius = (t?['geo_radius_m'] as num?)?.toInt() ?? 200;
+      _radius = (t?['geo_radius_m'] as num?)?.toInt() ?? 50;
+      await _loadWeekDots(tid);
       setState(() => _loading = false);
     } catch (e) {
       setState(() {
@@ -108,9 +124,6 @@ class _AttendanceViewState extends State<AttendanceView> {
       });
     }
   }
-
-  bool get _isToday =>
-      DateUtils.isSameDay(_day, DateTime.now());
 
   String _hoursFor(List<_Punch> punches) {
     Duration total = Duration.zero;
@@ -136,7 +149,8 @@ class _AttendanceViewState extends State<AttendanceView> {
     final body = Column(
       children: [
         _setupBar(),
-        _dateBar(),
+        _weekBar(),
+        Container(height: 0.5, color: YColor.hairline),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -149,12 +163,33 @@ class _AttendanceViewState extends State<AttendanceView> {
                           child: Text('No punches on this day.',
                               style: YFont.body()
                                   .copyWith(color: YColor.inkSubtle)))
-                      : ListView(
-                          padding: const EdgeInsets.all(16),
-                          children: [
-                            for (final name in names)
-                              _employeeCard(name, _byEmployee[name]!),
-                          ],
+                      : LayoutBuilder(
+                          builder: (context, c) {
+                            const pad = 16.0;
+                            const gap = 12.0;
+                            final usable = c.maxWidth - pad * 2;
+                            // Up to 3 columns; one column per ~320px of width,
+                            // but never more columns than there are employees
+                            // (1 → 1 col, 2 → 2 cols, 6 → 2 rows × 3 cols).
+                            final widthMax = (usable ~/ 320).clamp(1, 3);
+                            final cols = names.length < widthMax ? names.length : widthMax;
+                            final cardW = cols <= 1
+                                ? usable
+                                : (usable - gap * (cols - 1)) / cols;
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.all(pad),
+                              child: Wrap(
+                                spacing: gap,
+                                children: [
+                                  for (final name in names)
+                                    SizedBox(
+                                      width: cardW,
+                                      child: _employeeCard(name, _byEmployee[name]!),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
         ),
       ],
@@ -244,7 +279,7 @@ class _AttendanceViewState extends State<AttendanceView> {
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,
-              children: [100, 200, 300, 500]
+              children: [20, 30, 40, 50]
                   .map((r) => ElevatedButton(
                         onPressed: () => Navigator.pop(context, r),
                         style: ElevatedButton.styleFrom(
@@ -352,37 +387,138 @@ class _AttendanceViewState extends State<AttendanceView> {
     PushToast.show(context, title: title, subtitle: subtitle, leadingIcon: icon);
   }
 
-  Widget _dateBar() {
+  Future<void> _loadWeekDots(String tid) async {
+    final ws = _weekStart;
+    final start =
+        DateTime.utc(ws.year, ws.month, ws.day).subtract(const Duration(hours: 8));
+    final end = start.add(const Duration(days: 7));
+    try {
+      final rows = await supabase
+          .from('attendance_punches')
+          .select('punched_at')
+          .eq('tenant_id', tid)
+          .gte('punched_at', start.toIso8601String())
+          .lt('punched_at', end.toIso8601String());
+      final dots = <String>{};
+      for (final r in rows as List) {
+        final dt = DateTime.parse((r as Map)['punched_at'] as String).toLocal();
+        dots.add(DateFormat('yyyy-MM-dd').format(dt));
+      }
+      _weekDots = dots;
+    } catch (_) {/* dots are best-effort */}
+  }
+
+  void _goToDay(DateTime d) {
+    if (DateUtils.isSameDay(d, _day)) return;
+    setState(() => _day = DateTime(d.year, d.month, d.day));
+    _load();
+  }
+
+  Widget _weekBar() {
+    final ws = _weekStart;
+    final we = ws.add(const Duration(days: 6));
+    final isThisWeek = DateUtils.isSameDay(ws, _thisWeekStart);
+    final canGoNext = ws.isBefore(_thisWeekStart);
     return Container(
       color: YColor.surface1,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
         children: [
-          IconButton(
-            onPressed: () {
-              setState(() => _day = _day.subtract(const Duration(days: 1)));
-              _load();
-            },
-            icon: const Icon(Icons.chevron_left),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                _isToday ? 'Today' : DateFormat('EEE, MMM d').format(_day),
-                style: YFont.titleMD().copyWith(fontSize: 15),
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => _goToDay(_day.subtract(const Duration(days: 7))),
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(isThisWeek ? 'This week' : 'Week of',
+                          style: YFont.titleMD().copyWith(fontSize: 14)),
+                      Text(
+                        '${DateFormat('MMM d').format(ws)} – ${DateFormat('MMM d').format(we)}',
+                        style:
+                            YFont.caption().copyWith(color: YColor.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: canGoNext
+                      ? () => _goToDay(_day.add(const Duration(days: 7)))
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ),
           ),
-          IconButton(
-            onPressed: _isToday
-                ? null
-                : () {
-                    setState(() => _day = _day.add(const Duration(days: 1)));
-                    _load();
-                  },
-            icon: const Icon(Icons.chevron_right),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                for (var i = 0; i < 7; i++)
+                  Expanded(child: _dayChip(ws.add(Duration(days: i)))),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _dayChip(DateTime d) {
+    final sel = DateUtils.isSameDay(d, _day);
+    final today = DateUtils.isSameDay(d, DateTime.now());
+    final future = d.isAfter(DateTime.now());
+    final hasPunch = _weekDots.contains(DateFormat('yyyy-MM-dd').format(d));
+    final Color bg = sel
+        ? YColor.brandDeep
+        : today
+            ? YColor.brandTint
+            : Colors.transparent;
+    final Color fg = sel
+        ? Colors.white
+        : future
+            ? YColor.inkSubtle
+            : YColor.ink;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _goToDay(d),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Text(_wd[d.weekday],
+                    style: YFont.caption().copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: sel ? Colors.white70 : YColor.inkMuted)),
+                const SizedBox(height: 3),
+                Text('${d.day}',
+                    style: YFont.titleMD().copyWith(
+                        fontSize: 15, color: fg, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: hasPunch
+                        ? (sel ? Colors.white : YColor.brand)
+                        : Colors.transparent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
