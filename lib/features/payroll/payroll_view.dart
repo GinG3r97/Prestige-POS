@@ -216,16 +216,14 @@ class _TimesheetPane extends StatelessWidget {
                   ? Center(
                       child: Text('No employees yet.',
                           style: YFont.caption()))
+                  // Size to content (narrow employee col + roomy day cells) so
+                  // the Total sits just past the days and stays visible without
+                  // the table stretching and squeezing the dates. Horizontal
+                  // scroll only as a fallback on very narrow screens.
                   : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth:
-                              MediaQuery.sizeOf(context).width * 0.55,
-                        ),
-                        child: SingleChildScrollView(
-                          child: _grid(employees, days),
-                        ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: _grid(employees, days),
                       ),
                     ),
             ),
@@ -358,7 +356,7 @@ class _TimesheetPane extends StatelessWidget {
         for (final d in days)
           DataColumn(
             label: SizedBox(
-              width: 38,
+              width: 44,
               child: Text(
                 dayFmt.format(d).toUpperCase(),
                 textAlign: TextAlign.center,
@@ -409,7 +407,7 @@ class _TimesheetPane extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         SizedBox(
-          width: 116,
+          width: 92,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,11 +538,11 @@ class _HoursCellState extends State<_HoursCell> {
 
   @override
   Widget build(BuildContext context) {
-    // Fixed 38×34 envelope keeps the grid row height constant. Tapping the
+    // Fixed 44×34 envelope keeps the grid row height constant. Tapping the
     // cell opens the shared numpad sheet instead of the OS keyboard.
     final has = _c.text.trim().isNotEmpty;
     return SizedBox(
-      width: 38,
+      width: 44,
       height: 34,
       child: Material(
         color: Colors.transparent,
