@@ -484,28 +484,25 @@ class _DetailPaneState extends State<_DetailPane> {
             children: [
               _header(e),
               const SizedBox(height: 18),
-              // Profile + Salary side by side, matched height.
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _profileCard(e)),
-                    const SizedBox(width: 18),
-                    Expanded(child: _payCard(e)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              // Access + Portal side by side, matched height.
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _accessCard(e)),
-                    const SizedBox(width: 18),
-                    Expanded(child: _portalCard(e)),
-                  ],
-                ),
+              // Left column groups Profile → Access → Portal (mirrors the
+              // edit modal's Profile step); Salary sits in the right column.
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _profileCard(e),
+                        const SizedBox(height: 18),
+                        _accessCard(e),
+                        const SizedBox(height: 18),
+                        _portalCard(e),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(child: _payCard(e)),
+                ],
               ),
               const SizedBox(height: 18),
               // Weekly schedule + Requirements side by side, matched height.

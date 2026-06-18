@@ -60,8 +60,10 @@ class TopBar extends StatelessWidget {
             ),
           ),
           // Branch picker — only for the owner or roles granted the
-          // 'switch_branch' capability in Maintenance → Roles.
-          if (state.canSwitchBranch) ...[
+          // 'switch_branch' capability, AND only when there's more than one
+          // branch to switch between (single-branch stores hide it entirely).
+          if (state.canSwitchBranch &&
+              (state.tenant?.branches.length ?? 1) > 1) ...[
             PopupMenuButton<Branch>(
               position: PopupMenuPosition.under,
               offset: const Offset(0, 8),
