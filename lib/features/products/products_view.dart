@@ -523,8 +523,14 @@ Future<void> showProductEditor(BuildContext context,
 /// preserving recipe/modifiers/type/category, so the full Products editor and
 /// the DB stay perfectly consistent.
 Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
-  final result =
-      await showDialog<({String name, int priceCents, bool openPrice})>(
+  final result = await showDialog<
+      ({
+        String name,
+        int priceCents,
+        bool openPrice,
+        String? typeId,
+        String? categoryId,
+      })>(
     context: context,
     builder: (_) => _ProductQuickEditDialog(item: item),
   );
@@ -532,6 +538,8 @@ Future<void> showProductQuickEdit(BuildContext context, CafeItem item) async {
   item.name = result.name;
   item.basePrice = Money(result.priceCents);
   item.openPrice = result.openPrice;
+  item.typeId = result.typeId;
+  item.categoryId = result.categoryId;
   final err = await context.read<CatalogStore>().updateProduct(item);
   if (!context.mounted) return;
   PushToast.show(context,
@@ -551,122 +559,196 @@ class _ProductQuickEditDialog extends StatefulWidget {
 
 class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
   late final TextEditingController _name;
-  late final TextEditingController _price;
+  late String _priceStr; // numpad-driven, in pesos
   late bool _openPrice;
+  String? _typeId;
+  String? _categoryId;
 
   @override
   void initState() {
     super.initState();
     _name = TextEditingController(text: widget.item.name);
-    _price = TextEditingController(
-        text: (widget.item.basePrice.centavos / 100).toStringAsFixed(0));
+    final cents = widget.item.basePrice.centavos;
+    _priceStr = cents % 100 == 0
+        ? (cents ~/ 100).toString()
+        : (cents / 100).toStringAsFixed(2);
     _openPrice = widget.item.openPrice;
+    _typeId = widget.item.typeId;
+    _categoryId = widget.item.categoryId;
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _price.dispose();
     super.dispose();
+  }
+
+  // ── numpad → _priceStr (ignored while custom price is on) ──
+  void _press(String k) {
+    if (_openPrice) return;
+    setState(() {
+      if (k == '⌫') {
+        if (_priceStr.isNotEmpty) {
+          _priceStr = _priceStr.substring(0, _priceStr.length - 1);
+        }
+      } else if (k == '.') {
+        if (!_priceStr.contains('.')) {
+          _priceStr = _priceStr.isEmpty ? '0.' : '$_priceStr.';
+        }
+      } else {
+        final dot = _priceStr.indexOf('.');
+        if (dot >= 0 && _priceStr.length - dot > 2) return; // max 2 decimals
+        if (_priceStr == '0') {
+          _priceStr = k; // no leading zero
+        } else {
+          if (_priceStr.replaceAll('.', '').length >= 7) return; // sane cap
+          _priceStr += k;
+        }
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasImg =
-        widget.item.imageUrl != null && widget.item.imageUrl!.isNotEmpty;
+    final app = context.read<AppState>();
+    final types = app.productTypes;
+    final allCats = app.categories;
+    // Categories scoped to the chosen type (fall back to all if none match).
+    final scopedCats = _typeId == null
+        ? allCats
+        : (allCats.where((c) => c.typeId == _typeId).toList().isEmpty
+            ? allCats
+            : allCats.where((c) => c.typeId == _typeId).toList());
+
+    final priceText = _openPrice
+        ? 'Custom price'
+        : (_priceStr.isEmpty ? '0' : _priceStr);
+
     return AlertDialog(
       backgroundColor: YColor.surface1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text('Quick edit', style: YFont.titleMD()),
       content: SizedBox(
-        width: 360,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        width: 640,
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Locked image preview — full photo editing stays on the Products
-            // page for now.
-            Row(children: [
-              Container(
-                width: 48,
-                height: 48,
-                clipBehavior: Clip.antiAlias,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: YColor.surface2,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: YColor.hairline),
-                ),
-                child: hasImg
-                    ? Image.network(widget.item.imageUrl!,
-                        fit: BoxFit.cover,
-                        width: 48,
-                        height: 48,
-                        cacheWidth: 144,
-                        cacheHeight: 144,
-                        errorBuilder: (_, __, ___) => NameIconOrEmoji(
-                            name: widget.item.name,
-                            iconName: widget.item.iconName))
-                    : NameIconOrEmoji(
-                        name: widget.item.name,
-                        iconName: widget.item.iconName),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Row(children: [
-                  const Icon(Icons.lock_outline,
-                      size: 13, color: YColor.inkMuted),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text('Photo editing is on the Products page for now.',
-                        style:
-                            YFont.caption().copyWith(color: YColor.inkMuted)),
+            // ── LEFT: name, price, type, category ──
+            SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  KeyboardAccessoryField(
+                    controller: _name,
+                    label: 'Name',
+                    accessoryLabel: 'PRODUCT NAME',
+                    hint: 'Product name',
+                    fillColor: YColor.surface2,
+                    borderColor: YColor.hairline,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    onChanged: (_) => setState(() {}),
                   ),
-                ]),
+                  const SizedBox(height: 12),
+                  // Price — display only; driven by the numpad on the right.
+                  Text('PRICE (₱)',
+                      style: YFont.caption().copyWith(
+                          color: YColor.inkMuted,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4)),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 48,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: _openPrice ? YColor.surface3 : YColor.surface2,
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                      border: Border.all(color: YColor.hairline),
+                    ),
+                    child: Text(
+                      _openPrice ? priceText : '₱$priceText',
+                      style: YFont.titleMD().copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: _openPrice ? YColor.inkMuted : YColor.ink,
+                        fontStyle:
+                            _openPrice ? FontStyle.italic : FontStyle.normal,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ThemedDropdown<String>(
+                    label: 'Product type',
+                    value: _typeId,
+                    hint: 'Choose type',
+                    items: types.map((t) => t.id).toList(),
+                    labelOf: (id) =>
+                        types.where((t) => t.id == id).firstOrNull?.name ??
+                        'Unknown',
+                    onChanged: (id) => setState(() {
+                      _typeId = id;
+                      // Drop a category that no longer belongs to the new type.
+                      final stillValid = allCats
+                          .where((c) => c.id == _categoryId)
+                          .firstOrNull
+                          ?.typeId;
+                      if (id != null && stillValid != null && stillValid != id) {
+                        _categoryId = null;
+                      }
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  ThemedDropdown<String>(
+                    label: 'Category',
+                    value: _categoryId,
+                    hint: 'Choose category',
+                    items: scopedCats.map((c) => c.id).toList(),
+                    labelOf: (id) =>
+                        allCats.where((c) => c.id == id).firstOrNull?.name ??
+                        'Unknown',
+                    onChanged: (id) => setState(() => _categoryId = id),
+                  ),
+                ],
               ),
-            ]),
-            const SizedBox(height: 16),
-            KeyboardAccessoryField(
-              controller: _name,
-              label: 'Name',
-              accessoryLabel: 'PRODUCT NAME',
-              hint: 'Product name',
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
-              onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 12),
-            KeyboardAccessoryField(
-              controller: _price,
-              label: 'Price (₱)',
-              accessoryLabel: 'PRICE',
-              hint: '0',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: moneyInputFormatters,
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
-              onChanged: (_) => setState(() {}),
+            const SizedBox(width: 24),
+            // ── RIGHT: custom-price toggle + numpad ──
+            SizedBox(
+              width: 272,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                    decoration: BoxDecoration(
+                      color: _openPrice ? YColor.brandTint : YColor.surface2,
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                      border: Border.all(
+                          color: _openPrice ? YColor.brandSoft : YColor.hairline),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(
+                          'Custom price — cashier types the price at checkout',
+                          style: YFont.caption(),
+                        ),
+                      ),
+                      Switch(
+                        value: _openPrice,
+                        onChanged: (v) => setState(() => _openPrice = v),
+                        activeThumbColor: YColor.brand,
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  _Numpad(enabled: !_openPrice, onKey: _press),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Row(children: [
-              Switch(
-                value: _openPrice,
-                onChanged: (v) => setState(() => _openPrice = v),
-                activeThumbColor: YColor.brand,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Custom price — cashier types the price at checkout',
-                  style: YFont.caption(),
-                ),
-              ),
-            ]),
           ],
         ),
       ),
@@ -680,11 +762,13 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
           onPressed: _name.text.trim().isEmpty
               ? null
               : () {
-                  final pesos = double.tryParse(_price.text.trim()) ?? 0;
+                  final pesos = double.tryParse(_priceStr) ?? 0;
                   Navigator.of(context).pop((
                     name: _name.text.trim(),
                     priceCents: Money.pesos(pesos).centavos,
                     openPrice: _openPrice,
+                    typeId: _typeId,
+                    categoryId: _categoryId,
                   ));
                 },
           style: ElevatedButton.styleFrom(
@@ -695,6 +779,58 @@ class _ProductQuickEditDialogState extends State<_ProductQuickEditDialog> {
           child: const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+/// Compact in-app numpad (1–9, ., 0, ⌫). Greys out and ignores taps when
+/// [enabled] is false (e.g. while Custom price is on).
+class _Numpad extends StatelessWidget {
+  const _Numpad({required this.enabled, required this.onKey});
+  final bool enabled;
+  final void Function(String) onKey;
+
+  static const _rows = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    ['.', '0', '⌫'],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: Column(
+        children: [
+          for (final row in _rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (final k in row)
+                    GestureDetector(
+                      onTap: enabled ? () => onKey(k) : null,
+                      child: Container(
+                        width: 80,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: YColor.surface1,
+                          borderRadius: BorderRadius.circular(YRadius.md),
+                          border: Border.all(color: YColor.hairline),
+                        ),
+                        child: Text(k,
+                            style: const TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
