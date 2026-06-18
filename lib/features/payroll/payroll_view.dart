@@ -216,16 +216,23 @@ class _TimesheetPane extends StatelessWidget {
                   ? Center(
                       child: Text('No employees yet.',
                           style: YFont.caption()))
-                  // Size to content (narrow employee col + roomy day cells) so
-                  // the Total sits just past the days and stays visible without
-                  // the table stretching and squeezing the dates. Horizontal
-                  // scroll only as a fallback on very narrow screens.
-                  : SingleChildScrollView(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _grid(employees, days),
-                      ),
-                    ),
+                  // Fill the pane: force the table to at least the pane width so
+                  // the extra space goes into the (flexible, first) employee
+                  // column — no dead gap after the Total. Day cells keep their
+                  // fixed width so the dates never compress. Horizontal scroll
+                  // is only a fallback if the table is genuinely wider.
+                  : LayoutBuilder(builder: (ctx, cons) {
+                      return SingleChildScrollView(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints:
+                                BoxConstraints(minWidth: cons.maxWidth),
+                            child: _grid(employees, days),
+                          ),
+                        ),
+                      );
+                    }),
             ),
           ),
         ],
@@ -394,7 +401,7 @@ class _TimesheetPane extends StatelessWidget {
   Widget _employeeChip(Employee e) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+      child: Row(children: [
         Container(
           width: 28,
           height: 28,
@@ -406,8 +413,9 @@ class _TimesheetPane extends StatelessWidget {
           child: Icon(e.gender.icon, size: 18, color: YColor.brandDeep),
         ),
         const SizedBox(width: 8),
-        SizedBox(
-          width: 92,
+        // Expands to fill the (flexible) first column so the timesheet uses the
+        // full left width instead of leaving a gap after the Total.
+        Expanded(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
