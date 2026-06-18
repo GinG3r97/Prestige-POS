@@ -71,6 +71,10 @@ class Payslip {
   double bonus;
   /// Deductions (advances, late, missing items, taxes).
   double deductions;
+  /// Standard hours in a working day — sourced from the tenant's Payroll rules
+  /// (Maintenance → Payroll → "Regular hours / day"). Daily-rate pay divides
+  /// hours worked by this to get days. Defaults to 8 if unset.
+  double regularHoursPerDay;
 
   Payslip({
     String? id,
@@ -84,6 +88,7 @@ class Payslip {
     this.monthlySalary = 0,
     this.bonus = 0,
     this.deductions = 0,
+    this.regularHoursPerDay = 8,
   }) : id = id ?? _uuid.v4();
 
   /// Pesos → whole centavos, rounded to the nearest centavo. ALL pay math runs
@@ -100,7 +105,10 @@ class Payslip {
       case CompensationType.hourly:
         base = _toCentavos(hoursWorked * hourlyRate);
       case CompensationType.daily:
-        final daysWorked = hoursWorked / 8.0;
+        // Days worked = hours ÷ the configured standard day (Maintenance →
+        // Payroll). Guard against a 0/blank setting falling back to 8.
+        final perDay = regularHoursPerDay > 0 ? regularHoursPerDay : 8.0;
+        final daysWorked = hoursWorked / perDay;
         base = _toCentavos(daysWorked * dailyRate);
       case CompensationType.salaried:
         final divisor = switch (period) {

@@ -199,7 +199,8 @@ class HrStore extends ChangeNotifier {
       final row = r as Map<String, dynamic>;
       final slipsRaw = (row['payslips'] as List? ?? const []);
       final slips = slipsRaw
-          .map((s) => Payslip.fromRow(s as Map<String, dynamic>))
+          .map((s) => Payslip.fromRow(s as Map<String, dynamic>)
+            ..regularHoursPerDay = _payrollRules.regularHoursPerDay)
           .toList();
       return PayrollRun.fromRow(row, slips: slips);
     }).toList();
@@ -910,6 +911,7 @@ class HrStore extends ChangeNotifier {
         hourlyRate: emp.hourlyRate,
         dailyRate: emp.dailyRate,
         monthlySalary: emp.monthlySalary,
+        regularHoursPerDay: _payrollRules.regularHoursPerDay,
       ));
     }
     final draft = PayrollRun(
@@ -942,7 +944,10 @@ class HrStore extends ChangeNotifier {
               .cast<Map<String, dynamic>>();
       final hydrated = PayrollRun.fromRow(
         runRow,
-        slips: slipRows.map(Payslip.fromRow).toList(),
+        slips: slipRows
+            .map((s) => Payslip.fromRow(s)
+              ..regularHoursPerDay = _payrollRules.regularHoursPerDay)
+            .toList(),
       );
       _payrollRunsByTenant
           .putIfAbsent(key, () => <PayrollRun>[])

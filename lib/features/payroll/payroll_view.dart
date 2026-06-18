@@ -944,6 +944,7 @@ class _SlipRowState extends State<_SlipRow> {
       monthlySalary: widget.slip.monthlySalary,
       bonus: bonus,
       deductions: ded,
+      regularHoursPerDay: widget.slip.regularHoursPerDay,
     ));
   }
 
@@ -957,7 +958,7 @@ class _SlipRowState extends State<_SlipRow> {
       CompensationType.hourly =>
         '${s.hoursWorked.toStringAsFixed(1)}h × ₱${s.hourlyRate.toStringAsFixed(0)}',
       CompensationType.daily =>
-        '${(s.hoursWorked / 8).toStringAsFixed(1)}d × ₱${s.dailyRate.toStringAsFixed(0)}',
+        '${(s.hoursWorked / (s.regularHoursPerDay > 0 ? s.regularHoursPerDay : 8)).toStringAsFixed(1)}d × ₱${s.dailyRate.toStringAsFixed(0)}',
       CompensationType.salaried =>
         'Salaried · ₱${s.monthlySalary.toStringAsFixed(0)}/mo',
     };
