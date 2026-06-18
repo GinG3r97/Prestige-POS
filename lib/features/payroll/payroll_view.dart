@@ -863,14 +863,56 @@ class _RunDetail extends StatelessWidget {
             const SizedBox(width: 6),
             PopupMenuButton<PayrollStatus>(
               tooltip: 'Change status',
-              icon: const Icon(Icons.more_vert),
+              icon: const Icon(Icons.more_vert, color: YColor.inkMuted),
+              color: YColor.surface1,
+              elevation: 8,
+              position: PopupMenuPosition.under,
+              offset: const Offset(0, 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: YColor.hairline),
+              ),
               onSelected: (s) => state.setPayrollStatus(run.id, s),
-              itemBuilder: (_) => PayrollStatus.values
-                  .map((s) => PopupMenuItem(
-                        value: s,
-                        child: Text(s.label),
-                      ))
-                  .toList(),
+              itemBuilder: (_) => [
+                PopupMenuItem<PayrollStatus>(
+                  enabled: false,
+                  height: 34,
+                  child: Text('SET STATUS',
+                      style: YFont.caption().copyWith(
+                        fontSize: 10,
+                        letterSpacing: 1.0,
+                        fontWeight: FontWeight.w800,
+                        color: YColor.inkMuted,
+                      )),
+                ),
+                for (final s in PayrollStatus.values)
+                  PopupMenuItem<PayrollStatus>(
+                    value: s,
+                    height: 44,
+                    child: Row(children: [
+                      Icon(_statusIcon(s),
+                          size: 16,
+                          color: run.status == s
+                              ? YColor.brand
+                              : YColor.inkMuted),
+                      const SizedBox(width: 10),
+                      Text(s.label,
+                          style: YFont.bodyStrong().copyWith(
+                            fontSize: 13,
+                            color:
+                                run.status == s ? YColor.brand : YColor.ink,
+                            fontWeight: run.status == s
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          )),
+                      if (run.status == s) ...[
+                        const Spacer(),
+                        const Icon(Icons.check,
+                            size: 15, color: YColor.brand),
+                      ],
+                    ]),
+                  ),
+              ],
             ),
           ]),
         ),
@@ -928,6 +970,12 @@ class _RunDetail extends StatelessWidget {
       ]),
     );
   }
+
+  IconData _statusIcon(PayrollStatus s) => switch (s) {
+        PayrollStatus.draft => Icons.edit_note_outlined,
+        PayrollStatus.finalized => Icons.lock_outline,
+        PayrollStatus.paid => Icons.check_circle_outline,
+      };
 
   Widget _summaryRow(String label, double amount) {
     final neg = amount < 0;

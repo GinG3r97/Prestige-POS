@@ -191,7 +191,9 @@ class HrStore extends ChangeNotifier {
             'paid_at, created_at, '
             'payslips(id, employee_id, employee_name, employee_role, '
             'compensation_type, hours_worked, hourly_rate, daily_rate, '
-            'monthly_salary, bonus, deductions)')
+            'monthly_salary, bonus, deductions, sss, philhealth, pagibig, '
+            'ot_hours, undertime_hours, late_minutes, ot_multiplier, '
+            'deduct_undertime)')
         .eq('tenant_id', tenantDbId)
         .order('period_start', ascending: false)
         .limit(60);
