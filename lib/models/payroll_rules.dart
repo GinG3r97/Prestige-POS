@@ -13,6 +13,8 @@ const _uuid = Uuid();
 /// labor-law-driven ones that don't vary by employment type.
 class PayrollRules {
   double regularHoursPerDay;
+  /// Max overtime hours that can be claimed in a single day. 0 = no cap.
+  double maxOvertimeHoursPerDay;
   double restDayMultiplier;           // 1.30 — work on scheduled rest day
   double regularHolidayMultiplier;    // 2.00 — work on a regular PH holiday
   double specialHolidayMultiplier;    // 1.30 — work on a special non-working day
@@ -32,6 +34,7 @@ class PayrollRules {
 
   PayrollRules({
     this.regularHoursPerDay = 8,
+    this.maxOvertimeHoursPerDay = 0,
     this.restDayMultiplier = 1.30,
     this.regularHolidayMultiplier = 2.0,
     this.specialHolidayMultiplier = 1.30,
@@ -49,6 +52,7 @@ class PayrollRules {
 
   PayrollRules copy() => PayrollRules(
         regularHoursPerDay: regularHoursPerDay,
+        maxOvertimeHoursPerDay: maxOvertimeHoursPerDay,
         restDayMultiplier: restDayMultiplier,
         regularHolidayMultiplier: regularHolidayMultiplier,
         specialHolidayMultiplier: specialHolidayMultiplier,
@@ -67,6 +71,8 @@ class PayrollRules {
   factory PayrollRules.fromRow(Map<String, dynamic> row) => PayrollRules(
         regularHoursPerDay:
             (row['regular_hours_per_day'] as num?)?.toDouble() ?? 8,
+        maxOvertimeHoursPerDay:
+            (row['max_overtime_hours_per_day'] as num?)?.toDouble() ?? 0,
         restDayMultiplier:
             (row['rest_day_multiplier'] as num?)?.toDouble() ?? 1.30,
         regularHolidayMultiplier:
@@ -91,6 +97,7 @@ class PayrollRules {
 
   Map<String, dynamic> toRow() => {
         'regular_hours_per_day': regularHoursPerDay,
+        'max_overtime_hours_per_day': maxOvertimeHoursPerDay,
         'rest_day_multiplier': restDayMultiplier,
         'regular_holiday_multiplier': regularHolidayMultiplier,
         'special_holiday_multiplier': specialHolidayMultiplier,

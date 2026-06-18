@@ -4,7 +4,6 @@ import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
-import '../../models/employee.dart';
 import '../../models/payroll_rules.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
@@ -12,13 +11,13 @@ import '../widgets/push_toast.dart';
 import '../../design_system/icons.dart'
     show IconPickerField, iconFromKey, materialIconForName;
 
-/// Owner-facing payroll configuration. The tab now has four cards:
-///   1. Employment templates  — per-type compensation, default rate, OT, leaves
-///   2. Global multipliers     — rest day / holiday / night diff
-///   3. Hours, undertime, gov  — standard hours + lateness + 13th-month etc.
-///   4. Leave types            — buckets templates can draw from
+/// Owner-facing payroll configuration. A left rail switches between three
+/// sections:
+///   1. Hours & rates  — standard hours, allowed OT, labor-law multipliers
+///   2. Deductions     — undertime, lateness grace, government / 13th-month
+///   3. Leave types    — buckets staff can draw from
 ///
-/// All four persist to Supabase via [HrStore] (no more in-memory drafts).
+/// All persist to Supabase via [HrStore].
 class PayrollRulesTab extends StatefulWidget {
   const PayrollRulesTab({super.key, required this.state});
   final HrStore state;
@@ -32,6 +31,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   bool _saving = false;
 
   late final TextEditingController _regHours;
+  late final TextEditingController _otHours;
   late final TextEditingController _restMul;
   late final TextEditingController _regHolMul;
   late final TextEditingController _specHolMul;
@@ -43,6 +43,8 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
     super.initState();
     _draft = widget.state.payrollRules.copy();
     _regHours = TextEditingController(text: _fmt(_draft.regularHoursPerDay));
+    _otHours =
+        TextEditingController(text: _fmt(_draft.maxOvertimeHoursPerDay));
     _restMul = TextEditingController(text: _fmt(_draft.restDayMultiplier));
     _regHolMul =
         TextEditingController(text: _fmt(_draft.regularHolidayMultiplier));
@@ -57,6 +59,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   @override
   void dispose() {
     _regHours.dispose();
+    _otHours.dispose();
     _restMul.dispose();
     _regHolMul.dispose();
     _specHolMul.dispose();
@@ -71,6 +74,10 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   Future<void> _save() async {
     _draft.regularHoursPerDay =
         double.tryParse(_regHours.text) ?? _draft.regularHoursPerDay;
+    _draft.maxOvertimeHoursPerDay =
+        (double.tryParse(_otHours.text) ?? _draft.maxOvertimeHoursPerDay)
+            .clamp(0, 24)
+            .toDouble();
     _draft.restDayMultiplier =
         double.tryParse(_restMul.text) ?? _draft.restDayMultiplier;
     _draft.regularHolidayMultiplier =
@@ -104,12 +111,6 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
 
   static const _sections = <({String title, String sub, IconData icon})>[
     (
-      title: 'Employment templates',
-      sub:
-          'Pre-fill compensation, rate, OT and leaves per type. The Add Employee modal reads from here.',
-      icon: Icons.badge_outlined,
-    ),
-    (
       title: 'Hours & rates',
       sub:
           'Standard hours and the labor-law multipliers applied on top of base pay.',
@@ -131,7 +132,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final showSave = _section == 1 || _section == 2;
+    final showSave = _section == 0 || _section == 1;
     return Container(
       color: YColor.surface2,
       child: Row(
@@ -184,7 +185,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    if (_section == 3)
+                    if (_section == 2)
                       ElevatedButton.icon(
                         onPressed: () => _editLeave(null),
                         icon: const Icon(Icons.add, size: 16),
@@ -270,42 +271,40 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   List<Widget> _sectionContent(HrStore state) {
     switch (_section) {
       case 0:
-        final templates = state.employmentTemplates;
         return [
           _SectionCard(
-            title: 'Employment templates',
+            title: 'Standard hours & overtime',
             subtitle:
-                'The Add Employee modal reads compensation, rate, OT and leaves from here.',
-            child: Column(children: [
-              for (var i = 0; i < templates.length; i++) ...[
-                _TemplateRow(
-                  state: state,
-                  template: templates[i],
-                  onTap: () => _editTemplate(templates[i]),
-                ),
-                if (i != templates.length - 1) const _CardDivider(),
-              ],
-            ]),
-          ),
-        ];
-      case 1:
-        return [
-          _SectionCard(
-            title: 'Standard hours',
-            subtitle: 'Beyond this in a single day counts as overtime.',
+                'Work beyond regular hours counts as overtime, capped by the allowed OT hours.',
             child: Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(children: [
-                SizedBox(
-                  width: 200,
-                  child: _numField(
-                      label: 'Regular hours / day',
-                      controller: _regHours,
-                      suffix: 'hr'),
-                ),
-              ]),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 14,
+                children: [
+                  SizedBox(
+                    width: 240,
+                    child: _numField(
+                        label: 'Regular hours / day',
+                        controller: _regHours,
+                        suffix: 'hr'),
+                  ),
+                  SizedBox(
+                    width: 240,
+                    child: _numField(
+                        label: 'Allowed OT hours / day',
+                        controller: _otHours,
+                        suffix: 'hr'),
+                  ),
+                ],
+              ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 8),
+            child: Text('Allowed OT hours: 0 = no cap.',
+                style: YFont.caption()),
           ),
           const SizedBox(height: 16),
           _SectionCard(
@@ -339,7 +338,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
             ]),
           ),
         ];
-      case 2:
+      case 1:
         return [
           _SectionCard(
             title: 'Undertime & lateness',
@@ -373,7 +372,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                     ),
                   ),
                   SizedBox(
-                    width: 110,
+                    width: 132,
                     child: _numField(
                         label: '', controller: _grace, suffix: 'min'),
                   ),
@@ -471,7 +470,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
           ),
         ),
         SizedBox(
-          width: 110,
+          width: 140,
           child: _numField(label: '', controller: controller, suffix: '×'),
         ),
       ]),
@@ -565,23 +564,15 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
       itemBuilder: (_) => [
         PopupMenuItem<String>(
           value: 'edit',
-          height: 42,
-          child: Row(children: [
-            const Icon(Icons.edit_outlined, size: 17, color: YColor.brandDeep),
-            const SizedBox(width: 10),
-            Text('Edit', style: YFont.body()),
-          ]),
+          height: 40,
+          child: Text('Edit', style: YFont.body()),
         ),
         if (onDelete != null)
           PopupMenuItem<String>(
             value: 'delete',
-            height: 42,
-            child: Row(children: [
-              const Icon(Icons.delete_outline, size: 17, color: YColor.danger),
-              const SizedBox(width: 10),
-              Text('Delete',
-                  style: YFont.body().copyWith(color: YColor.danger)),
-            ]),
+            height: 40,
+            child: Text('Delete',
+                style: YFont.body().copyWith(color: YColor.danger)),
           ),
       ],
     );
@@ -610,32 +601,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   }
 
   Widget _unitSuffix(String unit) =>
-      _UnitBadge(label: unit == '×' ? '× MULT' : unit.toUpperCase());
-
-  Future<void> _editTemplate(EmploymentTemplate t) async {
-    final saved = await showDialog<EmploymentTemplate>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _TemplateDialog(
-        initial: t,
-        leaveTypes: widget.state.leaveTypes,
-      ),
-    );
-    if (saved == null || !mounted) return;
-    final err = await widget.state.updateEmploymentTemplate(saved);
-    if (!mounted) return;
-    if (err != null) {
-      PushToast.show(context,
-          title: 'Could not save',
-          subtitle: err,
-          leadingIcon: Icons.error_outline);
-      return;
-    }
-    PushToast.show(context,
-        title: 'Template updated',
-        subtitle: _employmentLabel(saved.employmentType),
-        leadingIcon: Icons.work_outline);
-  }
+      _UnitBadge(label: unit == '×' ? '×' : unit.toUpperCase());
 
   Future<void> _editLeave(LeaveType? initial) async {
     final saved = await showDialog<LeaveType>(
@@ -682,20 +648,6 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   }
 }
 
-String _employmentLabel(EmploymentType t) => switch (t) {
-      EmploymentType.fullTime => 'Full-time',
-      EmploymentType.partTime => 'Part-time',
-      EmploymentType.contract => 'Contract',
-      EmploymentType.seasonal => 'Seasonal',
-    };
-
-IconData _employmentIcon(EmploymentType t) => switch (t) {
-      EmploymentType.fullTime => Icons.work_outline,
-      EmploymentType.partTime => Icons.schedule_outlined,
-      EmploymentType.contract => Icons.assignment_outlined,
-      EmploymentType.seasonal => Icons.eco_outlined,
-    };
-
 /// Pick a themed Material icon for a leave. Precedence:
 ///   1. owner-picked `iconName` from the icon picker,
 ///   2. keyword auto-map (handles seeded names like "Vacation Leave"),
@@ -705,438 +657,16 @@ IconData leaveIconFor(LeaveType lt) =>
     materialIconForName(lt.name) ??
     Icons.beach_access_outlined;
 
-// ───── Template row ─────
-
-class _TemplateRow extends StatelessWidget {
-  const _TemplateRow({
-    required this.state,
-    required this.template,
-    required this.onTap,
-  });
-  final HrStore state;
-  final EmploymentTemplate template;
-  final VoidCallback onTap;
-
-  String _rateLabel() {
-    final v = template.defaultRate;
-    if (v == 0) return 'Rate not set';
-    final formatted = v == v.roundToDouble()
-        ? v.toStringAsFixed(0)
-        : v.toStringAsFixed(2);
-    return '₱$formatted${template.compensationType.rateSuffix}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final leaves = state.leaveTypes
-        .where((l) => template.leaveTypeIds.contains(l.id))
-        .toList();
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: YColor.brandTint.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(_employmentIcon(template.employmentType),
-                size: 20, color: YColor.brandDeep),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text(_employmentLabel(template.employmentType),
-                      style: YFont.bodyStrong().copyWith(fontSize: 15)),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: YColor.brand.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(template.compensationType.label.toUpperCase(),
-                        style: YFont.caption().copyWith(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                          color: YColor.brand,
-                        )),
-                  ),
-                ]),
-                const SizedBox(height: 4),
-                Text(
-                  '${_rateLabel()} · OT ×${template.overtimeMultiplier.toStringAsFixed(2)}',
-                  style: YFont.caption(),
-                ),
-                if (leaves.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      for (final l in leaves)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: YColor.surface2,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: YColor.hairline),
-                          ),
-                          child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(leaveIconFor(l),
-                                    size: 11, color: YColor.brandDeep),
-                                const SizedBox(width: 4),
-                                Text(l.name,
-                                    style: YFont.caption()
-                                        .copyWith(fontSize: 10)),
-                              ]),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right,
-              size: 20, color: YColor.inkMuted),
-        ]),
-      ),
-    );
-  }
-}
-
-// ───── Template edit dialog ─────
-
-class _TemplateDialog extends StatefulWidget {
-  const _TemplateDialog({required this.initial, required this.leaveTypes});
-  final EmploymentTemplate initial;
-  final List<LeaveType> leaveTypes;
-
-  @override
-  State<_TemplateDialog> createState() => _TemplateDialogState();
-}
-
-class _TemplateDialogState extends State<_TemplateDialog> {
-  late CompensationType _compType;
-  late final TextEditingController _hourly;
-  late final TextEditingController _daily;
-  late final TextEditingController _monthly;
-  late final TextEditingController _ot;
-  late Set<String> _leaves;
-
-  @override
-  void initState() {
-    super.initState();
-    final t = widget.initial;
-    _compType = t.compensationType;
-    _hourly = TextEditingController(text: _fmt(t.defaultHourlyRate));
-    _daily = TextEditingController(text: _fmt(t.defaultDailyRate));
-    _monthly = TextEditingController(text: _fmt(t.defaultMonthlySalary));
-    _ot = TextEditingController(text: t.overtimeMultiplier.toStringAsFixed(2));
-    _leaves = {...t.leaveTypeIds};
-  }
-
-  @override
-  void dispose() {
-    _hourly.dispose();
-    _daily.dispose();
-    _monthly.dispose();
-    _ot.dispose();
-    super.dispose();
-  }
-
-  String _fmt(double v) =>
-      v == 0 ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2));
-
-  void _save() {
-    final saved = EmploymentTemplate(
-      id: widget.initial.id,
-      employmentType: widget.initial.employmentType,
-      compensationType: _compType,
-      defaultHourlyRate: double.tryParse(_hourly.text) ?? 0,
-      defaultDailyRate: double.tryParse(_daily.text) ?? 0,
-      defaultMonthlySalary: double.tryParse(_monthly.text) ?? 0,
-      overtimeMultiplier:
-          double.tryParse(_ot.text) ?? widget.initial.overtimeMultiplier,
-      leaveTypeIds: _leaves,
-    );
-    Navigator.of(context).pop(saved);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    return Dialog(
-      insetPadding:
-          const EdgeInsets.symmetric(horizontal: 100, vertical: 60),
-      backgroundColor: YColor.surface1,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: size.width - 200,
-        height: size.height - 120,
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 18, 16, 14),
-            child: Row(children: [
-              Icon(_employmentIcon(widget.initial.employmentType),
-                  size: 22, color: YColor.brandDeep),
-              const SizedBox(width: 10),
-              Text(
-                '${_employmentLabel(widget.initial.employmentType)} template',
-                style: YFont.titleLG().copyWith(fontSize: 22),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close),
-              ),
-            ]),
-          ),
-          Container(height: 0.5, color: YColor.hairline),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('COMPENSATION TYPE',
-                        style: YFont.caption().copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          color: YColor.brandDeep,
-                        )),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      for (final c in CompensationType.values) ...[
-                        Expanded(
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(YRadius.md),
-                            onTap: () => setState(() => _compType = c),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: _compType == c
-                                    ? YColor.brand.withValues(alpha: 0.08)
-                                    : YColor.surface2,
-                                borderRadius:
-                                    BorderRadius.circular(YRadius.md),
-                                border: Border.all(
-                                  color: _compType == c
-                                      ? YColor.brand
-                                      : YColor.hairline,
-                                  width: _compType == c ? 1.4 : 1,
-                                ),
-                              ),
-                              child: Center(
-                                child: Text(c.label,
-                                    style: YFont.bodyStrong()
-                                        .copyWith(fontSize: 13)),
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (c != CompensationType.values.last)
-                          const SizedBox(width: 8),
-                      ],
-                    ]),
-                    const SizedBox(height: 18),
-                    Text('DEFAULT RATE',
-                        style: YFont.caption().copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          color: YColor.brandDeep,
-                        )),
-                    const SizedBox(height: 8),
-                    // Show the rate field that matches the picked comp type.
-                    _rateField(),
-                    const SizedBox(height: 18),
-                    Text('OVERTIME MULTIPLIER',
-                        style: YFont.caption().copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          color: YColor.brandDeep,
-                        )),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 200,
-                      child: KeyboardAccessoryField(
-                        controller: _ot,
-                        accessoryLabel: 'OT',
-                        hint: '1.25',
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        fillColor: YColor.surface2,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        suffix: _UnitBadge.mult(),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text('AVAILABLE LEAVE TYPES',
-                        style: YFont.caption().copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          color: YColor.brandDeep,
-                        )),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Employees of this type can avail any leave you check below.',
-                      style: YFont.caption(),
-                    ),
-                    const SizedBox(height: 10),
-                    if (widget.leaveTypes.isEmpty)
-                      Text(
-                        'No leave types defined yet. Add some in the Leave types section first.',
-                        style: YFont.caption()
-                            .copyWith(color: YColor.inkMuted),
-                      )
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final l in widget.leaveTypes)
-                            _leaveChip(l),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Container(height: 0.5, color: YColor.hairline),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(children: [
-              const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 22, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
-                ),
-                child: const Text('Save'),
-              ),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _rateField() {
-    final ctrl = switch (_compType) {
-      CompensationType.hourly => _hourly,
-      CompensationType.daily => _daily,
-      CompensationType.salaried => _monthly,
-    };
-    final hint = switch (_compType) {
-      CompensationType.hourly => 'e.g., 140',
-      CompensationType.daily => 'e.g., 800',
-      CompensationType.salaried => 'e.g., 28000',
-    };
-    final unitLabel = switch (_compType) {
-      CompensationType.hourly => 'PER HOUR',
-      CompensationType.daily => 'PER DAY',
-      CompensationType.salaried => 'PER MONTH',
-    };
-    return SizedBox(
-      width: 320,
-      child: KeyboardAccessoryField(
-        controller: ctrl,
-        accessoryLabel: 'RATE',
-        hint: hint,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        fillColor: YColor.surface2,
-        borderColor: YColor.hairline,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffix: _UnitBadge(label: unitLabel),
-      ),
-    );
-  }
-
-  Widget _leaveChip(LeaveType l) {
-    final on = _leaves.contains(l.id);
-    return InkWell(
-      borderRadius: BorderRadius.circular(YRadius.md),
-      onTap: () => setState(() {
-        if (on) {
-          _leaves.remove(l.id);
-        } else {
-          _leaves.add(l.id);
-        }
-      }),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: on ? YColor.brand.withValues(alpha: 0.08) : YColor.surface2,
-          borderRadius: BorderRadius.circular(YRadius.md),
-          border: Border.all(
-            color: on ? YColor.brand : YColor.hairline,
-            width: on ? 1.4 : 1,
-          ),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(
-            on ? Icons.check_box_outlined : Icons.check_box_outline_blank,
-            size: 16,
-            color: on ? YColor.brand : YColor.inkMuted,
-          ),
-          const SizedBox(width: 8),
-          Icon(leaveIconFor(l),
-              size: 16,
-              color: on ? YColor.brand : YColor.brandDeep),
-          const SizedBox(width: 6),
-          Text(l.name, style: YFont.bodyStrong().copyWith(fontSize: 13)),
-        ]),
-      ),
-    );
-  }
-}
-
 // ───── helpers ─────
 
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.title,
     this.subtitle,
-    this.action,
     required this.child,
   });
   final String title;
   final String? subtitle;
-  final Widget? action;
   final Widget child;
 
   @override
@@ -1166,7 +696,6 @@ class _SectionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (action != null) action!,
             ]),
           ),
           Container(height: 0.5, color: YColor.hairline),
@@ -1412,7 +941,6 @@ class _LeaveTypeDialogState extends State<_LeaveTypeDialog> {
 /// '×' suffix that read like a close/clear button.
 class _UnitBadge extends StatelessWidget {
   const _UnitBadge({required this.label});
-  factory _UnitBadge.mult() => const _UnitBadge(label: '× MULT');
 
   final String label;
 
