@@ -98,6 +98,8 @@ class _ReportsViewState extends State<ReportsView> {
   _ReportLens _lens = _ReportLens.all;
   String _salesSubTab = 'general';
   String _productSubTab = 'general';
+  // Sales lens: optional payment-method drill-down (null = all payments).
+  o.OrderPaymentMethod? _payFilter;
   _DateRange _range = _DateRange.today();
   bool _comparePrior = true;
 
@@ -503,24 +505,41 @@ class _ReportsViewState extends State<ReportsView> {
     final separated = _salesSubTab == 'separated';
     // Same UI, different data — General = everything EXCEPT separated
     // categories; Separated = only those. (Full store analytics live in All.)
+    // The payment filter (if any) narrows the underlying orders first.
+    final catGroups = data.catGroupsForMethod(_payFilter);
     final groups = separated
-        ? _separatedSalesGroups(catalog, data)
-        : _generalSalesGroups(catalog, data);
+        ? _separatedSalesGroups(catalog, catGroups)
+        : _generalSalesGroups(catalog, catGroups);
     final sorted = [...groups]..sort((a, b) => b.cents.compareTo(a.cents));
+    final methodLabel = _payFilter?.label;
     return [
       _subTabBar(_salesSubTab, (v) => setState(() => _salesSubTab = v)),
-      _SalesBanner(groups: groups, separated: separated),
+      _PaymentFilterBar(
+        data: data,
+        selected: _payFilter,
+        onChanged: (m) => setState(() => _payFilter = m),
+      ),
+      _SalesBanner(groups: groups, separated: separated, methodLabel: methodLabel),
       _SalesMoneyKpis(groups: groups),
+      // Full Cash / GCash / QR / Bank breakdown with the overall total — shown
+      // when viewing all payments (drilling into one method hides it).
+      if (_payFilter == null) _ByPaymentSection(data: data),
       _RevenueContributionSection(groups: groups),
       _CategoryBreakdownSection(
-        title: separated ? 'Separated revenue by group' : 'Revenue by category',
+        title: separated
+            ? 'Separated revenue by group'
+            : methodLabel != null
+                ? 'Revenue by category · $methodLabel'
+                : 'Revenue by category',
         subtitle: 'Tap a row to see which products made the money',
         groups: sorted,
-        emptyMessage: separated
-            ? 'No separated sales groups yet. In Maintenance, turn on '
-                '"Separate in Sales reports" for a Product Type or Category '
-                '(e.g. consigned Books).'
-            : 'No sales in this range yet.',
+        emptyMessage: methodLabel != null
+            ? 'No $methodLabel sales in this range yet.'
+            : separated
+                ? 'No separated sales groups yet. In Maintenance, turn on '
+                    '"Separate in Sales reports" for a Product Type or Category '
+                    '(e.g. consigned Books).'
+                : 'No sales in this range yet.',
       ),
     ];
   }
@@ -572,8 +591,8 @@ class _ReportsViewState extends State<ReportsView> {
     // Same UI, different data — General excludes separated categories,
     // Separated shows only them.
     final groups = separated
-        ? _separatedSalesGroups(catalogStore, data)
-        : _generalSalesGroups(catalogStore, data);
+        ? _separatedSalesGroups(catalogStore, data.categoryGroups)
+        : _generalSalesGroups(catalogStore, data.categoryGroups);
     final catalog = separated
         ? _separatedCatalog(catalogStore)
         : _generalCatalog(catalogStore);
@@ -993,36 +1012,7 @@ class _ReportData {
       ..sort((a, b) => b.cents.compareTo(a.cents));
 
     // Categories → products sold under each.
-    final catGroupAgg = <String, Map<String, _TopItem>>{};
-    for (final ord in paid) {
-      for (final l in ord.lines) {
-        final cat = (l.categoryName ?? '').trim().isEmpty
-            ? 'Uncategorised'
-            : l.categoryName!.trim();
-        final byName =
-            catGroupAgg.putIfAbsent(cat, () => <String, _TopItem>{});
-        final cur = byName[l.name];
-        byName[l.name] = _TopItem(
-          name: l.name,
-          emoji: cur == null
-              ? l.emoji
-              : (cur.emoji.isEmpty ? l.emoji : cur.emoji),
-          qty: (cur?.qty ?? 0) + l.quantity,
-          revenueCents: (cur?.revenueCents ?? 0) + l.lineTotalCents,
-        );
-      }
-    }
-    categoryGroups = catGroupAgg.entries.map((e) {
-      final items = e.value.values.toList()
-        ..sort((a, b) => b.revenueCents.compareTo(a.revenueCents));
-      return _CatGroup(
-        name: e.key,
-        cents: items.fold<int>(0, (s, i) => s + i.revenueCents),
-        qty: items.fold<int>(0, (s, i) => s + i.qty),
-        items: items,
-      );
-    }).toList()
-      ..sort((a, b) => b.cents.compareTo(a.cents));
+    categoryGroups = _buildCatGroups(paid);
 
     refundsAndVoids = _current
         .where((ord) =>
@@ -1037,6 +1027,53 @@ class _ReportData {
     if (priorTotalCents == 0) return null;
     return (totalCents - priorTotalCents) / priorTotalCents * 100;
   }
+
+  /// Groups categories → products sold, for an arbitrary subset of orders.
+  /// Used for the all-paid set and for the payment-method-filtered Sales view.
+  static List<_CatGroup> _buildCatGroups(Iterable<o.Order> orders) {
+    final agg = <String, Map<String, _TopItem>>{};
+    for (final ord in orders) {
+      for (final l in ord.lines) {
+        final cat = (l.categoryName ?? '').trim().isEmpty
+            ? 'Uncategorised'
+            : l.categoryName!.trim();
+        final byName = agg.putIfAbsent(cat, () => <String, _TopItem>{});
+        final cur = byName[l.name];
+        byName[l.name] = _TopItem(
+          name: l.name,
+          emoji: cur == null
+              ? l.emoji
+              : (cur.emoji.isEmpty ? l.emoji : cur.emoji),
+          qty: (cur?.qty ?? 0) + l.quantity,
+          revenueCents: (cur?.revenueCents ?? 0) + l.lineTotalCents,
+        );
+      }
+    }
+    return agg.entries.map((e) {
+      final items = e.value.values.toList()
+        ..sort((a, b) => b.revenueCents.compareTo(a.revenueCents));
+      return _CatGroup(
+        name: e.key,
+        cents: items.fold<int>(0, (s, i) => s + i.revenueCents),
+        qty: items.fold<int>(0, (s, i) => s + i.qty),
+        items: items,
+      );
+    }).toList()
+      ..sort((a, b) => b.cents.compareTo(a.cents));
+  }
+
+  /// Paid orders settled entirely with [method] (single-method orders).
+  /// Split-payment orders only appear in the unfiltered "All payments" view.
+  List<o.Order> paidForMethod(o.OrderPaymentMethod method) => paid
+      .where((ord) =>
+          ord.payments.isNotEmpty &&
+          ord.payments.every((p) => p.method == method))
+      .toList();
+
+  /// Category groups for the Sales lens, optionally narrowed to one payment
+  /// method. Null = all payments (the precomputed set).
+  List<_CatGroup> catGroupsForMethod(o.OrderPaymentMethod? method) =>
+      method == null ? categoryGroups : _buildCatGroups(paidForMethod(method));
 }
 
 class _TopItem {
@@ -1402,16 +1439,25 @@ class _NotSellingSectionState extends State<_NotSellingSection> {
 /// Headline banner for the Sales lens (scoped to the current sub-tab) — same
 /// gradient-card style as Inventory / Payroll / Staff / Attendance.
 class _SalesBanner extends StatelessWidget {
-  const _SalesBanner({required this.groups, required this.separated});
+  const _SalesBanner({
+    required this.groups,
+    required this.separated,
+    this.methodLabel,
+  });
   final List<_CatGroup> groups;
   final bool separated;
+  final String? methodLabel;
 
   @override
   Widget build(BuildContext context) {
     final revenue = groups.fold<int>(0, (s, g) => s + g.cents);
     final items = groups.fold<int>(0, (s, g) => s + g.qty);
     return _ReportBanner(
-      label: separated ? 'SEPARATED SALES' : 'SALES',
+      label: methodLabel != null
+          ? '${methodLabel!.toUpperCase()} SALES'
+          : separated
+              ? 'SEPARATED SALES'
+              : 'SALES',
       value: Money(revenue).formatted,
       subtitle: groups.isEmpty
           ? (separated
@@ -1691,22 +1737,24 @@ class _CatGroup {
 /// each carrying the products sold under it. General sales are excluded.
 /// Category groups for the General view — everything EXCEPT the categories
 /// flagged `separateSales` (those are settled in the Separated view).
-List<_CatGroup> _generalSalesGroups(CatalogStore catalog, _ReportData data) {
+List<_CatGroup> _generalSalesGroups(
+    CatalogStore catalog, List<_CatGroup> source) {
   final catByName = {
     for (final c in catalog.categories) c.name.trim().toLowerCase(): c,
   };
-  return data.categoryGroups.where((cg) {
+  return source.where((cg) {
     final c = catByName[cg.name.trim().toLowerCase()];
     return !(c?.separateSales ?? false);
   }).toList();
 }
 
-List<_CatGroup> _separatedSalesGroups(CatalogStore catalog, _ReportData data) {
+List<_CatGroup> _separatedSalesGroups(
+    CatalogStore catalog, List<_CatGroup> source) {
   final catByName = {
     for (final c in catalog.categories) c.name.trim().toLowerCase(): c,
   };
   final groups = <String, ({String name, Map<String, _TopItem> items})>{};
-  for (final cg in data.categoryGroups) {
+  for (final cg in source) {
     final c = catByName[cg.name.trim().toLowerCase()];
     // Separate-in-sales is per Category only.
     if (c == null || !c.separateSales) continue;
@@ -2504,21 +2552,143 @@ class _TopItemsSection extends StatelessWidget {
   }
 }
 
-// ─────────────────────── Payment method section ────────────────────
+// ─────────────────────── Payment method filter + section ────────────
+
+/// Brand-coordinated dot colours per payment method (shared by the filter
+/// chips and the breakdown bars).
+const _kPaymentTones = <o.OrderPaymentMethod, Color>{
+  o.OrderPaymentMethod.cash: Color(0xFF5C8A6B),
+  o.OrderPaymentMethod.gcash: Color(0xFF3D5A7A),
+  o.OrderPaymentMethod.paymaya: Color(0xFF8A5A8A),
+  o.OrderPaymentMethod.card: Color(0xFFC29A36),
+  o.OrderPaymentMethod.bankTransfer: Color(0xFF7C8F65),
+  o.OrderPaymentMethod.qrPh: Color(0xFF6E5AA0),
+  o.OrderPaymentMethod.other: Color(0xFF8A8A8A),
+};
+
+/// Horizontal filter strip for the Sales lens. Doubles as an at-a-glance
+/// Cash / GCash / QR / Bank breakdown: every chip shows that method's total,
+/// and tapping one narrows the whole Sales view to it. "All payments" shows
+/// the overall total and clears the filter.
+class _PaymentFilterBar extends StatelessWidget {
+  const _PaymentFilterBar({
+    required this.data,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _ReportData data;
+  final o.OrderPaymentMethod? selected;
+  final ValueChanged<o.OrderPaymentMethod?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = data.payments.entries.toList()
+      ..sort((a, b) => b.value.cents.compareTo(a.value.cents));
+    // Nothing to filter by until there are payments in the range.
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    Widget chip({
+      required bool on,
+      required Color tone,
+      required String label,
+      required String amount,
+      required VoidCallback onTap,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 130),
+            padding: const EdgeInsets.fromLTRB(11, 8, 13, 8),
+            decoration: BoxDecoration(
+              color: on ? tone : YColor.surface1,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: on ? tone : YColor.hairline, width: on ? 0 : 1),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: on ? Colors.white : tone,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label,
+                      style: YFont.bodyStrong().copyWith(
+                        fontSize: 12.5,
+                        color: on ? Colors.white : YColor.ink,
+                      )),
+                  Text(amount,
+                      style: YFont.caption().copyWith(
+                        fontSize: 11,
+                        color: on
+                            ? Colors.white.withValues(alpha: 0.9)
+                            : YColor.inkMuted,
+                      )),
+                ],
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 8),
+            child: Text('FILTER BY PAYMENT',
+                style: YFont.caption().copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: YColor.inkMuted,
+                )),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              chip(
+                on: selected == null,
+                tone: YColor.brand,
+                label: 'All payments',
+                amount: Money(data.totalCents).formatted,
+                onTap: () => onChanged(null),
+              ),
+              for (final e in entries)
+                chip(
+                  on: selected == e.key,
+                  tone: _kPaymentTones[e.key] ?? YColor.brand,
+                  label: e.key.label,
+                  amount: Money(e.value.cents).formatted,
+                  onTap: () => onChanged(e.key),
+                ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _ByPaymentSection extends StatelessWidget {
   const _ByPaymentSection({required this.data});
   final _ReportData data;
 
-  static const _tones = <o.OrderPaymentMethod, Color>{
-    o.OrderPaymentMethod.cash: Color(0xFF5C8A6B),
-    o.OrderPaymentMethod.gcash: Color(0xFF3D5A7A),
-    o.OrderPaymentMethod.paymaya: Color(0xFF8A5A8A),
-    o.OrderPaymentMethod.card: Color(0xFFC29A36),
-    o.OrderPaymentMethod.bankTransfer: Color(0xFF7C8F65),
-    o.OrderPaymentMethod.qrPh: Color(0xFF6E5AA0),
-    o.OrderPaymentMethod.other: Color(0xFF8A8A8A),
-  };
+  static const _tones = _kPaymentTones;
 
   @override
   Widget build(BuildContext context) {
