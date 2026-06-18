@@ -69,8 +69,16 @@ class Payslip {
   double monthlySalary;
   /// Bonuses / commission to add to gross.
   double bonus;
-  /// Deductions (advances, late, missing items, taxes).
+  /// "Other" deductions for THIS period (advances, late, missing items) —
+  /// taken as-is, not pro-rated. Statutory items are itemized below.
   double deductions;
+
+  // ── Itemized statutory deductions (employee share, MONTHLY pesos) ──
+  // Snapshotted from the employee at run time; pro-rated by pay frequency in
+  // [statutoryCentavosFor]. 0 when the tenant has that contribution switched off.
+  double sss;
+  double philHealth;
+  double pagIbig;
   /// Standard hours in a working day — sourced from the tenant's Payroll rules
   /// (Maintenance → Payroll → "Regular hours / day"). Daily-rate pay divides
   /// hours worked by this to get days. Defaults to 8 if unset.
@@ -88,6 +96,9 @@ class Payslip {
     this.monthlySalary = 0,
     this.bonus = 0,
     this.deductions = 0,
+    this.sss = 0,
+    this.philHealth = 0,
+    this.pagIbig = 0,
     this.regularHoursPerDay = 8,
   }) : id = id ?? _uuid.v4();
 
@@ -99,6 +110,15 @@ class Payslip {
   /// Gross pay in whole centavos (before deductions). Hourly = hours×rate.
   /// Daily = (hours/8)×rate. Salaried = monthlySalary pro-rated by the period
   /// (weekly = /4.33, biweekly = /2.165). Bonus is added on top.
+  /// How many of this period fit in a month — used to pro-rate a monthly
+  /// salary and the monthly statutory contributions to one pay run.
+  static double periodsPerMonth(PayPeriodKind period) => switch (period) {
+        PayPeriodKind.weekly => 4.333,
+        PayPeriodKind.biweekly => 2.167,
+        PayPeriodKind.semiMonthly => 2.0,
+        PayPeriodKind.monthly => 1.0,
+      };
+
   int grossCentavosFor(PayPeriodKind period) {
     int base;
     switch (compensationType) {
@@ -111,20 +131,31 @@ class Payslip {
         final daysWorked = hoursWorked / perDay;
         base = _toCentavos(daysWorked * dailyRate);
       case CompensationType.salaried:
-        final divisor = switch (period) {
-          PayPeriodKind.weekly => 4.333,
-          PayPeriodKind.biweekly => 2.167,
-          PayPeriodKind.semiMonthly => 2.0,
-          PayPeriodKind.monthly => 1.0,
-        };
-        base = _toCentavos(monthlySalary / divisor);
+        base = _toCentavos(monthlySalary / periodsPerMonth(period));
     }
     return base + _toCentavos(bonus);
   }
 
-  /// Net pay in whole centavos (gross − deductions).
+  /// Each itemized statutory deduction (SSS / PhilHealth / Pag-IBIG), in
+  /// centavos, pro-rated to THIS pay run from the stored monthly amount.
+  int sssCentavosFor(PayPeriodKind period) =>
+      _toCentavos(sss / periodsPerMonth(period));
+  int philHealthCentavosFor(PayPeriodKind period) =>
+      _toCentavos(philHealth / periodsPerMonth(period));
+  int pagIbigCentavosFor(PayPeriodKind period) =>
+      _toCentavos(pagIbig / periodsPerMonth(period));
+
+  /// All statutory deductions combined for the period, in centavos.
+  int statutoryCentavosFor(PayPeriodKind period) =>
+      sssCentavosFor(period) +
+      philHealthCentavosFor(period) +
+      pagIbigCentavosFor(period);
+
+  /// Net pay in whole centavos: gross − statutory (pro-rated) − other.
   int netCentavosFor(PayPeriodKind period) =>
-      grossCentavosFor(period) - _toCentavos(deductions);
+      grossCentavosFor(period) -
+      statutoryCentavosFor(period) -
+      _toCentavos(deductions);
 
   /// Gross/net in pesos for display — derived from the centavo math so the
   /// number shown matches the summed run total to the centavo.
@@ -145,6 +176,9 @@ class Payslip {
             ((row['monthly_salary'] as num?) ?? 0).toDouble(),
         bonus: ((row['bonus'] as num?) ?? 0).toDouble(),
         deductions: ((row['deductions'] as num?) ?? 0).toDouble(),
+        sss: ((row['sss'] as num?) ?? 0).toDouble(),
+        philHealth: ((row['philhealth'] as num?) ?? 0).toDouble(),
+        pagIbig: ((row['pagibig'] as num?) ?? 0).toDouble(),
       );
 
   Map<String, dynamic> toRowPayload({
@@ -164,6 +198,9 @@ class Payslip {
         'monthly_salary': monthlySalary,
         'bonus': bonus,
         'deductions': deductions,
+        'sss': sss,
+        'philhealth': philHealth,
+        'pagibig': pagIbig,
       };
 }
 

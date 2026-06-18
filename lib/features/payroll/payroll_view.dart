@@ -7,6 +7,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/employee.dart';
+import '../../models/money.dart';
 import '../../models/payroll.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
@@ -992,6 +993,7 @@ class _SlipRowState extends State<_SlipRow> {
               ],
             ),
           ]),
+          _statutoryBreakdown(s),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(
@@ -1010,6 +1012,57 @@ class _SlipRowState extends State<_SlipRow> {
               ),
             ),
           ]),
+        ],
+      ),
+    );
+  }
+
+  /// Itemized, read-only breakdown of every deduction on this slip for the
+  /// run's pay period. Statutory amounts (SSS / PhilHealth / Pag-IBIG) come
+  /// from the employee record and are pro-rated by [Payslip]; the lump
+  /// `deductions` field is shown as "Other deductions". Each line only shows
+  /// when its amount is > 0 so a slip with no deductions stays clean.
+  Widget _statutoryBreakdown(Payslip s) {
+    final p = widget.period;
+    final sss = s.sssCentavosFor(p);
+    final philHealth = s.philHealthCentavosFor(p);
+    final pagIbig = s.pagIbigCentavosFor(p);
+    final other = (s.deductions * 100).round();
+    if (sss == 0 && philHealth == 0 && pagIbig == 0 && other == 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (sss > 0) _deductionLine('SSS', sss),
+          if (philHealth > 0) _deductionLine('PhilHealth', philHealth),
+          if (pagIbig > 0) _deductionLine('Pag-IBIG', pagIbig),
+          if (other > 0) _deductionLine('Other deductions', other),
+        ],
+      ),
+    );
+  }
+
+  /// One deduction row: label on the left, the negative amount on the right
+  /// in the danger color to match the "− ₱…" deduction styling.
+  Widget _deductionLine(String label, int centavos) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 1),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label, style: YFont.caption()),
+          ),
+          Text(
+            '− ${Money(centavos).formatted}',
+            style: YFont.caption().copyWith(
+              color: YColor.danger,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

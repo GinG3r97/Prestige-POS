@@ -35,6 +35,28 @@ extension EmploymentTypeX on EmploymentType {
 ///  * salaried — fixed [Employee.monthlySalary] regardless of hours/days
 enum CompensationType { hourly, daily, salaried }
 
+/// One employee's MONTHLY statutory contributions (employee share, pesos).
+typedef PhStatutory = ({double sss, double philHealth, double pagIbig});
+
+/// Suggested PH employee-share contributions from a monthly basic salary,
+/// using the 2025 rules. These are approximations (SSS uses exact bracket
+/// tables; PhilHealth/Pag-IBIG are straight percentages with floor/ceiling),
+/// so the owner can override any value per employee. A salary of 0 yields 0.
+PhStatutory phStatutory(double monthlySalary) {
+  if (monthlySalary <= 0) return (sss: 0, philHealth: 0, pagIbig: 0);
+  double round0(double v) => v.roundToDouble();
+  // SSS — 5% employee share of the salary credit (₱5,000–₱35,000).
+  final sssBase = monthlySalary.clamp(5000.0, 35000.0);
+  final sss = round0(sssBase * 0.05);
+  // PhilHealth — 2.5% employee share (floor ₱10,000, ceiling ₱100,000).
+  final phBase = monthlySalary.clamp(10000.0, 100000.0);
+  final philHealth = round0(phBase * 0.025);
+  // Pag-IBIG — 2% of compensation, capped at ₱10,000 → max ₱200 (1% ≤ ₱1,500).
+  final pagBase = monthlySalary.clamp(0.0, 10000.0);
+  final pagIbig = round0(pagBase * (monthlySalary <= 1500 ? 0.01 : 0.02));
+  return (sss: sss, philHealth: philHealth, pagIbig: pagIbig);
+}
+
 extension CompensationTypeX on CompensationType {
   String get label => switch (this) {
         CompensationType.hourly => 'Hourly',
@@ -259,6 +281,15 @@ class Employee {
   double dailyRate;
   /// Fixed monthly pay in pesos. Used when [compensationType] is salaried.
   double monthlySalary;
+
+  // ── Statutory deductions (employee share, MONTHLY pesos) ──
+  // Auto-suggested from the salary via [phStatutory] but freely overridable per
+  // employee — real SSS brackets / declared salary credits vary. The pay run
+  // snapshots and pro-rates these per pay frequency.
+  double sssContribution;
+  double philHealthContribution;
+  double pagIbigContribution;
+
   Set<String> branchIds;
 
   // Schedule (per-weekday shifts; 1=Mon … 7=Sun)
@@ -296,6 +327,9 @@ class Employee {
     this.hourlyRate = 0,
     this.dailyRate = 0,
     this.monthlySalary = 0,
+    this.sssContribution = 0,
+    this.philHealthContribution = 0,
+    this.pagIbigContribution = 0,
     Set<String>? branchIds,
     List<WorkShift>? schedule,
     List<EmployeeDocument>? documents,
@@ -339,6 +373,9 @@ class Employee {
           EmploymentTypeX.fromDb(row['employment_type'] as String?),
       compensationType:
           CompensationTypeX.fromDb(row['compensation_type'] as String?),
+      sssContribution: ((row['sss_cents'] as int?) ?? 0) / 100,
+      philHealthContribution: ((row['philhealth_cents'] as int?) ?? 0) / 100,
+      pagIbigContribution: ((row['pagibig_cents'] as int?) ?? 0) / 100,
       hourlyRate: ((row['hourly_rate_cents'] as int?) ?? 0) / 100,
       dailyRate: ((row['daily_rate_cents'] as int?) ?? 0) / 100,
       monthlySalary: ((row['monthly_salary_cents'] as int?) ?? 0) / 100,

@@ -520,6 +520,9 @@ class HrStore extends ChangeNotifier {
         'hourly_rate_cents': (e.hourlyRate * 100).round(),
         'daily_rate_cents': (e.dailyRate * 100).round(),
         'monthly_salary_cents': (e.monthlySalary * 100).round(),
+        'sss_cents': (e.sssContribution * 100).round(),
+        'philhealth_cents': (e.philHealthContribution * 100).round(),
+        'pagibig_cents': (e.pagIbigContribution * 100).round(),
         'branch_ids': e.branchIds.toList(),
         'schedule': e.schedule.map((s) => s.toJson()).toList(),
         'documents': e.documents.map((d) => d.toJson()).toList(),
@@ -911,6 +914,13 @@ class HrStore extends ChangeNotifier {
         hourlyRate: emp.hourlyRate,
         dailyRate: emp.dailyRate,
         monthlySalary: emp.monthlySalary,
+        // Itemized statutory deductions — snapshot the employee's monthly
+        // amounts, but only the ones the tenant has switched on. The pay run
+        // pro-rates them by pay frequency at display/net time.
+        sss: _payrollRules.deductSSS ? emp.sssContribution : 0,
+        philHealth:
+            _payrollRules.deductPhilHealth ? emp.philHealthContribution : 0,
+        pagIbig: _payrollRules.deductPagIBIG ? emp.pagIbigContribution : 0,
         regularHoursPerDay: _payrollRules.regularHoursPerDay,
       ));
     }
@@ -984,6 +994,9 @@ class HrStore extends ChangeNotifier {
             'monthly_salary': updated.monthlySalary,
             'bonus': updated.bonus,
             'deductions': updated.deductions,
+            'sss': updated.sss,
+            'philhealth': updated.philHealth,
+            'pagibig': updated.pagIbig,
           })
           .eq('id', updated.id);
       final si = runs[ri].slips.indexWhere((s) => s.id == updated.id);

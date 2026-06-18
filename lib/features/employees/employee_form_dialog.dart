@@ -37,6 +37,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   late final TextEditingController _hourlyRate;
   late final TextEditingController _dailyRate;
   late final TextEditingController _monthlySalary;
+  late final TextEditingController _sss;
+  late final TextEditingController _philHealth;
+  late final TextEditingController _pagIbig;
   late final TextEditingController _notes;
 
   /// Lazy controllers for shift fields, keyed by "${weekday}_${start|end}".
@@ -100,6 +103,18 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         text: e == null || e.monthlySalary == 0
             ? ''
             : e.monthlySalary.toStringAsFixed(0));
+    _sss = TextEditingController(
+        text: e == null || e.sssContribution == 0
+            ? ''
+            : e.sssContribution.toStringAsFixed(0));
+    _philHealth = TextEditingController(
+        text: e == null || e.philHealthContribution == 0
+            ? ''
+            : e.philHealthContribution.toStringAsFixed(0));
+    _pagIbig = TextEditingController(
+        text: e == null || e.pagIbigContribution == 0
+            ? ''
+            : e.pagIbigContribution.toStringAsFixed(0));
     _notes = TextEditingController(text: e?.notes ?? '');
     _portalEnabled = e?.portalEnabled ?? false;
     _portalEmail = TextEditingController(
@@ -159,6 +174,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     _hourlyRate.dispose();
     _dailyRate.dispose();
     _monthlySalary.dispose();
+    _sss.dispose();
+    _philHealth.dispose();
+    _pagIbig.dispose();
     _notes.dispose();
     _portalEmail.dispose();
     for (final c in _shiftCtrls.values) {
@@ -288,6 +306,9 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       hourlyRate: double.tryParse(_hourlyRate.text) ?? 0,
       dailyRate: double.tryParse(_dailyRate.text) ?? 0,
       monthlySalary: double.tryParse(_monthlySalary.text) ?? 0,
+      sssContribution: double.tryParse(_sss.text) ?? 0,
+      philHealthContribution: double.tryParse(_philHealth.text) ?? 0,
+      pagIbigContribution: double.tryParse(_pagIbig.text) ?? 0,
       schedule: _schedule,
       documents: _documents,
       // Employee Portal: owner enables + sets the login email.
@@ -392,6 +413,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                         _templateHint(),
                       ],
                     ]),
+                    const SizedBox(height: 18),
+                    _statutorySection(),
                   ],
                   if (_step == 2) ...[
                     // Weekly schedule + Requirements side by side.
@@ -948,6 +971,95 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         keyboardType: TextInputType.number,
         hint: 'e.g., 28000',
       );
+
+  /// Statutory deductions — three editable monthly peso fields plus a
+  /// "Compute from salary" shortcut that fills them from [phStatutory].
+  /// Mirrors the [_section] container styling but adds a subtitle and a
+  /// trailing action beside the title.
+  Widget _statutorySection() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: YColor.surface2,
+        borderRadius: BorderRadius.circular(YRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Expanded(
+              child: Text('STATUTORY DEDUCTIONS',
+                  style: YFont.caption().copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                    color: YColor.brandDeep,
+                  )),
+            ),
+            TextButton.icon(
+              onPressed: _computeStatutory,
+              icon: const Icon(Icons.auto_awesome_outlined, size: 14),
+              label: const Text('Compute from salary'),
+              style: TextButton.styleFrom(
+                foregroundColor: YColor.brand,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                textStyle: YFont.caption().copyWith(
+                    fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            'Monthly employee share. Tap Compute to fill from salary; '
+            'edit any value.',
+            style: YFont.caption(),
+          ),
+          const SizedBox(height: 12),
+          _row(
+            _field(
+              label: 'SSS (₱)',
+              controller: _sss,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              hint: 'e.g., 900',
+            ),
+            _field(
+              label: 'PhilHealth (₱)',
+              controller: _philHealth,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              hint: 'e.g., 700',
+            ),
+          ),
+          const SizedBox(height: 12),
+          _row(
+            _field(
+              label: 'Pag-IBIG (₱)',
+              controller: _pagIbig,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              hint: 'e.g., 200',
+            ),
+            const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reads the monthly-salary field, runs [phStatutory], and fills the three
+  /// contribution fields. Hourly/daily employees have no monthly-salary field
+  /// shown, so we just use whatever is in that controller (0 if blank).
+  void _computeStatutory() {
+    final salary = double.tryParse(_monthlySalary.text) ?? 0;
+    final s = phStatutory(salary);
+    setState(() {
+      _sss.text = s.sss == 0 ? '' : s.sss.toStringAsFixed(0);
+      _philHealth.text =
+          s.philHealth == 0 ? '' : s.philHealth.toStringAsFixed(0);
+      _pagIbig.text = s.pagIbig == 0 ? '' : s.pagIbig.toStringAsFixed(0);
+    });
+  }
 
   /// Picks the right rate field based on the chosen compensation type so
   /// only one is visible at a time (no half-empty form noise).
