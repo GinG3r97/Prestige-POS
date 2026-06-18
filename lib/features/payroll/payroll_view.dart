@@ -200,7 +200,9 @@ class _TimesheetPane extends StatelessWidget {
     final days = _enumerateDays(periodStart, periodEnd);
 
     return Padding(
-      padding: const EdgeInsets.all(24),
+      // Trim the right padding so the timesheet card reaches close to the
+      // pane divider (no dead gap before the separator).
+      padding: const EdgeInsets.fromLTRB(24, 24, 10, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -223,7 +225,7 @@ class _TimesheetPane extends StatelessWidget {
                   // are subtracted, the rest is split across the days.
                   : LayoutBuilder(builder: (ctx, cons) {
                       final dayW =
-                          ((cons.maxWidth - 274) / 7).clamp(44.0, 84.0);
+                          ((cons.maxWidth - 286) / 7).clamp(44.0, 84.0);
                       return SingleChildScrollView(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
