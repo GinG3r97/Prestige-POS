@@ -239,8 +239,6 @@ class _TimesheetPane extends StatelessWidget {
     final fmt = DateFormat('MMM d');
     return Row(
       children: [
-        Text('Timesheet', style: YFont.titleLG().copyWith(fontSize: 20)),
-        const SizedBox(width: 12),
         _IconBtn(
           icon: Icons.chevron_left,
           onTap: () => onShift(1),
@@ -298,16 +296,46 @@ class _TimesheetPane extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<PayPeriodKind>(
-            value: period,
-            onChanged: (p) => p == null ? null : onPeriodChange(p),
-            items: PayPeriodKind.values
-                .map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(p.label, style: YFont.body()),
-                    ))
-                .toList(),
+        // Pay-period kind picker — compact icon popup (no inline label) so the
+        // header stays tight and the timesheet grid keeps its width.
+        PopupMenuButton<PayPeriodKind>(
+          tooltip: 'Pay period',
+          position: PopupMenuPosition.under,
+          offset: const Offset(0, 8),
+          color: YColor.surface1,
+          elevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: YColor.hairline),
+          ),
+          onSelected: onPeriodChange,
+          itemBuilder: (_) => [
+            for (final p in PayPeriodKind.values)
+              PopupMenuItem<PayPeriodKind>(
+                value: p,
+                height: 42,
+                child: Row(children: [
+                  Icon(Icons.check,
+                      size: 15,
+                      color: p == period ? YColor.brand : Colors.transparent),
+                  const SizedBox(width: 8),
+                  Text(p.label,
+                      style: YFont.bodyStrong().copyWith(
+                        fontSize: 13,
+                        color: p == period ? YColor.brand : YColor.ink,
+                      )),
+                ]),
+              ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: YColor.surface1,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: YColor.hairline),
+            ),
+            child: const Icon(Icons.calendar_view_week_outlined,
+                size: 18, color: YColor.brandDeep),
           ),
         ),
       ],
@@ -318,7 +346,8 @@ class _TimesheetPane extends StatelessWidget {
     final dayFmt = DateFormat('E\nd');
     return DataTable(
       dataRowMaxHeight: 56,
-      columnSpacing: 14,
+      columnSpacing: 6,
+      horizontalMargin: 12,
       headingTextStyle: YFont.caption().copyWith(
             fontWeight: FontWeight.w700,
             color: YColor.inkMuted,
@@ -329,7 +358,7 @@ class _TimesheetPane extends StatelessWidget {
         for (final d in days)
           DataColumn(
             label: SizedBox(
-              width: 44,
+              width: 38,
               child: Text(
                 dayFmt.format(d).toUpperCase(),
                 textAlign: TextAlign.center,
@@ -379,24 +408,31 @@ class _TimesheetPane extends StatelessWidget {
           child: Icon(e.gender.icon, size: 18, color: YColor.brandDeep),
         ),
         const SizedBox(width: 8),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(e.name,
-                style: YFont.bodyStrong().copyWith(fontSize: 13)),
-            Text(
-              switch (e.compensationType) {
-                CompensationType.hourly =>
-                  'Hourly · ₱${e.hourlyRate.toStringAsFixed(0)}/hr',
-                CompensationType.daily =>
-                  'Daily · ₱${e.dailyRate.toStringAsFixed(0)}/day',
-                CompensationType.salaried =>
-                  'Salaried · ₱${e.monthlySalary.toStringAsFixed(0)}/mo',
-              },
-              style: YFont.caption().copyWith(fontSize: 11),
-            ),
-          ],
+        SizedBox(
+          width: 116,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(e.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: YFont.bodyStrong().copyWith(fontSize: 13)),
+              Text(
+                switch (e.compensationType) {
+                  CompensationType.hourly =>
+                    'Hourly · ₱${e.hourlyRate.toStringAsFixed(0)}/hr',
+                  CompensationType.daily =>
+                    'Daily · ₱${e.dailyRate.toStringAsFixed(0)}/day',
+                  CompensationType.salaried =>
+                    'Salaried · ₱${e.monthlySalary.toStringAsFixed(0)}/mo',
+                },
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: YFont.caption().copyWith(fontSize: 11),
+              ),
+            ],
+          ),
         ),
       ]),
     );
@@ -504,11 +540,11 @@ class _HoursCellState extends State<_HoursCell> {
 
   @override
   Widget build(BuildContext context) {
-    // Fixed 44×34 envelope keeps the grid row height constant. Tapping the
+    // Fixed 38×34 envelope keeps the grid row height constant. Tapping the
     // cell opens the shared numpad sheet instead of the OS keyboard.
     final has = _c.text.trim().isNotEmpty;
     return SizedBox(
-      width: 44,
+      width: 38,
       height: 34,
       child: Material(
         color: Colors.transparent,
@@ -766,7 +802,7 @@ class _PayRunPane extends StatelessWidget {
                         style: YFont.bodyStrong(),
                       ),
                       Text(
-                        '${r.slips.length} employees · ${r.kind.label}',
+                        '${r.slips.length} employees',
                         style: YFont.caption(),
                       ),
                     ],
@@ -840,7 +876,7 @@ class _RunDetail extends StatelessWidget {
                     style: YFont.titleMD().copyWith(fontSize: 16),
                   ),
                   Text(
-                    '${run.kind.label} · ${run.slips.length} employees',
+                    '${run.slips.length} employees',
                     style: YFont.caption(),
                   ),
                 ],

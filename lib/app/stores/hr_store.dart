@@ -924,20 +924,22 @@ class HrStore extends ChangeNotifier {
     if (key == null || tenantId == null) {
       return (run: null, error: 'No store selected.');
     }
-    // Guard against spamming duplicate runs: if an unpaid run already covers
-    // this exact period, send the owner to it instead of stacking copies.
+    // Guard against duplicate runs: if ANY run (draft, finalized OR paid)
+    // already covers this exact period, send the owner to it instead of
+    // stacking copies. Delete the old one first to make a fresh run.
     bool sameDay(DateTime a, DateTime b) =>
         a.year == b.year && a.month == b.month && a.day == b.day;
     final existing = _payrollRunsByTenant[key]?.where((r) =>
         r.kind == kind &&
-        r.status != PayrollStatus.paid &&
         sameDay(r.periodStart, start) &&
         sameDay(r.periodEnd, end));
     if (existing != null && existing.isNotEmpty) {
+      final dup = existing.first;
       return (
-        run: existing.first,
-        error: 'A run for this period already exists — opening it instead. '
-            'Delete it first if you want to regenerate.'
+        run: dup,
+        error: 'A ${dup.status.label.toLowerCase()} run for this period '
+            'already exists — opening it instead. Delete it first if you '
+            'want to regenerate.'
       );
     }
     final slips = <Payslip>[];
