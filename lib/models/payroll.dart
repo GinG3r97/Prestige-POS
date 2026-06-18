@@ -86,16 +86,22 @@ class Payslip {
     this.deductions = 0,
   }) : id = id ?? _uuid.v4();
 
-  /// Gross before deductions. Hourly = hours * rate. Daily = days worked *
-  /// daily rate (days derived from hours / 8). Salaried = monthlySalary
-  /// pro-rated by the period (weekly = /4.33, biweekly = /2.165).
-  double grossFor(PayPeriodKind period) {
+  /// Pesos → whole centavos, rounded to the nearest centavo. ALL pay math runs
+  /// in integer centavos so summing many slips can't drift by fractions of a
+  /// centavo — floating-point pesos was the bug this avoids.
+  static int _toCentavos(double pesos) => (pesos * 100).round();
+
+  /// Gross pay in whole centavos (before deductions). Hourly = hours×rate.
+  /// Daily = (hours/8)×rate. Salaried = monthlySalary pro-rated by the period
+  /// (weekly = /4.33, biweekly = /2.165). Bonus is added on top.
+  int grossCentavosFor(PayPeriodKind period) {
+    int base;
     switch (compensationType) {
       case CompensationType.hourly:
-        return hoursWorked * hourlyRate + bonus;
+        base = _toCentavos(hoursWorked * hourlyRate);
       case CompensationType.daily:
         final daysWorked = hoursWorked / 8.0;
-        return daysWorked * dailyRate + bonus;
+        base = _toCentavos(daysWorked * dailyRate);
       case CompensationType.salaried:
         final divisor = switch (period) {
           PayPeriodKind.weekly => 4.333,
@@ -103,12 +109,19 @@ class Payslip {
           PayPeriodKind.semiMonthly => 2.0,
           PayPeriodKind.monthly => 1.0,
         };
-        return (monthlySalary / divisor) + bonus;
+        base = _toCentavos(monthlySalary / divisor);
     }
+    return base + _toCentavos(bonus);
   }
 
-  double netFor(PayPeriodKind period) =>
-      grossFor(period) - deductions;
+  /// Net pay in whole centavos (gross − deductions).
+  int netCentavosFor(PayPeriodKind period) =>
+      grossCentavosFor(period) - _toCentavos(deductions);
+
+  /// Gross/net in pesos for display — derived from the centavo math so the
+  /// number shown matches the summed run total to the centavo.
+  double grossFor(PayPeriodKind period) => grossCentavosFor(period) / 100.0;
+  double netFor(PayPeriodKind period) => netCentavosFor(period) / 100.0;
 
   factory Payslip.fromRow(Map<String, dynamic> row) => Payslip(
         id: row['id'] as String,
@@ -218,12 +231,16 @@ class PayrollRun {
         slips = slips ?? <Payslip>[],
         createdAt = createdAt ?? DateTime.now();
 
-  double get totalGross =>
-      slips.fold(0.0, (acc, s) => acc + s.grossFor(kind));
-  double get totalNet =>
-      slips.fold(0.0, (acc, s) => acc + s.netFor(kind));
+  // Sum in integer centavos, convert to pesos once — no per-slip float drift.
+  int get totalGrossCentavos =>
+      slips.fold(0, (acc, s) => acc + s.grossCentavosFor(kind));
+  int get totalNetCentavos =>
+      slips.fold(0, (acc, s) => acc + s.netCentavosFor(kind));
+  double get totalGross => totalGrossCentavos / 100.0;
+  double get totalNet => totalNetCentavos / 100.0;
   double get totalDeductions =>
-      slips.fold(0.0, (acc, s) => acc + s.deductions);
+      slips.fold(0, (acc, s) => acc + Payslip._toCentavos(s.deductions)) /
+          100.0;
 
   factory PayrollRun.fromRow(
     Map<String, dynamic> row, {

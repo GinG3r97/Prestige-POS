@@ -42,7 +42,12 @@ class _AttendanceViewState extends State<AttendanceView> {
   DateTime _day = DateTime.now();
   bool _loading = true;
   String? _error;
+  // Punches shown for the selected day (display).
   final Map<String, List<_Punch>> _byEmployee = {};
+  // Pre-computed worked-hours label per employee. Computed from a wider window
+  // than the day so a shift that crosses midnight is counted on its start day
+  // (instead of showing 0h on both days).
+  final Map<String, String> _hours = {};
 
   bool _geoSet = false;
   int _radius = 50;
@@ -82,11 +87,16 @@ class _AttendanceViewState extends State<AttendanceView> {
       _loading = true;
       _error = null;
       _byEmployee.clear();
+      _hours.clear();
     });
     // Day bounds in Manila (UTC+8) expressed as UTC instants.
     final start = DateTime.utc(_day.year, _day.month, _day.day)
         .subtract(const Duration(hours: 8));
     final end = start.add(const Duration(days: 1));
+    // Pull a wider window (the next day too) so a shift that clocks out after
+    // midnight still has its closing 'out' to pair with — otherwise an
+    // overnight shift reads as 0h on both days.
+    final windowEnd = end.add(const Duration(days: 1));
     try {
       final rows = await supabase
           .from('attendance_punches')
@@ -94,19 +104,30 @@ class _AttendanceViewState extends State<AttendanceView> {
               'employee_name, kind, punched_at, selfie, distance_m, within_geofence, flagged, flag_reason')
           .eq('tenant_id', tid)
           .gte('punched_at', start.toIso8601String())
-          .lt('punched_at', end.toIso8601String())
+          .lt('punched_at', windowEnd.toIso8601String())
           .order('punched_at');
+      // Full window (for hour pairing) vs the day's punches (for display).
+      final full = <String, List<_Punch>>{};
       for (final r in rows as List) {
         final m = r as Map<String, dynamic>;
         final name = (m['employee_name'] as String?) ?? 'Unknown';
-        (_byEmployee[name] ??= []).add(_Punch(
-          m['kind'] as String,
-          DateTime.parse(m['punched_at'] as String).toLocal(),
+        final atUtc = DateTime.parse(m['punched_at'] as String);
+        final punch = _Punch(
+          (m['kind'] as String?) ?? '', // null-safe: bad row can't blank the day
+          atUtc.toLocal(),
           m['selfie'] as String?,
           (m['flagged'] as bool?) ?? false,
           m['flag_reason'] as String?,
           (m['distance_m'] as num?)?.toInt(),
-        ));
+        );
+        (full[name] ??= []).add(punch);
+        // Display only the selected day's punches (before tomorrow's start).
+        if (atUtc.isBefore(end)) (_byEmployee[name] ??= []).add(punch);
+      }
+      // Worked hours: pair across the window, count a session on the day its
+      // 'in' falls (so overnight shifts land on their start day, once).
+      for (final entry in full.entries) {
+        _hours[entry.key] = _hoursFor(entry.value, start, end);
       }
       final t = await supabase
           .from('tenants')
@@ -125,18 +146,29 @@ class _AttendanceViewState extends State<AttendanceView> {
     }
   }
 
-  String _hoursFor(List<_Punch> punches) {
+  /// Sums worked time for sessions whose clock-IN falls inside the selected
+  /// day [start, end) (UTC instants). [punches] spans a wider window so a
+  /// session that clocks out after midnight is still paired. A session is
+  /// attributed to the day of its IN punch, so overnight shifts count once on
+  /// their start day rather than 0h on both days.
+  String _hoursFor(List<_Punch> punches, DateTime start, DateTime end) {
     Duration total = Duration.zero;
-    DateTime? openIn;
+    DateTime? openIn; // local time of the open IN
+    bool openInToday = false; // does that IN belong to the selected day?
+    bool stillIn = false;
     for (final p in punches) {
       if (p.kind == 'in') {
         openIn = p.at;
+        final inUtc = p.at.toUtc();
+        openInToday = !inUtc.isBefore(start) && inUtc.isBefore(end);
       } else if (p.kind == 'out' && openIn != null) {
-        total += p.at.difference(openIn);
+        if (openInToday) total += p.at.difference(openIn);
         openIn = null;
+        openInToday = false;
       }
     }
-    final stillIn = openIn != null;
+    // An IN for the selected day with no matching OUT yet → still clocked in.
+    if (openIn != null && openInToday) stillIn = true;
     final h = total.inMinutes / 60.0;
     return stillIn
         ? '${h.toStringAsFixed(1)}h · still in'
@@ -543,7 +575,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                   child: Text(name,
                       style: YFont.titleMD().copyWith(fontSize: 16)),
                 ),
-                Text(_hoursFor(punches),
+                Text(_hours[name] ?? '0.0h',
                     style: YFont.bodyStrong().copyWith(color: YColor.brandDeep)),
               ],
             ),
