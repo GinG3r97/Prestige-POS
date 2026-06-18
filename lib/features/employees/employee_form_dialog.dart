@@ -827,93 +827,98 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     );
   }
 
-  /// Compact portal toggle that sits beside the hire date. No login email —
-  /// the employee's own Email (Profile) is their portal login. Switch on the
-  /// right of the title; a badge below explains where/how they sign in.
+  /// Compact portal toggle beside the hire date. No login email — the
+  /// employee's own Email is their portal login. The label + switch sit on the
+  /// label line (lining up with the other field labels); a single input-height
+  /// badge shows the compact login detail with the status anchored right.
   Widget _portalToggle() {
     final loggedIn = widget.initial?.portalLastLoginAt != null;
     final email = _email.text.trim();
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: YColor.surface2,
-        borderRadius: BorderRadius.circular(YRadius.lg),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Expanded(
-              child: Text('EMPLOYEE PORTAL',
-                  style: YFont.caption().copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.0,
-                    color: YColor.brandDeep,
-                  )),
-            ),
-            Switch(
-              value: _portalEnabled,
-              activeColor: YColor.brand,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: (v) => setState(() => _portalEnabled = v),
+    final (statusLabel, statusColor) = !_portalEnabled
+        ? ('Off', YColor.inkMuted)
+        : loggedIn
+            ? ('Active', YColor.success)
+            : ('Pending', YColor.brandDeep);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Label line — matches the other field labels; switch anchored right.
+        SizedBox(
+          height: 17,
+          child: Row(children: [
+            Text('EMPLOYEE PORTAL',
+                style: YFont.caption().copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: YColor.brandDeep,
+                )),
+            const Spacer(),
+            Transform.scale(
+              scale: 0.72,
+              alignment: Alignment.centerRight,
+              child: Switch(
+                value: _portalEnabled,
+                activeColor: YColor.brand,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (v) => setState(() => _portalEnabled = v),
+              ),
             ),
           ]),
-          if (_portalEnabled) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: YColor.brandTint.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(YRadius.md),
-                border: Border.all(
-                    color: YColor.brandDeep.withValues(alpha: 0.18)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.login, size: 13, color: YColor.brandDeep),
-                    const SizedBox(width: 6),
-                    Text('Logs in at',
-                        style: YFont.caption()
-                            .copyWith(color: YColor.brandDeep)),
-                  ]),
-                  const SizedBox(height: 2),
-                  Text('pos.prestigeitsolutions.tech/portal',
-                      style: YFont.bodyStrong().copyWith(
-                          fontSize: 12.5, color: YColor.brandDeep)),
-                  const SizedBox(height: 6),
-                  Text(
-                    email.isEmpty
-                        ? 'Using their email — set the Email above.'
-                        : 'Using their email: $email',
-                    style: YFont.caption().copyWith(color: YColor.ink),
-                  ),
-                  Text('One-time code · no password.',
-                      style:
-                          YFont.caption().copyWith(color: YColor.inkSubtle)),
-                ],
-              ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: _portalEnabled
+                ? YColor.brandTint.withValues(alpha: 0.45)
+                : YColor.surface1,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: YColor.hairline),
+          ),
+          child: Row(children: [
+            Icon(Icons.login,
+                size: 15,
+                color: _portalEnabled ? YColor.brandDeep : YColor.inkMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _portalEnabled
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(email.isEmpty ? 'Set the Email above' : email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.bodyStrong().copyWith(fontSize: 12)),
+                        Text('pos…/portal · one-time code',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: YFont.caption().copyWith(
+                                fontSize: 10, color: YColor.inkSubtle)),
+                      ],
+                    )
+                  : Text('Web access off',
+                      style: YFont.caption().copyWith(color: YColor.inkMuted)),
             ),
-            if (loggedIn) ...[
-              const SizedBox(height: 8),
-              Row(children: [
-                const Icon(Icons.check_circle,
-                    size: 13, color: YColor.success),
-                const SizedBox(width: 6),
-                Text('Active · has logged in',
-                    style: YFont.caption().copyWith(
-                        color: YColor.success, fontWeight: FontWeight.w600)),
-              ]),
-            ],
-          ] else ...[
-            const SizedBox(height: 6),
-            Text("Off — employee can't log in to the portal.",
-                style: YFont.caption()),
-          ],
-        ],
-      ),
+            const SizedBox(width: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(statusLabel,
+                  style: YFont.caption().copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: statusColor)),
+            ),
+          ]),
+        ),
+      ],
     );
   }
 
