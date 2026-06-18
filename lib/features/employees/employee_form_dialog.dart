@@ -80,7 +80,6 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   late List<EmployeeDocument> _documents;
   bool _showPin = true;
   bool _portalEnabled = false;
-  late final TextEditingController _portalEmail;
 
   @override
   void initState() {
@@ -119,10 +118,6 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             : e.pagIbigContribution.toStringAsFixed(0));
     _notes = TextEditingController(text: e?.notes ?? '');
     _portalEnabled = e?.portalEnabled ?? false;
-    _portalEmail = TextEditingController(
-        text: (e?.portalGmail.isNotEmpty ?? false)
-            ? e!.portalGmail
-            : (e?.email ?? ''));
 
     _roleId = e?.roleId;
     _gender = e?.gender ?? Gender.male;
@@ -181,7 +176,6 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     _philHealth.dispose();
     _pagIbig.dispose();
     _notes.dispose();
-    _portalEmail.dispose();
     for (final c in _shiftCtrls.values) {
       c.dispose();
     }
@@ -316,7 +310,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       documents: _documents,
       // Employee Portal: owner enables + sets the login email.
       portalEnabled: _portalEnabled,
-      portalGmail: _portalEmail.text.trim(),
+      // The employee's own email is their portal login (no separate field).
+      portalGmail: _email.text.trim(),
       portalUsername: widget.initial?.portalUsername ?? '',
       portalInvitedAt: widget.initial?.portalInvitedAt,
       portalLastLoginAt: widget.initial?.portalLastLoginAt,
@@ -394,7 +389,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                       const SizedBox(height: 12),
                       _genderPicker(),
                       const SizedBox(height: 12),
-                      _hireDatePicker(),
+                      // Hire date | Employee Portal toggle side by side.
+                      _row(_hireDatePicker(), _portalToggle()),
                     ]),
                     const SizedBox(height: 18),
                     _section('Access & role', [
@@ -402,8 +398,6 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                           ? _row(_roleDropdown(), _pinField())
                           : _roleDropdown(),
                     ]),
-                    const SizedBox(height: 18),
-                    _lockedPortalSection(),
                   ],
                   if (_step == 1) ...[
                     // Salary | Statutory side by side, 3 rows each column.
@@ -833,20 +827,14 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     );
   }
 
-  Widget _lockedPortalSection() {
+  /// Compact portal toggle that sits beside the hire date. No login email —
+  /// the employee's own Email (Profile) is their portal login. Switch on the
+  /// right of the title; a badge below explains where/how they sign in.
+  Widget _portalToggle() {
     final loggedIn = widget.initial?.portalLastLoginAt != null;
-    final statusText = !_portalEnabled
-        ? "Off — employee can't log in to the portal."
-        : loggedIn
-            ? 'Active · employee has logged in'
-            : 'Enabled — waiting for their first login';
-    final statusColor = !_portalEnabled
-        ? YColor.inkMuted
-        : loggedIn
-            ? YColor.success
-            : YColor.brandDeep;
+    final email = _email.text.trim();
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: BoxDecoration(
         color: YColor.surface2,
         borderRadius: BorderRadius.circular(YRadius.lg),
@@ -855,50 +843,75 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
-            Text('EMPLOYEE PORTAL ACCOUNT',
-                style: YFont.caption().copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
-                  color: YColor.brandDeep,
-                )),
-            const Spacer(),
+            Expanded(
+              child: Text('EMPLOYEE PORTAL',
+                  style: YFont.caption().copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    color: YColor.brandDeep,
+                  )),
+            ),
             Switch(
               value: _portalEnabled,
               activeColor: YColor.brand,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged: (v) => setState(() => _portalEnabled = v),
             ),
           ]),
-          const SizedBox(height: 4),
-          Text(
-            'Lets the employee log in to the web portal to clock in/out, '
-            'file leave / OT / undertime, and see their schedule.',
-            style: YFont.caption(),
-          ),
           if (_portalEnabled) ...[
-            const SizedBox(height: 14),
-            _field(
-              label: 'Login email',
-              controller: _portalEmail,
-              keyboardType: TextInputType.emailAddress,
-              hint: 'employee@email.com',
-            ),
             const SizedBox(height: 6),
-            Text(
-              'They sign in at pos.prestigeitsolutions.tech/portal with this email (one-time code — no password).',
-              style: YFont.caption().copyWith(color: YColor.inkSubtle),
+            Container(
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: YColor.brandTint.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(YRadius.md),
+                border: Border.all(
+                    color: YColor.brandDeep.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.login, size: 13, color: YColor.brandDeep),
+                    const SizedBox(width: 6),
+                    Text('Logs in at',
+                        style: YFont.caption()
+                            .copyWith(color: YColor.brandDeep)),
+                  ]),
+                  const SizedBox(height: 2),
+                  Text('pos.prestigeitsolutions.tech/portal',
+                      style: YFont.bodyStrong().copyWith(
+                          fontSize: 12.5, color: YColor.brandDeep)),
+                  const SizedBox(height: 6),
+                  Text(
+                    email.isEmpty
+                        ? 'Using their email — set the Email above.'
+                        : 'Using their email: $email',
+                    style: YFont.caption().copyWith(color: YColor.ink),
+                  ),
+                  Text('One-time code · no password.',
+                      style:
+                          YFont.caption().copyWith(color: YColor.inkSubtle)),
+                ],
+              ),
             ),
+            if (loggedIn) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                const Icon(Icons.check_circle,
+                    size: 13, color: YColor.success),
+                const SizedBox(width: 6),
+                Text('Active · has logged in',
+                    style: YFont.caption().copyWith(
+                        color: YColor.success, fontWeight: FontWeight.w600)),
+              ]),
+            ],
+          ] else ...[
+            const SizedBox(height: 6),
+            Text("Off — employee can't log in to the portal.",
+                style: YFont.caption()),
           ],
-          const SizedBox(height: 12),
-          Row(children: [
-            Icon(Icons.circle, size: 8, color: statusColor),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(statusText,
-                  style: YFont.caption().copyWith(
-                      color: statusColor, fontWeight: FontWeight.w600)),
-            ),
-          ]),
         ],
       ),
     );
