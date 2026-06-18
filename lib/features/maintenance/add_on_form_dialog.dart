@@ -9,6 +9,7 @@ import '../../models/category.dart' as cat;
 import '../../models/inventory.dart';
 import '../../models/money.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 
 class AddOnFormDialog extends StatefulWidget {
   const AddOnFormDialog({
@@ -179,35 +180,22 @@ class _AddOnFormDialogState extends State<AddOnFormDialog> {
                     const SizedBox(height: 12),
                     Row(children: [
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _price,
                           label: 'Price (₱)',
-                          accessoryLabel: 'PRICE',
                           hint: '0',
-                          keyboardType: TextInputType.number,
-                          formatPreview: (raw) {
-                            final n = double.tryParse(raw) ?? 0;
-                            return '+₱${n.toStringAsFixed(0)} each';
-                          },
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          prefix: '₱',
+                          decimal: true,
                           onChanged: (_) => setState(() {}),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _maxQty,
                           label: 'Max per order',
-                          accessoryLabel: 'MAX QUANTITY',
                           hint: '0 = unlimited',
-                          keyboardType: TextInputType.number,
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          decimal: false,
                           onChanged: (_) => setState(() {}),
                         ),
                       ),
@@ -474,15 +462,12 @@ class _AddOnFormDialogState extends State<AddOnFormDialog> {
             const SizedBox(width: 8),
             SizedBox(
               width: 130,
-              child: KeyboardAccessoryField(
+              child: NumpadField(
                 controller: _qtyCtrl(line),
-                accessoryLabel: 'QUANTITY',
+                label: '',
+                title: 'Quantity',
                 hint: '0',
-                keyboardType: TextInputType.number,
-                fillColor: YColor.surface1,
-                borderColor: YColor.hairline,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 14),
+                decimal: true,
                 onChanged: (v) {
                   line.quantity =
                       (double.tryParse(v) ?? 0).clamp(0, double.infinity);

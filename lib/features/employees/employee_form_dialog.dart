@@ -10,6 +10,7 @@ import '../../design_system/typography.dart';
 import '../../models/employee.dart';
 import '../../models/payroll_rules.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 
 /// What the dialog returns to its caller. Carries the saved employee plus,
 /// when the chosen role requires a PIN, the plaintext cashier PIN the
@@ -948,26 +949,24 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     );
   }
 
-  Widget _hourlyRateField() => _field(
-        label: 'Hourly rate (₱)',
+  Widget _hourlyRateField() => NumpadField(
         controller: _hourlyRate,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+        label: 'Hourly rate',
+        prefix: '₱',
         hint: 'e.g., 140',
       );
 
-  Widget _dailyRateField() => _field(
-        label: 'Daily rate (₱)',
+  Widget _dailyRateField() => NumpadField(
         controller: _dailyRate,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+        label: 'Daily rate',
+        prefix: '₱',
         hint: 'e.g., 800',
       );
 
-  Widget _monthlySalaryField() => _field(
-        label: 'Monthly salary (₱)',
+  Widget _monthlySalaryField() => NumpadField(
         controller: _monthlySalary,
-        keyboardType: TextInputType.number,
+        label: 'Monthly salary',
+        prefix: '₱',
         hint: 'e.g., 28000',
       );
 
@@ -1027,24 +1026,24 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
             ),
           ]),
           const SizedBox(height: 10),
-          _field(
-            label: 'SSS (₱)',
+          NumpadField(
             controller: _sss,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            label: 'SSS',
+            prefix: '₱',
             hint: 'e.g., 900',
           ),
           const SizedBox(height: 12),
-          _field(
-            label: 'PhilHealth (₱)',
+          NumpadField(
             controller: _philHealth,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            label: 'PhilHealth',
+            prefix: '₱',
             hint: 'e.g., 700',
           ),
           const SizedBox(height: 12),
-          _field(
-            label: 'Pag-IBIG (₱)',
+          NumpadField(
             controller: _pagIbig,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            label: 'Pag-IBIG',
+            prefix: '₱',
             hint: 'e.g., 200',
           ),
         ],

@@ -10,6 +10,7 @@ import '../../design_system/themed_dropdown.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 
 class InventoryFormDialog extends StatefulWidget {
   const InventoryFormDialog({super.key, this.initial});
@@ -259,21 +260,13 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
                     ]),
                     const SizedBox(height: 14),
                     _row(
-                      KeyboardAccessoryField(
+                      NumpadField(
                         controller: _stock,
                         label: 'Current stock ($_displaySymbol)',
-                        accessoryLabel: 'STOCK',
+                        title: 'Current stock',
                         hint: '0',
-                        keyboardType: TextInputType.number,
+                        suffix: _displaySymbol,
                         onChanged: (_) => setState(() {}),
-                        formatPreview: (raw) {
-                          final n = double.tryParse(raw) ?? 0;
-                          return '${_fmt(n, _unit)} $_displaySymbol';
-                        },
-                        fillColor: YColor.surface1,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
                       ),
                       // Threshold field is only enabled when Restockable is
                       // ON — otherwise we force threshold = 0 on save.
@@ -281,41 +274,29 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
                         opacity: _restockable ? 1.0 : 0.45,
                         child: IgnorePointer(
                           ignoring: !_restockable,
-                          child: KeyboardAccessoryField(
+                          child: NumpadField(
                             controller: _threshold,
                             label:
                                 'Low-stock alert at ($_displaySymbol)',
-                            accessoryLabel: 'THRESHOLD',
+                            title: 'Low-stock alert at',
                             hint: _restockable
                                 ? '0 (no alert)'
                                 : 'Disabled — toggle Restockable on',
-                            keyboardType: TextInputType.number,
+                            suffix: _displaySymbol,
                             onChanged: (_) => setState(() {}),
-                            fillColor: YColor.surface1,
-                            borderColor: YColor.hairline,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     _row(
-                      KeyboardAccessoryField(
+                      NumpadField(
                         controller: _cost,
                         label: 'Cost per $_displaySymbol (₱)',
-                        accessoryLabel: 'COST',
+                        title: 'Cost per $_displaySymbol',
                         hint: '0.00',
-                        keyboardType: TextInputType.number,
+                        prefix: '₱',
                         onChanged: (_) => setState(() {}),
-                        formatPreview: (raw) {
-                          final n = double.tryParse(raw) ?? 0;
-                          return '₱${n.toStringAsFixed(2)} / $_displaySymbol';
-                        },
-                        fillColor: YColor.surface1,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
                       ),
                       KeyboardAccessoryField(
                         controller: _supplier,

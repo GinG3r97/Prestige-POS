@@ -17,6 +17,7 @@ import '../../models/money.dart';
 import '../../models/inventory.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 import 'add_on_form_dialog.dart';
 import 'bookable_resources_tab.dart';
@@ -1151,21 +1152,14 @@ class _ModifierGroupDialogState extends State<_ModifierGroupDialog> {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 110,
-            child: KeyboardAccessoryField(
+            width: 130,
+            child: NumpadField(
               controller: _priceCtrl(o),
-              accessoryLabel: 'PRICE (₱)',
+              label: '',
+              title: 'Option price',
               hint: '+0',
-              keyboardType: TextInputType.number,
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
-              formatPreview: (raw) {
-                final n = double.tryParse(raw) ?? 0;
-                if (n == 0) return 'no charge';
-                return '+₱${n.toStringAsFixed(0)}';
-              },
+              prefix: '₱',
+              decimal: true,
               onChanged: (v) {
                 final pesos = double.tryParse(v) ?? 0;
                 o.priceDelta = Money((pesos * 100).round());
@@ -1837,16 +1831,11 @@ class _InventoryCategoryDialogState extends State<_InventoryCategoryDialog> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    KeyboardAccessoryField(
+                    NumpadField(
                       controller: _sortOrder,
                       label: 'Order',
-                      accessoryLabel: 'ORDER',
                       hint: '100',
-                      keyboardType: TextInputType.number,
-                      fillColor: YColor.surface1,
-                      borderColor: YColor.hairline,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
+                      decimal: false,
                     ),
                   ],
                 ),
@@ -2108,16 +2097,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       const SizedBox(width: 10),
                       SizedBox(
                         width: 120,
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _sortOrder,
                           label: 'Order',
-                          accessoryLabel: 'ORDER',
                           hint: '100',
-                          keyboardType: TextInputType.number,
-                          fillColor: YColor.surface2,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 12),
+                          decimal: false,
                           onChanged: (_) => setState(() {}),
                         ),
                       ),

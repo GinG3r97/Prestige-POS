@@ -9,6 +9,7 @@ import '../../design_system/typography.dart';
 import '../../models/booking.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 
 /// Maintenance tab where owners manage what customers can reserve —
@@ -510,50 +511,33 @@ class _BookableResourceDialogState extends State<_BookableResourceDialog> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _capacity,
                           label: 'Capacity (pax)',
-                          accessoryLabel: 'CAPACITY',
                           hint: '1',
-                          keyboardType: TextInputType.number,
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          suffix: 'pax',
+                          decimal: false,
                         ),
                       ),
                     ]),
                     const SizedBox(height: 14),
                     Row(children: [
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _rate,
                           label: 'Hourly rate (₱)',
-                          accessoryLabel: 'RATE',
                           hint: '0',
-                          keyboardType: TextInputType.number,
-                          formatPreview: (raw) {
-                            final n = double.tryParse(raw) ?? 0;
-                            return '₱${n.toStringAsFixed(0)}/hr';
-                          },
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          prefix: '₱',
+                          decimal: true,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _sortOrder,
                           label: 'Order',
-                          accessoryLabel: 'ORDER',
                           hint: '100',
-                          keyboardType: TextInputType.number,
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          decimal: false,
                         ),
                       ),
                     ]),

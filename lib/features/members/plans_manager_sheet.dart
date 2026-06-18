@@ -11,6 +11,7 @@ import '../../design_system/typography.dart';
 import '../../models/member.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 
 /// Modal sheet that lists every plan template the owner has set up
@@ -532,51 +533,40 @@ class _PlanFormDialogState extends State<_PlanFormDialog> {
                     const SizedBox(height: 14),
                     Row(children: [
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _price,
                           label: 'Price (₱)',
-                          accessoryLabel: 'PRICE',
+                          title: 'Plan price',
                           hint: '0',
-                          keyboardType: TextInputType.number,
-                          formatPreview: (raw) {
-                            final n = double.tryParse(raw) ?? 0;
-                            return '₱${n.toStringAsFixed(0)}';
-                          },
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          prefix: '₱',
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: KeyboardAccessoryField(
+                        child: NumpadField(
                           controller: _duration,
                           label: 'Lasts (days)',
-                          accessoryLabel: 'DURATION',
+                          title: 'Plan duration',
                           hint: '30',
-                          keyboardType: TextInputType.number,
-                          fillColor: YColor.surface1,
-                          borderColor: YColor.hairline,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                          suffix: 'days',
+                          decimal: false,
                         ),
                       ),
                     ]),
                     if (_kind != MemberPlanKind.monthly) ...[
                       const SizedBox(height: 14),
-                      KeyboardAccessoryField(
+                      NumpadField(
                         controller: _units,
                         label: _kind == MemberPlanKind.hours
                             ? 'Included minutes'
                             : 'Included passes',
-                        accessoryLabel: 'INCLUDED',
+                        title: _kind == MemberPlanKind.hours
+                            ? 'Included minutes'
+                            : 'Included passes',
                         hint: _kind == MemberPlanKind.hours ? '600' : '5',
-                        keyboardType: TextInputType.number,
-                        fillColor: YColor.surface1,
-                        borderColor: YColor.hairline,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
+                        suffix:
+                            _kind == MemberPlanKind.hours ? 'min' : 'passes',
+                        decimal: false,
                       ),
                       const SizedBox(height: 4),
                       Padding(

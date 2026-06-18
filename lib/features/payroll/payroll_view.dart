@@ -11,6 +11,7 @@ import '../../models/money.dart';
 import '../../models/payroll.dart';
 import '../../models/payroll_rules.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 
 /// Two-pane payroll: left = timesheet (per-day hours per employee for the
@@ -1091,25 +1092,11 @@ class _SlipRowState extends State<_SlipRow> {
     required String accessoryLabel,
     required TextEditingController controller,
   }) {
-    final field = KeyboardAccessoryField(
+    final field = NumpadField(
       controller: controller,
       label: label,
-      accessoryLabel: accessoryLabel,
+      prefix: '₱',
       hint: '0',
-      keyboardType:
-          const TextInputType.numberWithOptions(decimal: true),
-      // Numbers + one decimal only — letters and special characters
-      // can't reach the controller even via paste or a hardware
-      // keyboard.
-      inputFormatters: moneyInputFormatters,
-      fillColor: YColor.surface1,
-      borderColor: YColor.hairline,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      formatPreview: (raw) {
-        final n = double.tryParse(raw) ?? 0;
-        return '₱${n.toStringAsFixed(2)}';
-      },
       onChanged: (_) => _commit(),
     );
     // Paid runs are read-only — wrap with IgnorePointer (instead of

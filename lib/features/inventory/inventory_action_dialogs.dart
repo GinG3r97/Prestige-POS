@@ -4,7 +4,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/inventory.dart';
-import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 
 class RestockResult {
   final double quantity;
@@ -82,39 +82,24 @@ class _RestockDialogState extends State<RestockDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            KeyboardAccessoryField(
+            NumpadField(
               controller: _qty,
               label: 'Quantity received (${widget.item.displayUnit})',
-              accessoryLabel: 'QUANTITY',
+              title: 'Quantity received',
               hint: '0',
-              keyboardType: TextInputType.number,
+              decimal: false,
+              suffix: widget.item.displayUnit,
               onChanged: (_) => setState(() {}),
-              formatPreview: (raw) {
-                final n = double.tryParse(raw) ?? 0;
-                return '+${n.toStringAsFixed(0)} ${widget.item.displayUnit}';
-              },
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
             const SizedBox(height: 12),
-            KeyboardAccessoryField(
+            NumpadField(
               controller: _cost,
               label:
                   'Cost per ${widget.item.displayUnit} (₱) — optional update',
-              accessoryLabel: 'COST',
+              title: 'Cost per ${widget.item.displayUnit}',
               hint: widget.item.costPerUnit.toStringAsFixed(2),
-              keyboardType: TextInputType.number,
+              prefix: '₱',
               onChanged: (_) => setState(() {}),
-              formatPreview: (raw) {
-                final n = double.tryParse(raw) ?? 0;
-                return '₱${n.toStringAsFixed(2)} / ${widget.item.displayUnit}';
-              },
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
             const SizedBox(height: 16),
             Container(
@@ -240,22 +225,14 @@ class _StockTakeDialogState extends State<StockTakeDialog> {
               ]),
             ),
             const SizedBox(height: 12),
-            KeyboardAccessoryField(
+            NumpadField(
               controller: _amount,
               label: 'Amount (${widget.item.displayUnit})',
-              accessoryLabel: 'AMOUNT',
+              title: 'Amount',
               hint: '0',
-              keyboardType: TextInputType.number,
+              decimal: false,
+              suffix: widget.item.displayUnit,
               onChanged: (_) => setState(() {}),
-              formatPreview: (raw) {
-                final n = double.tryParse(raw) ?? 0;
-                final sign = _isAdd ? '+' : '−';
-                return '$sign${n.toStringAsFixed(0)} ${widget.item.displayUnit}';
-              },
-              fillColor: YColor.surface2,
-              borderColor: YColor.hairline,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
             const SizedBox(height: 12),
             // Reason chips

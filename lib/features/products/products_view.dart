@@ -23,6 +23,7 @@ import '../../models/inventory.dart';
 import '../../models/money.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 import 'ingredient_search_field.dart';
 
@@ -1648,19 +1649,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 style: YFont.body().copyWith(color: YColor.inkMuted)),
           )
         else
-          KeyboardAccessoryField(
+          NumpadField(
             controller: _price,
-            accessoryLabel: 'PRICE',
+            label: '',
+            title: 'Price',
             hint: '0',
-            keyboardType: TextInputType.number,
-            formatPreview: (raw) {
-              final n = double.tryParse(raw) ?? 0;
-              return '₱${n.toStringAsFixed(0)}';
-            },
-            fillColor: YColor.surface1,
-            borderColor: YColor.hairline,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            prefix: '₱',
             onChanged: (_) => setState(() {}),
           ),
       ],
@@ -2042,20 +2036,13 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         const SizedBox(width: 10),
         SizedBox(
           width: 150,
-          child: KeyboardAccessoryField(
+          child: NumpadField(
             controller: _priceDeltaCtrl('${g.id}_${o.id}',
                 _adjFor(g.id, o.id)?.priceDelta ?? Money.zero),
-            accessoryLabel: '${o.name.toUpperCase()} — EXTRA (₱)',
+            label: '',
+            title: '${o.name} — extra',
             hint: '+0',
-            keyboardType: TextInputType.number,
-            fillColor: YColor.surface1,
-            borderColor: YColor.hairline,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            formatPreview: (raw) {
-              final n = double.tryParse(raw) ?? 0;
-              return n == 0 ? 'default' : '+₱${n.toStringAsFixed(0)}';
-            },
+            prefix: '₱',
             onChanged: (v) {
               final pesos = double.tryParse(v) ?? 0;
               _setAdjustment(
@@ -2367,28 +2354,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
         ),
         const SizedBox(width: 8),
         SizedBox(
-          width: 64,
-          child: TextField(
+          width: 86,
+          child: NumpadField(
             controller: ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textAlign: TextAlign.center,
-            style: YFont.bodyStrong().copyWith(fontSize: 13),
-            decoration: InputDecoration(
-              prefixText: '×',
-              isDense: true,
-              filled: true,
-              fillColor: YColor.surface2,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(YRadius.md),
-                borderSide: const BorderSide(color: YColor.hairline),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(YRadius.md),
-                borderSide: const BorderSide(color: YColor.hairline),
-              ),
-            ),
+            label: '',
+            title: '${it.name} multiplier',
+            prefix: '×',
             onChanged: (v) => _setLineMul(group, option,
                 line.inventoryItemId, double.tryParse(v) ?? 1.0),
           ),
@@ -2553,27 +2524,12 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 ignoring: item == null,
                 child: Opacity(
                   opacity: item == null ? 0.4 : 1,
-                  child: KeyboardAccessoryField(
+                  child: NumpadField(
                     controller: _qtyCtrl(line),
-                    accessoryLabel: 'QUANTITY',
+                    label: '',
+                    title: 'Quantity',
                     hint: '0',
-                    keyboardType: TextInputType.number,
-                    fillColor: YColor.surface2,
-                    borderColor: YColor.hairline,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 11),
-                    suffix: unit.isEmpty
-                        ? null
-                        : Center(
-                            widthFactor: 1.0,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 2, right: 8),
-                              child: Text(unit,
-                                  style: YFont.bodyStrong().copyWith(
-                                      color: YColor.inkMuted, fontSize: 11.5)),
-                            ),
-                          ),
+                    suffix: unit.isEmpty ? null : unit,
                     onChanged: (v) {
                       line.quantity = double.tryParse(v) ?? 0;
                       setState(() {});
