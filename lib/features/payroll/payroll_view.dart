@@ -24,8 +24,10 @@ class PayrollView extends StatefulWidget {
 }
 
 class _PayrollViewState extends State<PayrollView> {
-  PayPeriodKind _period = PayPeriodKind.weekly;
-  /// Index of the period, counted backwards from the current week (0 = this week).
+  // The pay period is ALWAYS the semi-monthly cutoff the owner set in
+  // Maintenance → Payroll (15 & 30 vs 10 & 25) — no weekly/monthly choice.
+  final PayPeriodKind _period = PayPeriodKind.semiMonthly;
+  /// Index of the period, counted backwards from the current one (0 = current).
   int _periodOffset = 0;
   PayrollRun? _selectedRun;
   bool _generating = false;
@@ -108,15 +110,9 @@ class _PayrollViewState extends State<PayrollView> {
             flex: 6,
             child: _TimesheetPane(
               state: state,
-              period: _period,
               periodStart: periodStart,
               periodEnd: periodEnd,
               periodOffset: _periodOffset,
-              onPeriodChange: (p) => setState(() {
-                _period = p;
-                _periodOffset = 0;
-                _selectedRun = null;
-              }),
               onShift: (delta) => setState(() {
                 _periodOffset = (_periodOffset + delta).clamp(0, 60);
               }),
@@ -176,20 +172,16 @@ class _PayrollViewState extends State<PayrollView> {
 class _TimesheetPane extends StatelessWidget {
   const _TimesheetPane({
     required this.state,
-    required this.period,
     required this.periodStart,
     required this.periodEnd,
     required this.periodOffset,
-    required this.onPeriodChange,
     required this.onShift,
   });
 
   final HrStore state;
-  final PayPeriodKind period;
   final DateTime periodStart;
   final DateTime periodEnd;
   final int periodOffset;
-  final ValueChanged<PayPeriodKind> onPeriodChange;
   final ValueChanged<int> onShift;
 
   @override
@@ -224,12 +216,15 @@ class _TimesheetPane extends StatelessWidget {
                   // fixed bits (employee ~150 + Total ~60 + margins/spacing)
                   // are subtracted, the rest is split across the days.
                   : LayoutBuilder(builder: (ctx, cons) {
-                      final dayW =
-                          ((cons.maxWidth - 286) / 7).clamp(44.0, 84.0);
+                      // Spread the day columns to fill the pane when they fit
+                      // (e.g. a short period); a long cutoff (15 days) clamps to
+                      // a readable min and scrolls horizontally instead.
+                      final dayW = ((cons.maxWidth - 286) / days.length)
+                          .clamp(44.0, 84.0);
                       return SingleChildScrollView(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: _grid(employees, days, dayW),
+                          child: _grid(context, employees, days, dayW),
                         ),
                       );
                     }),
@@ -300,54 +295,12 @@ class _TimesheetPane extends StatelessWidget {
             side: const BorderSide(color: YColor.hairline),
           ),
         ),
-        const SizedBox(width: 12),
-        // Pay-period kind picker — compact icon popup (no inline label) so the
-        // header stays tight and the timesheet grid keeps its width.
-        PopupMenuButton<PayPeriodKind>(
-          tooltip: 'Pay period',
-          position: PopupMenuPosition.under,
-          offset: const Offset(0, 8),
-          color: YColor.surface1,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: YColor.hairline),
-          ),
-          onSelected: onPeriodChange,
-          itemBuilder: (_) => [
-            for (final p in PayPeriodKind.values)
-              PopupMenuItem<PayPeriodKind>(
-                value: p,
-                height: 42,
-                child: Row(children: [
-                  Icon(Icons.check,
-                      size: 15,
-                      color: p == period ? YColor.brand : Colors.transparent),
-                  const SizedBox(width: 8),
-                  Text(p.label,
-                      style: YFont.bodyStrong().copyWith(
-                        fontSize: 13,
-                        color: p == period ? YColor.brand : YColor.ink,
-                      )),
-                ]),
-              ),
-          ],
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-            decoration: BoxDecoration(
-              color: YColor.surface1,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: YColor.hairline),
-            ),
-            child: const Icon(Icons.calendar_view_week_outlined,
-                size: 18, color: YColor.brandDeep),
-          ),
-        ),
       ],
     );
   }
 
-  Widget _grid(List<Employee> employees, List<DateTime> days, double dayW) {
+  Widget _grid(BuildContext context, List<Employee> employees,
+      List<DateTime> days, double dayW) {
     final dayFmt = DateFormat('E\nd');
     return DataTable(
       dataRowMaxHeight: 56,
@@ -380,7 +333,8 @@ class _TimesheetPane extends StatelessWidget {
       rows: [
         for (final emp in employees)
           DataRow(cells: [
-            DataCell(_employeeChip(emp)),
+            DataCell(_employeeChip(emp),
+                onTap: () => _openEmployeeDtr(context, emp)),
             for (final d in days)
               DataCell(_HoursCell(
                 employee: emp,
@@ -396,6 +350,26 @@ class _TimesheetPane extends StatelessWidget {
             DataCell(_totalCell(emp)),
           ]),
       ],
+    );
+  }
+
+  /// Tapping an employee opens their attendance (DTR) for the WHOLE cutoff
+  /// period — so the owner can review all the days (e.g. the full 15) before
+  /// generating the run, not just one week.
+  void _openEmployeeDtr(BuildContext context, Employee emp) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: YColor.surface1,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _DtrSheet(
+        name: emp.name,
+        start: periodStart,
+        end: periodEnd,
+        future: state.fetchEmployeeDtr(emp.id, periodStart, periodEnd),
+      ),
     );
   }
 
@@ -417,7 +391,7 @@ class _TimesheetPane extends StatelessWidget {
         // Snug fixed width — the day columns (not this one) absorb the pane
         // width, so there's no gap between the name and the dates.
         SizedBox(
-          width: 112,
+          width: 96,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -442,6 +416,10 @@ class _TimesheetPane extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 2),
+        // Hints that the row is tappable → opens the attendance (DTR) modal.
+        const Icon(Icons.event_note_outlined,
+            size: 14, color: YColor.inkMuted),
       ]),
     );
   }
@@ -1333,7 +1311,7 @@ class _SlipRowState extends State<_SlipRow> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _DtrSheet(
-        slip: s,
+        name: s.employeeName,
         start: widget.periodStart,
         end: widget.periodEnd,
         future: store.fetchEmployeeDtr(
@@ -1372,12 +1350,12 @@ class _SlipRowState extends State<_SlipRow> {
 /// it day-by-day so the owner can see exactly how the payslip hours were built.
 class _DtrSheet extends StatelessWidget {
   const _DtrSheet({
-    required this.slip,
+    required this.name,
     required this.start,
     required this.end,
     required this.future,
   });
-  final Payslip slip;
+  final String name;
   final DateTime start;
   final DateTime end;
   final Future<Map<String, dynamic>?> future;
@@ -1439,7 +1417,7 @@ class _DtrSheet extends StatelessWidget {
                     Text('Daily time record',
                         style: YFont.titleMD().copyWith(fontSize: 16)),
                     Text(
-                        '${slip.employeeName} · ${df.format(start)} – ${df.format(end)}',
+                        '$name · ${df.format(start)} – ${df.format(end)}',
                         style: YFont.caption()),
                   ],
                 ),
