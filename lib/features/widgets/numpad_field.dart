@@ -123,29 +123,50 @@ class NumpadField extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
-    // Never raise the OS keyboard — drop focus first so a focused text field
-    // can't pop its keyboard accessory behind the sheet.
-    FocusManager.instance.primaryFocus?.unfocus();
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: YColor.surface1,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _NumpadSheet(
-        label: title ?? (label.isEmpty ? 'Enter value' : label),
-        initial: controller.text,
-        prefix: prefix,
-        suffix: suffix,
-        decimal: decimal,
-      ),
+    final result = await showNumpadSheet(
+      context,
+      title: title ?? (label.isEmpty ? 'Enter value' : label),
+      initial: controller.text,
+      decimal: decimal,
+      prefix: prefix,
+      suffix: suffix,
     );
     if (result != null) {
       controller.text = result;
       onChanged?.call(result);
     }
   }
+}
+
+/// Opens the numpad sheet on its own — for custom triggers (e.g. a tight grid
+/// cell) that can't host a full [NumpadField] box. Returns the entered string,
+/// or null if the sheet was dismissed without Done.
+Future<String?> showNumpadSheet(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+  bool decimal = true,
+  String? prefix,
+  String? suffix,
+}) {
+  // Never raise the OS keyboard — drop focus first so a focused text field
+  // can't pop its keyboard accessory behind the sheet.
+  FocusManager.instance.primaryFocus?.unfocus();
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: YColor.surface1,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => _NumpadSheet(
+      label: title,
+      initial: initial,
+      prefix: prefix,
+      suffix: suffix,
+      decimal: decimal,
+    ),
+  );
 }
 
 class _NumpadSheet extends StatefulWidget {

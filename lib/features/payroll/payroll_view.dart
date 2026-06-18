@@ -10,7 +10,6 @@ import '../../models/employee.dart';
 import '../../models/money.dart';
 import '../../models/payroll.dart';
 import '../../models/payroll_rules.dart';
-import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -467,54 +466,59 @@ class _HoursCellState extends State<_HoursCell> {
     super.dispose();
   }
 
-  /// Builds the accessory-bar label like "HOURS · MARIA · MON 18"
-  /// so the floating card identifies which cell the user is editing.
-  String _accessoryLabel() {
-    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  /// Sheet header like "Hours · Maria · Mon 18" so the numpad identifies
+  /// which cell is being edited.
+  String _sheetTitle() {
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final weekday = weekdays[widget.date.weekday - 1];
-    final firstName =
-        widget.employee.name.split(' ').first.toUpperCase();
-    return 'HOURS · $firstName · $weekday ${widget.date.day}';
+    final firstName = widget.employee.name.split(' ').first;
+    return 'Hours · $firstName · $weekday ${widget.date.day}';
+  }
+
+  Future<void> _edit() async {
+    final result = await showNumpadSheet(
+      context,
+      title: _sheetTitle(),
+      initial: _c.text,
+      decimal: true,
+      suffix: 'hr',
+    );
+    if (result != null) {
+      _c.text = result;
+      _commit();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Fixed 44×34 envelope so the grid row stays the same height
-    // whether or not the cell is focused. `isDense: true` collapses
-    // the default 48px Material min-height that was making cells
-    // look oversized.
+    // Fixed 44×34 envelope keeps the grid row height constant. Tapping the
+    // cell opens the shared numpad sheet instead of the OS keyboard.
+    final has = _c.text.trim().isNotEmpty;
     return SizedBox(
       width: 44,
       height: 34,
-      child: KeyboardAccessoryField(
-        controller: _c,
-        accessoryLabel: _accessoryLabel(),
-        hint: '–',
-        textAlign: TextAlign.center,
-        keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
-        // Numbers + one decimal only — rejects letters and symbols
-        // before they reach the controller, so paste / hardware
-        // keyboards can't sneak invalid input in.
-        inputFormatters: moneyInputFormatters,
-        textStyle: YFont.body().copyWith(fontSize: 13),
-        fillColor: YColor.surface1,
-        borderColor: YColor.hairline,
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        // Live preview of the typed value as "8.0 hrs" — gives the
-        // owner instant confirmation in the accessory card without
-        // squinting at the small grid cell.
-        formatPreview: (raw) {
-          final n = double.tryParse(raw) ?? 0;
-          return n == n.roundToDouble()
-              ? '${n.toStringAsFixed(0)} hrs'
-              : '${n.toStringAsFixed(1)} hrs';
-        },
-        // Defer the DB write until the user moves on — avoids a
-        // round-trip per keystroke.
-        onFocusLost: _commit,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _edit,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: YColor.surface1,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: YColor.hairline),
+            ),
+            child: Text(
+              has ? _c.text : '–',
+              textAlign: TextAlign.center,
+              style: YFont.body().copyWith(
+                fontSize: 13,
+                color: has ? YColor.ink : YColor.inkSubtle,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
