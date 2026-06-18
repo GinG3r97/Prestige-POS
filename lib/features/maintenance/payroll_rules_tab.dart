@@ -268,6 +268,54 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
     );
   }
 
+  Widget _scheduleChip(SemiMonthlyStyle s) {
+    final on = _draft.semiMonthlyStyle == s;
+    final sub = s == SemiMonthlyStyle.fifteenThirty
+        ? '1–15 · 16–end'
+        : '26–10 · 11–25';
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _draft.semiMonthlyStyle = s),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: on ? YColor.brand : YColor.surface2,
+            borderRadius: BorderRadius.circular(YRadius.md),
+            border: Border.all(color: on ? YColor.brand : YColor.hairline),
+          ),
+          child: Row(children: [
+            Icon(
+                on
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                size: 18,
+                color: on ? Colors.white : YColor.inkMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Pay on ${s.label}',
+                      style: YFont.bodyStrong().copyWith(
+                          fontSize: 13,
+                          color: on ? Colors.white : YColor.ink)),
+                  Text(sub,
+                      style: YFont.caption().copyWith(
+                          fontSize: 11,
+                          color: on
+                              ? Colors.white.withValues(alpha: 0.85)
+                              : YColor.inkMuted)),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
   List<Widget> _sectionContent(HrStore state) {
     switch (_section) {
       case 0:
@@ -305,6 +353,23 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
             padding: const EdgeInsets.only(left: 4, top: 8),
             child: Text('Allowed OT hours: 0 = no cap.',
                 style: YFont.caption()),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Pay schedule',
+            subtitle:
+                'Semi-monthly cutoff. Weekly / bi-weekly / monthly are still chosen on the Payroll page.',
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(children: [
+                for (final s in SemiMonthlyStyle.values) ...[
+                  _scheduleChip(s),
+                  if (s != SemiMonthlyStyle.values.last)
+                    const SizedBox(width: 10),
+                ],
+              ]),
+            ),
           ),
           const SizedBox(height: 16),
           _SectionCard(

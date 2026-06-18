@@ -9,6 +9,7 @@ import '../../design_system/typography.dart';
 import '../../models/employee.dart';
 import '../../models/money.dart';
 import '../../models/payroll.dart';
+import '../../models/payroll_rules.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -28,60 +29,73 @@ class _PayrollViewState extends State<PayrollView> {
   int _periodOffset = 0;
   PayrollRun? _selectedRun;
 
-  DateTime get _periodStart {
+  /// Current period's [start, end] for the active [_period] and [_periodOffset],
+  /// honoring the tenant's semi-monthly cutoff [style] (15 & 30 vs 10 & 25).
+  ({DateTime start, DateTime end}) _periodRange(SemiMonthlyStyle style) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     switch (_period) {
       case PayPeriodKind.weekly:
-        // Monday of the target week
-        final monday =
-            today.subtract(Duration(days: today.weekday - 1));
-        return monday.subtract(Duration(days: 7 * _periodOffset));
+        final monday = today.subtract(Duration(days: today.weekday - 1));
+        final s = monday.subtract(Duration(days: 7 * _periodOffset));
+        return (start: s, end: s.add(const Duration(days: 6)));
       case PayPeriodKind.biweekly:
-        final monday =
-            today.subtract(Duration(days: today.weekday - 1));
-        return monday.subtract(Duration(days: 14 * _periodOffset));
+        final monday = today.subtract(Duration(days: today.weekday - 1));
+        final s = monday.subtract(Duration(days: 14 * _periodOffset));
+        return (start: s, end: s.add(const Duration(days: 13)));
+      case PayPeriodKind.monthly:
+        final s = DateTime(today.year, today.month - _periodOffset, 1);
+        return (start: s, end: DateTime(s.year, s.month + 1, 0));
       case PayPeriodKind.semiMonthly:
-        final isSecondHalf = today.day >= 16;
-        final base = isSecondHalf
-            ? DateTime(today.year, today.month, 16)
-            : DateTime(today.year, today.month, 1);
-        var s = base;
+        var r = _currentSemiMonthly(style, today);
         for (var i = 0; i < _periodOffset; i++) {
-          s = _previousSemiMonthly(s);
+          r = _prevSemiMonthly(style, r.start);
         }
-        return s;
-      case PayPeriodKind.monthly:
-        return DateTime(today.year, today.month - _periodOffset, 1);
+        return r;
     }
   }
 
-  DateTime _previousSemiMonthly(DateTime s) {
-    if (s.day == 16) return DateTime(s.year, s.month, 1);
-    final prev = DateTime(s.year, s.month - 1, 16);
-    return prev;
+  /// The semi-monthly period that contains [today] for the given [style].
+  ({DateTime start, DateTime end}) _currentSemiMonthly(
+      SemiMonthlyStyle style, DateTime today) {
+    final y = today.year, m = today.month, d = today.day;
+    if (style == SemiMonthlyStyle.fifteenThirty) {
+      return d <= 15
+          ? (start: DateTime(y, m, 1), end: DateTime(y, m, 15))
+          : (start: DateTime(y, m, 16), end: DateTime(y, m + 1, 0));
+    }
+    // 10 & 25: periods are 11–25 and 26–10 (the latter spans the month end).
+    if (d >= 11 && d <= 25) {
+      return (start: DateTime(y, m, 11), end: DateTime(y, m, 25));
+    }
+    return d >= 26
+        ? (start: DateTime(y, m, 26), end: DateTime(y, m + 1, 10))
+        : (start: DateTime(y, m - 1, 26), end: DateTime(y, m, 10));
   }
 
-  DateTime get _periodEnd {
-    final start = _periodStart;
-    switch (_period) {
-      case PayPeriodKind.weekly:
-        return start.add(const Duration(days: 6));
-      case PayPeriodKind.biweekly:
-        return start.add(const Duration(days: 13));
-      case PayPeriodKind.semiMonthly:
-        if (start.day == 1) {
-          return DateTime(start.year, start.month, 15);
-        }
-        return DateTime(start.year, start.month + 1, 0); // last of month
-      case PayPeriodKind.monthly:
-        return DateTime(start.year, start.month + 1, 0);
+  /// The semi-monthly period immediately before the one starting at [start].
+  ({DateTime start, DateTime end}) _prevSemiMonthly(
+      SemiMonthlyStyle style, DateTime start) {
+    if (style == SemiMonthlyStyle.fifteenThirty) {
+      return start.day == 16
+          ? (start: DateTime(start.year, start.month, 1),
+              end: DateTime(start.year, start.month, 15))
+          : (start: DateTime(start.year, start.month - 1, 16),
+              end: DateTime(start.year, start.month, 0));
     }
+    return start.day == 26
+        ? (start: DateTime(start.year, start.month, 11),
+            end: DateTime(start.year, start.month, 25))
+        : (start: DateTime(start.year, start.month - 1, 26),
+            end: DateTime(start.year, start.month, 10));
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<HrStore>();
+    final range = _periodRange(state.payrollRules.semiMonthlyStyle);
+    final periodStart = range.start;
+    final periodEnd = range.end;
 
     return Container(
       color: YColor.surface2,
@@ -94,8 +108,8 @@ class _PayrollViewState extends State<PayrollView> {
             child: _TimesheetPane(
               state: state,
               period: _period,
-              periodStart: _periodStart,
-              periodEnd: _periodEnd,
+              periodStart: periodStart,
+              periodEnd: periodEnd,
               periodOffset: _periodOffset,
               onPeriodChange: (p) => setState(() {
                 _period = p;
@@ -114,14 +128,14 @@ class _PayrollViewState extends State<PayrollView> {
             child: _PayRunPane(
               state: state,
               period: _period,
-              periodStart: _periodStart,
-              periodEnd: _periodEnd,
+              periodStart: periodStart,
+              periodEnd: periodEnd,
               selectedRun: _selectedRun,
               onSelectRun: (r) => setState(() => _selectedRun = r),
               onGenerate: () async {
                 final res = await state.generatePayrollRun(
-                  start: _periodStart,
-                  end: _periodEnd,
+                  start: periodStart,
+                  end: periodEnd,
                   kind: _period,
                 );
                 if (!context.mounted) return;

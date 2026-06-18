@@ -4,6 +4,28 @@ import 'employee.dart' show CompensationType, CompensationTypeX, EmploymentType;
 
 const _uuid = Uuid();
 
+/// Which days a semi-monthly pay cycle cuts on. The classic PH choices:
+///  * fifteenThirty — 1st–15th and 16th–end of month (pay on 15 & 30)
+///  * tenTwentyFive — 26th–10th and 11th–25th       (pay on 10 & 25)
+enum SemiMonthlyStyle { fifteenThirty, tenTwentyFive }
+
+extension SemiMonthlyStyleX on SemiMonthlyStyle {
+  String get label => switch (this) {
+        SemiMonthlyStyle.fifteenThirty => '15 & 30',
+        SemiMonthlyStyle.tenTwentyFive => '10 & 25',
+      };
+
+  String get dbValue => switch (this) {
+        SemiMonthlyStyle.fifteenThirty => 'fifteen_thirty',
+        SemiMonthlyStyle.tenTwentyFive => 'ten_twentyfive',
+      };
+
+  static SemiMonthlyStyle fromDb(String? s) => switch (s) {
+        'ten_twentyfive' => SemiMonthlyStyle.tenTwentyFive,
+        _ => SemiMonthlyStyle.fifteenThirty,
+      };
+}
+
 /// Per-tenant payroll configuration. Multipliers are applied on top of the
 /// employee's base hourly rate (or pro-rated salary). PH defaults baked in
 /// to seed new stores; owner can tweak in Maintenance.
@@ -15,6 +37,8 @@ class PayrollRules {
   double regularHoursPerDay;
   /// Max overtime hours that can be claimed in a single day. 0 = no cap.
   double maxOvertimeHoursPerDay;
+  /// Cutoff style for semi-monthly pay runs (15 & 30 vs 10 & 25).
+  SemiMonthlyStyle semiMonthlyStyle;
   double restDayMultiplier;           // 1.30 — work on scheduled rest day
   double regularHolidayMultiplier;    // 2.00 — work on a regular PH holiday
   double specialHolidayMultiplier;    // 1.30 — work on a special non-working day
@@ -35,6 +59,7 @@ class PayrollRules {
   PayrollRules({
     this.regularHoursPerDay = 8,
     this.maxOvertimeHoursPerDay = 0,
+    this.semiMonthlyStyle = SemiMonthlyStyle.fifteenThirty,
     this.restDayMultiplier = 1.30,
     this.regularHolidayMultiplier = 2.0,
     this.specialHolidayMultiplier = 1.30,
@@ -53,6 +78,7 @@ class PayrollRules {
   PayrollRules copy() => PayrollRules(
         regularHoursPerDay: regularHoursPerDay,
         maxOvertimeHoursPerDay: maxOvertimeHoursPerDay,
+        semiMonthlyStyle: semiMonthlyStyle,
         restDayMultiplier: restDayMultiplier,
         regularHolidayMultiplier: regularHolidayMultiplier,
         specialHolidayMultiplier: specialHolidayMultiplier,
@@ -73,6 +99,8 @@ class PayrollRules {
             (row['regular_hours_per_day'] as num?)?.toDouble() ?? 8,
         maxOvertimeHoursPerDay:
             (row['max_overtime_hours_per_day'] as num?)?.toDouble() ?? 0,
+        semiMonthlyStyle:
+            SemiMonthlyStyleX.fromDb(row['semi_monthly_style'] as String?),
         restDayMultiplier:
             (row['rest_day_multiplier'] as num?)?.toDouble() ?? 1.30,
         regularHolidayMultiplier:
@@ -98,6 +126,7 @@ class PayrollRules {
   Map<String, dynamic> toRow() => {
         'regular_hours_per_day': regularHoursPerDay,
         'max_overtime_hours_per_day': maxOvertimeHoursPerDay,
+        'semi_monthly_style': semiMonthlyStyle.dbValue,
         'rest_day_multiplier': restDayMultiplier,
         'regular_holiday_multiplier': regularHolidayMultiplier,
         'special_holiday_multiplier': specialHolidayMultiplier,
