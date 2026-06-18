@@ -28,6 +28,7 @@ class _PayrollViewState extends State<PayrollView> {
   /// Index of the period, counted backwards from the current week (0 = this week).
   int _periodOffset = 0;
   PayrollRun? _selectedRun;
+  bool _generating = false;
 
   /// Current period's [start, end] for the active [_period] and [_periodOffset],
   /// honoring the tenant's semi-monthly cutoff [style] (15 & 30 vs 10 & 25).
@@ -131,24 +132,36 @@ class _PayrollViewState extends State<PayrollView> {
               periodStart: periodStart,
               periodEnd: periodEnd,
               selectedRun: _selectedRun,
+              generating: _generating,
               onSelectRun: (r) => setState(() => _selectedRun = r),
               onGenerate: () async {
+                // Debounce: ignore taps while a run is already being built so
+                // a double-tap can't stack duplicate runs.
+                if (_generating) return;
+                setState(() => _generating = true);
                 final res = await state.generatePayrollRun(
                   start: periodStart,
                   end: periodEnd,
                   kind: _period,
                 );
                 if (!context.mounted) return;
+                setState(() {
+                  _generating = false;
+                  // Open the run whether it was just created or already existed.
+                  if (res.run != null) _selectedRun = res.run;
+                });
                 if (res.error != null) {
                   PushToast.show(
                     context,
-                    title: 'Could not generate run',
+                    title: res.run != null
+                        ? 'Run already exists'
+                        : 'Could not generate run',
                     subtitle: res.error!,
-                    leadingIcon: Icons.error_outline,
+                    leadingIcon: res.run != null
+                        ? Icons.info_outline
+                        : Icons.error_outline,
                   );
-                  return;
                 }
-                setState(() => _selectedRun = res.run);
               },
             ),
           ),
@@ -603,6 +616,7 @@ class _PayRunPane extends StatelessWidget {
     required this.periodStart,
     required this.periodEnd,
     required this.selectedRun,
+    required this.generating,
     required this.onSelectRun,
     required this.onGenerate,
   });
@@ -612,6 +626,7 @@ class _PayRunPane extends StatelessWidget {
   final DateTime periodStart;
   final DateTime periodEnd;
   final PayrollRun? selectedRun;
+  final bool generating;
   final ValueChanged<PayrollRun?> onSelectRun;
   final VoidCallback onGenerate;
 
@@ -650,12 +665,20 @@ class _PayRunPane extends StatelessWidget {
                   style: YFont.titleLG().copyWith(fontSize: 20)),
             if (!inDetail) const Spacer(),
             ElevatedButton.icon(
-              onPressed: onGenerate,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Generate run'),
+              onPressed: generating ? null : onGenerate,
+              icon: generating
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.add, size: 16),
+              label: Text(generating ? 'Generating…' : 'Generate run'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: YColor.brand,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: YColor.brand.withValues(alpha: 0.5),
+                disabledForegroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 12),
                 shape: RoundedRectangleBorder(
