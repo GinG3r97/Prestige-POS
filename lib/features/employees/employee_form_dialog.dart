@@ -67,7 +67,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
 
   /// Wizard step (0 = Profile, 1 = Access & pay, 2 = Schedule & docs).
   int _step = 0;
-  static const _stepTitles = ['Profile', 'Access & Salary', 'Schedule & docs'];
+  static const _stepTitles = ['Profile', 'Salary', 'Schedule & docs'];
   final ScrollController _scrollC = ScrollController();
 
   /// Name of the account already using the typed PIN (null = free).
@@ -396,8 +396,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                       const SizedBox(height: 12),
                       _hireDatePicker(),
                     ]),
-                  ],
-                  if (_step == 1) ...[
+                    const SizedBox(height: 18),
                     _section('Access & role', [
                       _needsPin
                           ? _row(_roleDropdown(), _pinField())
@@ -405,7 +404,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                     ]),
                     const SizedBox(height: 18),
                     _lockedPortalSection(),
-                    const SizedBox(height: 18),
+                  ],
+                  if (_step == 1) ...[
                     // Salary | Statutory side by side, 3 rows each column.
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

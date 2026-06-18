@@ -508,9 +508,17 @@ class _DetailPaneState extends State<_DetailPane> {
                 ),
               ),
               const SizedBox(height: 18),
-              _scheduleCard(e),
-              const SizedBox(height: 18),
-              _requirementsCard(e),
+              // Weekly schedule + Requirements side by side, matched height.
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _scheduleCard(e)),
+                    const SizedBox(width: 18),
+                    Expanded(child: _requirementsCard(e)),
+                  ],
+                ),
+              ),
               if (e.notes.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 _notesCard(e),
