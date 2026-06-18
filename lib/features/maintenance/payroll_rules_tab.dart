@@ -99,261 +99,358 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
         leadingIcon: Icons.check_circle_outline);
   }
 
+  // Which payroll setup section the rail is showing.
+  int _section = 0;
+
+  static const _sections = <({String title, String sub, IconData icon})>[
+    (
+      title: 'Employment templates',
+      sub:
+          'Pre-fill compensation, rate, OT and leaves per type. The Add Employee modal reads from here.',
+      icon: Icons.badge_outlined,
+    ),
+    (
+      title: 'Hours & rates',
+      sub:
+          'Standard hours and the labor-law multipliers applied on top of base pay.',
+      icon: Icons.schedule_outlined,
+    ),
+    (
+      title: 'Deductions',
+      sub:
+          'Undertime, lateness grace, and the government / 13th-month line items.',
+      icon: Icons.receipt_long_outlined,
+    ),
+    (
+      title: 'Leave types',
+      sub: 'Buckets staff can draw from — names, days per year, paid status.',
+      icon: Icons.event_available_outlined,
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final templates = state.employmentTemplates;
-    final leaves = state.leaveTypes;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Payroll',
-                          style: YFont.titleMD().copyWith(fontSize: 20)),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Set up rates and rules once — they auto-fill when you add an employee, and feed every pay run.',
-                        style: YFont.caption(),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 24),
-                ElevatedButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.save_outlined, size: 16),
-                  label: Text(_saving ? 'Saving…' : 'Save changes'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: YColor.brand,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 20),
-
-              // ─── Employment templates (NEW, on top) ───
-              _SectionCard(
-                title: 'Employment templates',
-                subtitle:
-                    'Pre-fill compensation, default rate, OT, and available leaves per employment type. The Add Employee modal reads from here.',
-                child: Column(children: [
-                  for (var i = 0; i < templates.length; i++) ...[
-                    _TemplateRow(
-                      state: state,
-                      template: templates[i],
-                      onTap: () => _editTemplate(templates[i]),
-                    ),
-                    if (i != templates.length - 1) const _CardDivider(),
-                  ],
-                ]),
+    final showSave = _section == 1 || _section == 2;
+    return Container(
+      color: YColor.surface2,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Rail ──
+          SizedBox(
+            width: 212,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: YColor.surface1,
+                border: Border(right: BorderSide(color: YColor.hairline)),
               ),
-
-              const SizedBox(height: 16),
-
-              // ─── Standard hours ───
-              _SectionCard(
-                title: 'Standard hours',
-                subtitle:
-                    'Beyond this in a single day counts as overtime.',
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  child: Row(children: [
-                    SizedBox(
-                      width: 200,
-                      child: _numField(
-                          label: 'Regular hours / day',
-                          controller: _regHours,
-                          suffix: 'hr'),
-                    ),
-                  ]),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ─── Global multipliers (no more standard OT here) ───
-              _SectionCard(
-                title: 'Labor-law multipliers',
-                subtitle:
-                    'Applied on top of the employee\'s base rate. Standard overtime lives on each template above.',
-                child: Column(children: [
-                  _multRow(
-                    label: 'Rest day work',
-                    hint: 'Working on scheduled day off',
-                    controller: _restMul,
-                  ),
-                  const _CardDivider(),
-                  _multRow(
-                    label: 'Regular holiday',
-                    hint: '12 PH regular holidays — double pay',
-                    controller: _regHolMul,
-                  ),
-                  const _CardDivider(),
-                  _multRow(
-                    label: 'Special holiday',
-                    hint: 'Special non-working days — 30% premium',
-                    controller: _specHolMul,
-                  ),
-                  const _CardDivider(),
-                  _multRow(
-                    label: 'Night differential',
-                    hint: 'Default window 10 PM → 6 AM',
-                    controller: _ndMul,
-                  ),
-                ]),
-              ),
-
-              const SizedBox(height: 16),
-
-              _SectionCard(
-                title: 'Undertime & lateness',
-                child: Column(children: [
-                  _switchRow(
-                    icon: Icons.timer_off_outlined,
-                    title: 'Deduct undertime',
-                    subtitle:
-                        'Subtract missed hours when an employee clocks out early',
-                    value: _draft.deductUndertime,
-                    onChanged: (v) =>
-                        setState(() => _draft.deductUndertime = v),
-                  ),
-                  const _CardDivider(),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(10, 14, 10, 24),
+                children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Row(children: [
-                      const Icon(Icons.alarm,
-                          size: 18, color: YColor.brandDeep),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Lateness grace period',
-                                style: YFont.bodyStrong()),
-                            Text(
-                              'Minutes of clock-in slack before deductions kick in',
-                              style: YFont.caption(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: 110,
-                        child: _numField(
-                            label: '', controller: _grace, suffix: 'min'),
-                      ),
-                    ]),
+                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                    child: Text('PAYROLL SETUP',
+                        style: YFont.caption().copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.0,
+                          color: YColor.inkMuted,
+                        )),
                   ),
-                ]),
+                  for (var i = 0; i < _sections.length; i++)
+                    _railRow(i, _sections[i].title, _sections[i].icon),
+                ],
               ),
-
-              const SizedBox(height: 16),
-
-              _SectionCard(
-                title: 'Government & 13th month',
-                subtitle:
-                    'Show these line items on payslips. Tables coming in a later release.',
-                child: Column(children: [
-                  _switchRow(
-                    icon: Icons.card_giftcard_outlined,
-                    title: '13th-month pay',
-                    subtitle:
-                        'Mandatory in the Philippines — accrued monthly',
-                    value: _draft.include13thMonth,
-                    onChanged: (v) =>
-                        setState(() => _draft.include13thMonth = v),
-                  ),
-                  const _CardDivider(),
-                  _switchRow(
-                    icon: Icons.account_balance_outlined,
-                    title: 'SSS contribution',
-                    value: _draft.deductSSS,
-                    onChanged: (v) => setState(() => _draft.deductSSS = v),
-                  ),
-                  const _CardDivider(),
-                  _switchRow(
-                    icon: Icons.medical_services_outlined,
-                    title: 'PhilHealth contribution',
-                    value: _draft.deductPhilHealth,
-                    onChanged: (v) =>
-                        setState(() => _draft.deductPhilHealth = v),
-                  ),
-                  const _CardDivider(),
-                  _switchRow(
-                    icon: Icons.home_work_outlined,
-                    title: 'Pag-IBIG contribution',
-                    value: _draft.deductPagIBIG,
-                    onChanged: (v) =>
-                        setState(() => _draft.deductPagIBIG = v),
-                  ),
-                  const _CardDivider(),
-                  _switchRow(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'BIR withholding tax',
-                    value: _draft.withholdBIR,
-                    onChanged: (v) =>
-                        setState(() => _draft.withholdBIR = v),
-                  ),
-                ]),
-              ),
-
-              const SizedBox(height: 16),
-
-              _SectionCard(
-                title: 'Leave types',
-                subtitle:
-                    'Buckets staff can draw from. Edit names, days/year, paid status.',
-                action: TextButton.icon(
-                  onPressed: () => _editLeave(null),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add type'),
-                  style: TextButton.styleFrom(foregroundColor: YColor.brand),
-                ),
-                child: leaves.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Center(
-                          child: Text(
-                            'No leave types yet. Add one to start tracking time off.',
-                            style: YFont.caption(),
-                          ),
+            ),
+          ),
+          // ── Content ──
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 10),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_sections[_section].title,
+                              style: YFont.titleMD().copyWith(fontSize: 19)),
+                          const SizedBox(height: 2),
+                          Text(_sections[_section].sub, style: YFont.caption()),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    if (_section == 3)
+                      ElevatedButton.icon(
+                        onPressed: () => _editLeave(null),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add type'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: YColor.brand,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
                         ),
                       )
-                    : Column(children: [
-                        for (var i = 0; i < leaves.length; i++) ...[
-                          _leaveRow(leaves[i]),
-                          if (i != leaves.length - 1) const _CardDivider(),
-                        ],
-                      ]),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+                    else if (showSave)
+                      ElevatedButton.icon(
+                        onPressed: _saving ? null : _save,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.save_outlined, size: 16),
+                        label: Text(_saving ? 'Saving…' : 'Save changes'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: YColor.brand,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(YRadius.md)),
+                        ),
+                      ),
+                  ]),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 36),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _sectionContent(state),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  Widget _railRow(int i, String label, IconData icon) {
+    final on = _section == i;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _section = i),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
+        decoration: BoxDecoration(
+          color: on ? YColor.brand : Colors.transparent,
+          borderRadius: BorderRadius.circular(YRadius.md),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 18, color: on ? Colors.white : YColor.brandDeep),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: YFont.bodyStrong().copyWith(
+                  fontSize: 13.5,
+                  color: on ? Colors.white : YColor.ink,
+                )),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _sectionContent(HrStore state) {
+    switch (_section) {
+      case 0:
+        final templates = state.employmentTemplates;
+        return [
+          _SectionCard(
+            title: 'Employment templates',
+            subtitle:
+                'The Add Employee modal reads compensation, rate, OT and leaves from here.',
+            child: Column(children: [
+              for (var i = 0; i < templates.length; i++) ...[
+                _TemplateRow(
+                  state: state,
+                  template: templates[i],
+                  onTap: () => _editTemplate(templates[i]),
+                ),
+                if (i != templates.length - 1) const _CardDivider(),
+              ],
+            ]),
+          ),
+        ];
+      case 1:
+        return [
+          _SectionCard(
+            title: 'Standard hours',
+            subtitle: 'Beyond this in a single day counts as overtime.',
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(children: [
+                SizedBox(
+                  width: 200,
+                  child: _numField(
+                      label: 'Regular hours / day',
+                      controller: _regHours,
+                      suffix: 'hr'),
+                ),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Labor-law multipliers',
+            subtitle:
+                'Applied on top of the employee\'s base rate. Standard overtime lives on each template.',
+            child: Column(children: [
+              _multRow(
+                label: 'Rest day work',
+                hint: 'Working on scheduled day off',
+                controller: _restMul,
+              ),
+              const _CardDivider(),
+              _multRow(
+                label: 'Regular holiday',
+                hint: '12 PH regular holidays — double pay',
+                controller: _regHolMul,
+              ),
+              const _CardDivider(),
+              _multRow(
+                label: 'Special holiday',
+                hint: 'Special non-working days — 30% premium',
+                controller: _specHolMul,
+              ),
+              const _CardDivider(),
+              _multRow(
+                label: 'Night differential',
+                hint: 'Default window 10 PM → 6 AM',
+                controller: _ndMul,
+              ),
+            ]),
+          ),
+        ];
+      case 2:
+        return [
+          _SectionCard(
+            title: 'Undertime & lateness',
+            child: Column(children: [
+              _switchRow(
+                icon: Icons.timer_off_outlined,
+                title: 'Deduct undertime',
+                subtitle:
+                    'Subtract missed hours when an employee clocks out early',
+                value: _draft.deductUndertime,
+                onChanged: (v) => setState(() => _draft.deductUndertime = v),
+              ),
+              const _CardDivider(),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(children: [
+                  const Icon(Icons.alarm, size: 18, color: YColor.brandDeep),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Lateness grace period',
+                            style: YFont.bodyStrong()),
+                        Text(
+                          'Minutes of clock-in slack before deductions kick in',
+                          style: YFont.caption(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 110,
+                    child: _numField(
+                        label: '', controller: _grace, suffix: 'min'),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Government & 13th month',
+            subtitle:
+                'Show these line items on payslips. Tables coming in a later release.',
+            child: Column(children: [
+              _switchRow(
+                icon: Icons.card_giftcard_outlined,
+                title: '13th-month pay',
+                subtitle: 'Mandatory in the Philippines — accrued monthly',
+                value: _draft.include13thMonth,
+                onChanged: (v) => setState(() => _draft.include13thMonth = v),
+              ),
+              const _CardDivider(),
+              _switchRow(
+                icon: Icons.account_balance_outlined,
+                title: 'SSS contribution',
+                value: _draft.deductSSS,
+                onChanged: (v) => setState(() => _draft.deductSSS = v),
+              ),
+              const _CardDivider(),
+              _switchRow(
+                icon: Icons.medical_services_outlined,
+                title: 'PhilHealth contribution',
+                value: _draft.deductPhilHealth,
+                onChanged: (v) => setState(() => _draft.deductPhilHealth = v),
+              ),
+              const _CardDivider(),
+              _switchRow(
+                icon: Icons.home_work_outlined,
+                title: 'Pag-IBIG contribution',
+                value: _draft.deductPagIBIG,
+                onChanged: (v) => setState(() => _draft.deductPagIBIG = v),
+              ),
+              const _CardDivider(),
+              _switchRow(
+                icon: Icons.receipt_long_outlined,
+                title: 'BIR withholding tax',
+                value: _draft.withholdBIR,
+                onChanged: (v) => setState(() => _draft.withholdBIR = v),
+              ),
+            ]),
+          ),
+        ];
+      default:
+        final leaves = state.leaveTypes;
+        return [
+          _SectionCard(
+            title: 'Leave types',
+            subtitle:
+                'Buckets staff can draw from. Use the 3-dot menu to edit or delete.',
+            child: leaves.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: Text(
+                        'No leave types yet. Tap "Add type" to start tracking time off.',
+                        style: YFont.caption(),
+                      ),
+                    ),
+                  )
+                : Column(children: [
+                    for (var i = 0; i < leaves.length; i++) ...[
+                      _leaveRow(leaves[i]),
+                      if (i != leaves.length - 1) const _CardDivider(),
+                    ],
+                  ]),
+          ),
+        ];
+    }
   }
 
   Widget _multRow({
@@ -441,19 +538,52 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
             ],
           ),
         ),
-        IconButton(
-          tooltip: 'Edit',
-          onPressed: () => _editLeave(lt),
-          icon: const Icon(Icons.edit_outlined,
-              size: 18, color: YColor.inkMuted),
-        ),
-        IconButton(
-          tooltip: 'Delete',
-          onPressed: () => _confirmDeleteLeave(lt),
-          icon: const Icon(Icons.delete_outline,
-              size: 18, color: YColor.danger),
+        _rowMenu(
+          onEdit: () => _editLeave(lt),
+          onDelete: () => _confirmDeleteLeave(lt),
         ),
       ]),
+    );
+  }
+
+  /// Shared 3-dot overflow menu for an editable / deletable row.
+  Widget _rowMenu({required VoidCallback onEdit, VoidCallback? onDelete}) {
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert, size: 19, color: YColor.inkMuted),
+      padding: EdgeInsets.zero,
+      splashRadius: 20,
+      color: YColor.surface1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(YRadius.md),
+        side: const BorderSide(color: YColor.hairline),
+      ),
+      onSelected: (v) {
+        if (v == 'edit') onEdit();
+        if (v == 'delete') onDelete?.call();
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'edit',
+          height: 42,
+          child: Row(children: [
+            const Icon(Icons.edit_outlined, size: 17, color: YColor.brandDeep),
+            const SizedBox(width: 10),
+            Text('Edit', style: YFont.body()),
+          ]),
+        ),
+        if (onDelete != null)
+          PopupMenuItem<String>(
+            value: 'delete',
+            height: 42,
+            child: Row(children: [
+              const Icon(Icons.delete_outline, size: 17, color: YColor.danger),
+              const SizedBox(width: 10),
+              Text('Delete',
+                  style: YFont.body().copyWith(color: YColor.danger)),
+            ]),
+          ),
+      ],
     );
   }
 
