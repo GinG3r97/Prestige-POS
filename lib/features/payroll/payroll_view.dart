@@ -216,20 +216,18 @@ class _TimesheetPane extends StatelessWidget {
                   ? Center(
                       child: Text('No employees yet.',
                           style: YFont.caption()))
-                  // Fill the pane: force the table to at least the pane width so
-                  // the extra space goes into the (flexible, first) employee
-                  // column — no dead gap after the Total. Day cells keep their
-                  // fixed width so the dates never compress. Horizontal scroll
-                  // is only a fallback if the table is genuinely wider.
+                  // Spread the 7 day columns to fill the pane so the table
+                  // reaches the divider — no gap after the Total, and the
+                  // employee column stays snug (no gap before the days). The
+                  // fixed bits (employee ~150 + Total ~60 + margins/spacing)
+                  // are subtracted, the rest is split across the days.
                   : LayoutBuilder(builder: (ctx, cons) {
+                      final dayW =
+                          ((cons.maxWidth - 274) / 7).clamp(44.0, 84.0);
                       return SingleChildScrollView(
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints:
-                                BoxConstraints(minWidth: cons.maxWidth),
-                            child: _grid(employees, days),
-                          ),
+                          child: _grid(employees, days, dayW),
                         ),
                       );
                     }),
@@ -347,7 +345,7 @@ class _TimesheetPane extends StatelessWidget {
     );
   }
 
-  Widget _grid(List<Employee> employees, List<DateTime> days) {
+  Widget _grid(List<Employee> employees, List<DateTime> days, double dayW) {
     final dayFmt = DateFormat('E\nd');
     return DataTable(
       dataRowMaxHeight: 56,
@@ -363,7 +361,7 @@ class _TimesheetPane extends StatelessWidget {
         for (final d in days)
           DataColumn(
             label: SizedBox(
-              width: 44,
+              width: dayW,
               child: Text(
                 dayFmt.format(d).toUpperCase(),
                 textAlign: TextAlign.center,
@@ -385,6 +383,7 @@ class _TimesheetPane extends StatelessWidget {
               DataCell(_HoursCell(
                 employee: emp,
                 date: d,
+                width: dayW,
                 hours: state.hoursIn(emp.id, d, d),
                 onChanged: (h) => state.upsertTimeEntry(
                   employeeId: emp.id,
@@ -401,7 +400,7 @@ class _TimesheetPane extends StatelessWidget {
   Widget _employeeChip(Employee e) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 28,
           height: 28,
@@ -413,9 +412,10 @@ class _TimesheetPane extends StatelessWidget {
           child: Icon(e.gender.icon, size: 18, color: YColor.brandDeep),
         ),
         const SizedBox(width: 8),
-        // Expands to fill the (flexible) first column so the timesheet uses the
-        // full left width instead of leaving a gap after the Total.
-        Expanded(
+        // Snug fixed width — the day columns (not this one) absorb the pane
+        // width, so there's no gap between the name and the dates.
+        SizedBox(
+          width: 112,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,11 +470,13 @@ class _HoursCell extends StatefulWidget {
   const _HoursCell({
     required this.employee,
     required this.date,
+    required this.width,
     required this.hours,
     required this.onChanged,
   });
   final Employee employee;
   final DateTime date;
+  final double width;
   final double hours;
   final ValueChanged<double> onChanged;
 
@@ -546,11 +548,11 @@ class _HoursCellState extends State<_HoursCell> {
 
   @override
   Widget build(BuildContext context) {
-    // Fixed 44×34 envelope keeps the grid row height constant. Tapping the
-    // cell opens the shared numpad sheet instead of the OS keyboard.
+    // Fixed-height envelope (width set by the grid so the day columns fill the
+    // pane) keeps the row height constant. Tapping opens the shared numpad.
     final has = _c.text.trim().isNotEmpty;
     return SizedBox(
-      width: 44,
+      width: widget.width,
       height: 34,
       child: Material(
         color: Colors.transparent,
