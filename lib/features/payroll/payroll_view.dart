@@ -32,36 +32,23 @@ class _PayrollViewState extends State<PayrollView> {
   PayrollRun? _selectedRun;
   bool _generating = false;
 
-  /// Current period's [start, end] for the active [_period] and [_periodOffset],
-  /// honoring the tenant's semi-monthly cutoff [style] (15 & 30 vs 10 & 25).
-  ({DateTime start, DateTime end}) _periodRange(SemiMonthlyStyle style) {
+  /// The 7-day week shown in the timesheet grid (navigable by [_periodOffset]
+  /// weeks). The grid only ever shows a week so it stays readable; the PAY RUN
+  /// covers the full semi-monthly cutoff ([_cutoffRange]) and the complete
+  /// record is in the per-employee DTR modal.
+  ({DateTime start, DateTime end}) _weekRange() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    switch (_period) {
-      case PayPeriodKind.weekly:
-        final monday = today.subtract(Duration(days: today.weekday - 1));
-        final s = monday.subtract(Duration(days: 7 * _periodOffset));
-        return (start: s, end: s.add(const Duration(days: 6)));
-      case PayPeriodKind.biweekly:
-        final monday = today.subtract(Duration(days: today.weekday - 1));
-        final s = monday.subtract(Duration(days: 14 * _periodOffset));
-        return (start: s, end: s.add(const Duration(days: 13)));
-      case PayPeriodKind.monthly:
-        final s = DateTime(today.year, today.month - _periodOffset, 1);
-        return (start: s, end: DateTime(s.year, s.month + 1, 0));
-      case PayPeriodKind.semiMonthly:
-        var r = _currentSemiMonthly(style, today);
-        for (var i = 0; i < _periodOffset; i++) {
-          r = _prevSemiMonthly(style, r.start);
-        }
-        return r;
-    }
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final s = monday.subtract(Duration(days: 7 * _periodOffset));
+    return (start: s, end: s.add(const Duration(days: 6)));
   }
 
-  /// The semi-monthly period that contains [today] for the given [style].
-  ({DateTime start, DateTime end}) _currentSemiMonthly(
-      SemiMonthlyStyle style, DateTime today) {
-    final y = today.year, m = today.month, d = today.day;
+  /// The semi-monthly cutoff (15 & 30 vs 10 & 25) containing [anchor] — the
+  /// period a pay run is generated for, and the range the DTR modal shows.
+  ({DateTime start, DateTime end}) _cutoffRange(
+      DateTime anchor, SemiMonthlyStyle style) {
+    final y = anchor.year, m = anchor.month, d = anchor.day;
     if (style == SemiMonthlyStyle.fifteenThirty) {
       return d <= 15
           ? (start: DateTime(y, m, 1), end: DateTime(y, m, 15))
@@ -76,29 +63,18 @@ class _PayrollViewState extends State<PayrollView> {
         : (start: DateTime(y, m - 1, 26), end: DateTime(y, m, 10));
   }
 
-  /// The semi-monthly period immediately before the one starting at [start].
-  ({DateTime start, DateTime end}) _prevSemiMonthly(
-      SemiMonthlyStyle style, DateTime start) {
-    if (style == SemiMonthlyStyle.fifteenThirty) {
-      return start.day == 16
-          ? (start: DateTime(start.year, start.month, 1),
-              end: DateTime(start.year, start.month, 15))
-          : (start: DateTime(start.year, start.month - 1, 16),
-              end: DateTime(start.year, start.month, 0));
-    }
-    return start.day == 26
-        ? (start: DateTime(start.year, start.month, 11),
-            end: DateTime(start.year, start.month, 25))
-        : (start: DateTime(start.year, start.month - 1, 26),
-            end: DateTime(start.year, start.month, 10));
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<HrStore>();
-    final range = _periodRange(state.payrollRules.semiMonthlyStyle);
-    final periodStart = range.start;
-    final periodEnd = range.end;
+    final style = state.payrollRules.semiMonthlyStyle;
+    // Grid shows a week; the pay run + DTR modal use the cutoff that week is in.
+    // Anchor on the week's midpoint (Thursday) so a week straddling the cutoff
+    // boundary maps to the cutoff it mostly falls in.
+    final week = _weekRange();
+    final cutoff =
+        _cutoffRange(week.start.add(const Duration(days: 3)), style);
+    final periodStart = week.start;
+    final periodEnd = week.end;
 
     return Container(
       color: YColor.surface2,
@@ -112,6 +88,8 @@ class _PayrollViewState extends State<PayrollView> {
               state: state,
               periodStart: periodStart,
               periodEnd: periodEnd,
+              cutoffStart: cutoff.start,
+              cutoffEnd: cutoff.end,
               periodOffset: _periodOffset,
               onShift: (delta) => setState(() {
                 _periodOffset = (_periodOffset + delta).clamp(0, 60);
@@ -125,8 +103,8 @@ class _PayrollViewState extends State<PayrollView> {
             child: _PayRunPane(
               state: state,
               period: _period,
-              periodStart: periodStart,
-              periodEnd: periodEnd,
+              periodStart: cutoff.start,
+              periodEnd: cutoff.end,
               selectedRun: _selectedRun,
               generating: _generating,
               onSelectRun: (r) => setState(() => _selectedRun = r),
@@ -136,8 +114,8 @@ class _PayrollViewState extends State<PayrollView> {
                 if (_generating) return;
                 setState(() => _generating = true);
                 final res = await state.generatePayrollRun(
-                  start: periodStart,
-                  end: periodEnd,
+                  start: cutoff.start,
+                  end: cutoff.end,
                   kind: _period,
                 );
                 if (!context.mounted) return;
@@ -174,13 +152,19 @@ class _TimesheetPane extends StatelessWidget {
     required this.state,
     required this.periodStart,
     required this.periodEnd,
+    required this.cutoffStart,
+    required this.cutoffEnd,
     required this.periodOffset,
     required this.onShift,
   });
 
   final HrStore state;
+  // The week shown in the grid.
   final DateTime periodStart;
   final DateTime periodEnd;
+  // The full semi-monthly cutoff the DTR modal shows (the complete record).
+  final DateTime cutoffStart;
+  final DateTime cutoffEnd;
   final int periodOffset;
   final ValueChanged<int> onShift;
 
@@ -366,9 +350,9 @@ class _TimesheetPane extends StatelessWidget {
       ),
       builder: (_) => _DtrSheet(
         name: emp.name,
-        start: periodStart,
-        end: periodEnd,
-        future: state.fetchEmployeeDtr(emp.id, periodStart, periodEnd),
+        start: cutoffStart,
+        end: cutoffEnd,
+        future: state.fetchEmployeeDtr(emp.id, cutoffStart, cutoffEnd),
       ),
     );
   }
