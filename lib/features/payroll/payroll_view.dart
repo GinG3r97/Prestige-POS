@@ -846,7 +846,8 @@ class _RunDetail extends StatelessWidget {
                 ],
               ),
             ),
-            if (!readonly)
+            // Re-generate only on a draft — a finalized/paid run is locked.
+            if (run.status == PayrollStatus.draft)
               OutlinedButton.icon(
                 onPressed: () => _regenerate(context),
                 icon: const Icon(Icons.refresh, size: 16),

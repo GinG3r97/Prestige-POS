@@ -1067,8 +1067,9 @@ class HrStore extends ChangeNotifier {
     final ri = runs.indexWhere((r) => r.id == runId);
     if (ri < 0) return 'That payroll run no longer exists.';
     final run = runs[ri];
-    if (run.status == PayrollStatus.paid) {
-      return 'This run is already paid — it can\'t be re-generated.';
+    if (run.status != PayrollStatus.draft) {
+      return 'This run is ${run.status.label.toLowerCase()} — re-generate '
+          'only works on a draft. Set it back to Draft first.';
     }
     // Keep the owner's manual bonus / deductions, matched per employee.
     final prevByEmp = {for (final s in run.slips) s.employeeId: s};
