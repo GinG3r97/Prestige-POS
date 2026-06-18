@@ -890,6 +890,43 @@ class _DetailPaneState extends State<_DetailPane> {
           label: 'Employment type',
           value: e.employmentType.label,
         ),
+        if (e.sssContribution > 0 ||
+            e.philHealthContribution > 0 ||
+            e.pagIbigContribution > 0) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+            child: Text('STATUTORY DEDUCTIONS · MONTHLY',
+                style: YFont.caption().copyWith(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: YColor.inkMuted,
+                )),
+          ),
+          _DetailRow(
+            icon: Icons.account_balance_outlined,
+            label: 'SSS',
+            value: '₱${e.sssContribution.toStringAsFixed(0)}',
+          ),
+          Container(
+              height: 0.5,
+              color: YColor.hairline,
+              margin: const EdgeInsets.symmetric(horizontal: 16)),
+          _DetailRow(
+            icon: Icons.medical_services_outlined,
+            label: 'PhilHealth',
+            value: '₱${e.philHealthContribution.toStringAsFixed(0)}',
+          ),
+          Container(
+              height: 0.5,
+              color: YColor.hairline,
+              margin: const EdgeInsets.symmetric(horizontal: 16)),
+          _DetailRow(
+            icon: Icons.home_work_outlined,
+            label: 'Pag-IBIG',
+            value: '₱${e.pagIbigContribution.toStringAsFixed(0)}',
+          ),
+        ],
       ],
     );
   }
@@ -911,64 +948,88 @@ class _DetailPaneState extends State<_DetailPane> {
   }
 
   Widget _scheduleCard(Employee e) {
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const labels = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday',
+    ];
     return _SectionCard(
       title: 'Weekly schedule',
       icon: Icons.calendar_view_week_outlined,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Row(
-            children: List.generate(7, (i) {
-              final day = i + 1;
-              final shift =
-                  e.schedule.where((s) => s.weekday == day).firstOrNull;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: shift == null
-                          ? YColor.surface2
-                          : YColor.brandTint.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(YRadius.md),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          labels[i],
-                          style: YFont.caption().copyWith(
-                            color: YColor.brandDeep,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            fontSize: 10,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          shift == null
-                              ? '—'
-                              : '${shift.start}\n${shift.end}',
-                          textAlign: TextAlign.center,
-                          style: YFont.caption().copyWith(
-                            fontSize: 10,
-                            height: 1.3,
-                            color: shift == null
-                                ? YColor.inkMuted
-                                : YColor.ink,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+          child: Column(
+            children: [
+              for (var i = 0; i < 7; i++)
+                _scheduleDayRow(labels[i],
+                    e.schedule.where((s) => s.weekday == i + 1).firstOrNull),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _scheduleDayRow(String day, WorkShift? shift) {
+    final on = shift != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: on ? YColor.brandTint.withValues(alpha: 0.4) : YColor.surface2,
+        borderRadius: BorderRadius.circular(YRadius.md),
+      ),
+      child: Row(children: [
+        SizedBox(
+          width: 84,
+          child: Text(day,
+              style: YFont.bodyStrong().copyWith(
+                  fontSize: 13,
+                  color: on ? YColor.ink : YColor.inkMuted)),
+        ),
+        Expanded(
+          child: on
+              ? Row(children: [
+                  const Icon(Icons.schedule_outlined,
+                      size: 14, color: YColor.brandDeep),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_ampm(shift.start)} – ${_ampm(shift.end)}',
+                    style: YFont.bodyStrong().copyWith(fontSize: 12.5),
+                  ),
+                ])
+              : Text('Day off',
+                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+        ),
+        if (on)
+          Text(_shiftLength(shift.start, shift.end),
+              style: YFont.caption().copyWith(
+                  color: YColor.brandDeep, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  /// 'HH:mm' → '9:00 AM'.
+  String _ampm(String hhmm) {
+    final p = hhmm.split(':');
+    final h24 = int.tryParse(p[0]) ?? 0;
+    final m = p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0;
+    final h12 = h24 % 12 == 0 ? 12 : h24 % 12;
+    return '$h12:${m.toString().padLeft(2, '0')} ${h24 >= 12 ? 'PM' : 'AM'}';
+  }
+
+  /// Hours between two 'HH:mm' times, e.g. '8h' or '7.5h'.
+  String _shiftLength(String start, String end) {
+    int mins(String t) {
+      final p = t.split(':');
+      return (int.tryParse(p[0]) ?? 0) * 60 +
+          (p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0);
+    }
+
+    var diff = mins(end) - mins(start);
+    if (diff < 0) diff += 24 * 60; // overnight shift
+    final h = diff / 60.0;
+    return '${h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toStringAsFixed(1)}h';
   }
 
   Widget _requirementsCard(Employee e) => _SectionCard(

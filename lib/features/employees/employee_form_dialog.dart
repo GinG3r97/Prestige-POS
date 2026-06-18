@@ -103,6 +103,8 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         text: e == null || e.monthlySalary == 0
             ? ''
             : e.monthlySalary.toStringAsFixed(0));
+    // Statutory deductions auto-fill from the monthly salary in real time.
+    _monthlySalary.addListener(_syncStatutoryFromSalary);
     _sss = TextEditingController(
         text: e == null || e.sssContribution == 0
             ? ''
@@ -173,6 +175,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
     _pin.dispose();
     _hourlyRate.dispose();
     _dailyRate.dispose();
+    _monthlySalary.removeListener(_syncStatutoryFromSalary);
     _monthlySalary.dispose();
     _sss.dispose();
     _philHealth.dispose();
@@ -980,33 +983,32 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('STATUTORY DEDUCTIONS',
-              style: YFont.caption().copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-                color: YColor.brandDeep,
-              )),
-          const SizedBox(height: 4),
-          Text('Monthly employee share. Tap Compute to fill from salary.',
-              style: YFont.caption()),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
+          Row(children: [
+            Expanded(
+              child: Text('STATUTORY DEDUCTIONS',
+                  style: YFont.caption().copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                    color: YColor.brandDeep,
+                  )),
+            ),
+            TextButton.icon(
               onPressed: _computeStatutory,
               icon: const Icon(Icons.auto_awesome_outlined, size: 14),
-              label: const Text('Compute from salary'),
+              label: const Text('Compute'),
               style: TextButton.styleFrom(
                 foregroundColor: YColor.brand,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 visualDensity: VisualDensity.compact,
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 textStyle: YFont.caption()
                     .copyWith(fontSize: 12, fontWeight: FontWeight.w700),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
+          ]),
+          const SizedBox(height: 10),
           _field(
             label: 'SSS (₱)',
             controller: _sss,
@@ -1030,6 +1032,11 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         ],
       ),
     );
+  }
+
+  /// Live recompute when the monthly salary changes (real-time auto-fill).
+  void _syncStatutoryFromSalary() {
+    if (mounted) _computeStatutory();
   }
 
   /// Reads the monthly-salary field, runs [phStatutory], and fills the three
