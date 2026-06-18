@@ -1439,6 +1439,8 @@ class _DtrSheet extends StatelessWidget {
                 final ot = (data['ot_hours'] as num?) ?? 0;
                 final ut = (data['undertime_hours'] as num?) ?? 0;
                 final late = (data['late_minutes'] as num?) ?? 0;
+                final paidLeave = (data['paid_leave_hours'] as num?) ?? 0;
+                final absent = (data['absent_days'] as num?) ?? 0;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1448,8 +1450,14 @@ class _DtrSheet extends StatelessWidget {
                           YColor.brandDeep),
                       if (ot > 0)
                         _chip('OT ${ot.toStringAsFixed(1)}h', YColor.success),
+                      if (paidLeave > 0)
+                        _chip('Paid leave ${paidLeave.toStringAsFixed(1)}h',
+                            YColor.brand),
                       if (ut > 0)
                         _chip('Undertime ${ut.toStringAsFixed(1)}h',
+                            YColor.danger),
+                      if (absent > 0)
+                        _chip('Absent ${absent.toStringAsFixed(0)}d',
                             YColor.danger),
                       if (late > 0)
                         _chip('Late ${late.toStringAsFixed(0)}m',
@@ -1471,6 +1479,8 @@ class _DtrSheet extends StatelessWidget {
                               days[i] as Map<String, dynamic>;
                           final date =
                               DateTime.parse(day['date'] as String);
+                          final status =
+                              (day['status'] as String?) ?? 'worked';
                           final inMin = (day['first_in'] as num?)?.toInt();
                           final outMin = (day['last_out'] as num?)?.toInt();
                           final dayOt = (day['ot_min'] as num?) ?? 0;
@@ -1480,6 +1490,52 @@ class _DtrSheet extends StatelessWidget {
                           final dayReg = (day['regular_min'] as num?) ?? 0;
                           final dayRest =
                               (day['restday_min'] as num?) ?? 0;
+                          final leaveMin = (day['leave_min'] as num?) ?? 0;
+                          final leaveName =
+                              (day['leave_name'] as String?) ?? 'Leave';
+
+                          // Middle text + trailing chips depend on the day's
+                          // status (worked / on-leave / absent).
+                          late final Widget middle;
+                          late final Widget trailing;
+                          switch (status) {
+                            case 'absent':
+                              middle = Text('Absent',
+                                  style: YFont.caption().copyWith(
+                                      color: YColor.danger,
+                                      fontWeight: FontWeight.w600));
+                              trailing = _chip('No pay', YColor.danger);
+                              break;
+                            case 'leave_paid':
+                              middle = Text('On leave · $leaveName',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.ink));
+                              trailing = _chip(
+                                  'Paid ${_h(leaveMin)}', YColor.brand);
+                              break;
+                            case 'leave_unpaid':
+                              middle = Text('On leave · $leaveName',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.inkMuted));
+                              trailing = _chip('Unpaid', YColor.inkMuted);
+                              break;
+                            default: // worked / restday
+                              middle = Text(
+                                '${_clock(inMin)}  –  ${_clock(outMin)}',
+                                style: YFont.caption()
+                                    .copyWith(color: YColor.ink),
+                              );
+                              trailing = Wrap(spacing: 5, children: [
+                                _chip(_h(dayReg + dayRest), YColor.brandDeep),
+                                if (dayOt > 0)
+                                  _chip('OT ${_h(dayOt)}', YColor.success),
+                                if (dayUt > 0)
+                                  _chip('UT ${_h(dayUt)}', YColor.danger),
+                                if (dayLate > 0)
+                                  _chip('${dayLate.toStringAsFixed(0)}m',
+                                      YColor.warning),
+                              ]);
+                          }
                           return Padding(
                             padding:
                                 const EdgeInsets.symmetric(vertical: 8),
@@ -1498,23 +1554,8 @@ class _DtrSheet extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              Expanded(
-                                child: Text(
-                                  '${_clock(inMin)}  –  ${_clock(outMin)}',
-                                  style: YFont.caption()
-                                      .copyWith(color: YColor.ink),
-                                ),
-                              ),
-                              Wrap(spacing: 5, children: [
-                                _chip(_h(dayReg + dayRest), YColor.brandDeep),
-                                if (dayOt > 0)
-                                  _chip('OT ${_h(dayOt)}', YColor.success),
-                                if (dayUt > 0)
-                                  _chip('UT ${_h(dayUt)}', YColor.danger),
-                                if (dayLate > 0)
-                                  _chip('${dayLate.toStringAsFixed(0)}m',
-                                      YColor.warning),
-                              ]),
+                              Expanded(child: middle),
+                              trailing,
                             ]),
                           );
                         },

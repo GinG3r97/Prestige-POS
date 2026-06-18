@@ -1019,7 +1019,13 @@ class HrStore extends ChangeNotifier {
         'p_start': ymd(start),
         'p_end': ymd(end),
       });
-      if (dtr is Map && ((dtr['days_present'] as int?) ?? 0) > 0) {
+      final present = (dtr is Map) ? ((dtr['days_present'] as int?) ?? 0) : 0;
+      final paidLeave =
+          (dtr is Map) ? ((dtr['paid_leave_hours'] as num?) ?? 0).toDouble() : 0;
+      // Use attendance when the employee actually worked or had PAID leave in
+      // the period; otherwise fall back to the manual timesheet grid. NOTE:
+      // regular_hours already folds in paid-leave hours, so base pay covers them.
+      if (present > 0 || paidLeave > 0) {
         baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
         otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
         utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
