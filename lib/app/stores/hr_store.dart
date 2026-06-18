@@ -887,6 +887,27 @@ class HrStore extends ChangeNotifier {
     }
   }
 
+  /// Fetch one employee's itemized daily time record for a period — the
+  /// per-day rows + totals (regular/OT/undertime/late) from the server's
+  /// schedule-aware engine. Powers the payslip DTR drill-down.
+  Future<Map<String, dynamic>?> fetchEmployeeDtr(
+      String employeeId, DateTime start, DateTime end) async {
+    String ymd(DateTime x) => '${x.year.toString().padLeft(4, '0')}-'
+        '${x.month.toString().padLeft(2, '0')}-'
+        '${x.day.toString().padLeft(2, '0')}';
+    try {
+      final res = await supabase.rpc('payroll_dtr_period', params: {
+        'p_employee': employeeId,
+        'p_start': ymd(start),
+        'p_end': ymd(end),
+      });
+      if (res is Map) return Map<String, dynamic>.from(res);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Build a fresh payroll run snapshot for the given period. Pulls
   /// each active employee's hours from [timeEntries] and freezes
   /// their rate / salary at the time of generation. The run + each
@@ -901,16 +922,39 @@ class HrStore extends ChangeNotifier {
     if (key == null || tenantId == null) {
       return (run: null, error: 'No store selected.');
     }
+    String ymd(DateTime x) => '${x.year.toString().padLeft(4, '0')}-'
+        '${x.month.toString().padLeft(2, '0')}-'
+        '${x.day.toString().padLeft(2, '0')}';
     final slips = <Payslip>[];
     for (final emp in _employees) {
       if (emp.status == EmployeeStatus.terminated) continue;
-      final hrs = hoursIn(emp.id, start, end);
+      // Itemized hours from attendance (schedule-aware regular/OT/UT/late, OT
+      // capped by Allowed-OT/day). Falls back to the manual timesheet grid when
+      // the employee has no punches in the period.
+      double baseHrs = hoursIn(emp.id, start, end);
+      double otHrs = 0, utHrs = 0;
+      int lateMin = 0;
+      try {
+        final dtr = await supabase.rpc('payroll_dtr_period', params: {
+          'p_employee': emp.id,
+          'p_start': ymd(start),
+          'p_end': ymd(end),
+        });
+        if (dtr is Map && ((dtr['days_present'] as int?) ?? 0) > 0) {
+          baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
+          otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
+          utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
+          lateMin = (dtr['late_minutes'] as int?) ?? 0;
+        }
+      } catch (_) {
+        // Network/RPC hiccup — keep the grid hours as the base.
+      }
       slips.add(Payslip(
         employeeId: emp.id,
         employeeName: emp.name,
         employeeRole: emp.role,
         compensationType: emp.compensationType,
-        hoursWorked: hrs,
+        hoursWorked: baseHrs,
         hourlyRate: emp.hourlyRate,
         dailyRate: emp.dailyRate,
         monthlySalary: emp.monthlySalary,
@@ -922,6 +966,13 @@ class HrStore extends ChangeNotifier {
             _payrollRules.deductPhilHealth ? emp.philHealthContribution : 0,
         pagIbig: _payrollRules.deductPagIBIG ? emp.pagIbigContribution : 0,
         regularHoursPerDay: _payrollRules.regularHoursPerDay,
+        // Itemized OT / undertime from attendance.
+        otHours: otHrs,
+        undertimeHours: utHrs,
+        lateMinutes: lateMin,
+        otMultiplier:
+            templateFor(emp.employmentType)?.overtimeMultiplier ?? 1.25,
+        deductUndertime: _payrollRules.deductUndertime,
       ));
     }
     final draft = PayrollRun(
@@ -997,6 +1048,11 @@ class HrStore extends ChangeNotifier {
             'sss': updated.sss,
             'philhealth': updated.philHealth,
             'pagibig': updated.pagIbig,
+            'ot_hours': updated.otHours,
+            'undertime_hours': updated.undertimeHours,
+            'late_minutes': updated.lateMinutes,
+            'ot_multiplier': updated.otMultiplier,
+            'deduct_undertime': updated.deductUndertime,
           })
           .eq('id', updated.id);
       final si = runs[ri].slips.indexWhere((s) => s.id == updated.id);

@@ -84,6 +84,20 @@ class Payslip {
   /// hours worked by this to get days. Defaults to 8 if unset.
   double regularHoursPerDay;
 
+  // ── Itemized OT / undertime, pulled from attendance (payroll_dtr_period) ──
+  /// Approved + capped overtime hours for the period (paid at [otMultiplier]).
+  double otHours;
+  /// Undertime hours for the period (left early / fell short of schedule).
+  double undertimeHours;
+  /// Total lateness minutes (already reflected in the credited regular hours;
+  /// shown on the DTR for transparency, not deducted twice).
+  int lateMinutes;
+  /// OT rate multiplier snapshot (employment-type template, default 1.25).
+  double otMultiplier;
+  /// Whether undertime is deducted from pay (Maintenance → Payroll toggle),
+  /// snapshotted so a finalized slip is stable if the rule later changes.
+  bool deductUndertime;
+
   Payslip({
     String? id,
     required this.employeeId,
@@ -100,6 +114,11 @@ class Payslip {
     this.philHealth = 0,
     this.pagIbig = 0,
     this.regularHoursPerDay = 8,
+    this.otHours = 0,
+    this.undertimeHours = 0,
+    this.lateMinutes = 0,
+    this.otMultiplier = 1.25,
+    this.deductUndertime = true,
   }) : id = id ?? _uuid.v4();
 
   /// Pesos → whole centavos, rounded to the nearest centavo. ALL pay math runs
@@ -133,8 +152,29 @@ class Payslip {
       case CompensationType.salaried:
         base = _toCentavos(monthlySalary / periodsPerMonth(period));
     }
-    return base + _toCentavos(bonus);
+    return base + otPayCentavos + _toCentavos(bonus);
   }
+
+  /// Per-hour rate used for OT pay and undertime deductions. Hourly staff use
+  /// their hourly rate directly; daily/salaried derive an hourly-equivalent
+  /// (daily ÷ hours-per-day; monthly ÷ 26 working days ÷ hours-per-day).
+  double get hourlyEquivalent {
+    final perDay = regularHoursPerDay > 0 ? regularHoursPerDay : 8.0;
+    return switch (compensationType) {
+      CompensationType.hourly => hourlyRate,
+      CompensationType.daily => dailyRate / perDay,
+      CompensationType.salaried => monthlySalary / 26.0 / perDay,
+    };
+  }
+
+  /// Overtime pay for the period, in centavos (hours × hourly-equiv × multiplier).
+  int get otPayCentavos =>
+      _toCentavos(otHours * hourlyEquivalent * otMultiplier);
+
+  /// Undertime deduction, in centavos. 0 when the tenant has undertime
+  /// deduction switched off (snapshotted in [deductUndertime]).
+  int get undertimeCentavos =>
+      deductUndertime ? _toCentavos(undertimeHours * hourlyEquivalent) : 0;
 
   /// Each itemized statutory deduction (SSS / PhilHealth / Pag-IBIG), in
   /// centavos, pro-rated to THIS pay run from the stored monthly amount.
@@ -151,10 +191,12 @@ class Payslip {
       philHealthCentavosFor(period) +
       pagIbigCentavosFor(period);
 
-  /// Net pay in whole centavos: gross − statutory (pro-rated) − other.
+  /// Net pay in whole centavos: gross (incl. OT) − statutory (pro-rated) −
+  /// undertime − other.
   int netCentavosFor(PayPeriodKind period) =>
       grossCentavosFor(period) -
       statutoryCentavosFor(period) -
+      undertimeCentavos -
       _toCentavos(deductions);
 
   /// Gross/net in pesos for display — derived from the centavo math so the
@@ -179,6 +221,11 @@ class Payslip {
         sss: ((row['sss'] as num?) ?? 0).toDouble(),
         philHealth: ((row['philhealth'] as num?) ?? 0).toDouble(),
         pagIbig: ((row['pagibig'] as num?) ?? 0).toDouble(),
+        otHours: ((row['ot_hours'] as num?) ?? 0).toDouble(),
+        undertimeHours: ((row['undertime_hours'] as num?) ?? 0).toDouble(),
+        lateMinutes: (row['late_minutes'] as int?) ?? 0,
+        otMultiplier: ((row['ot_multiplier'] as num?) ?? 1.25).toDouble(),
+        deductUndertime: (row['deduct_undertime'] as bool?) ?? true,
       );
 
   Map<String, dynamic> toRowPayload({
@@ -201,6 +248,11 @@ class Payslip {
         'sss': sss,
         'philhealth': philHealth,
         'pagibig': pagIbig,
+        'ot_hours': otHours,
+        'undertime_hours': undertimeHours,
+        'late_minutes': lateMinutes,
+        'ot_multiplier': otMultiplier,
+        'deduct_undertime': deductUndertime,
       };
 }
 
@@ -283,9 +335,9 @@ class PayrollRun {
       slips.fold(0, (acc, s) => acc + s.netCentavosFor(kind));
   double get totalGross => totalGrossCentavos / 100.0;
   double get totalNet => totalNetCentavos / 100.0;
+  /// Everything withheld between gross and net — statutory + undertime + other.
   double get totalDeductions =>
-      slips.fold(0, (acc, s) => acc + Payslip._toCentavos(s.deductions)) /
-          100.0;
+      (totalGrossCentavos - totalNetCentavos) / 100.0;
 
   factory PayrollRun.fromRow(
     Map<String, dynamic> row, {

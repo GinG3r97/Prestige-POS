@@ -847,6 +847,8 @@ class _RunDetail extends StatelessWidget {
               return _SlipRow(
                 slip: s,
                 period: run.kind,
+                periodStart: run.periodStart,
+                periodEnd: run.periodEnd,
                 readonly: readonly,
                 onChange: (updated) =>
                     state.updatePayslip(run.id, updated),
@@ -910,11 +912,15 @@ class _SlipRow extends StatefulWidget {
   const _SlipRow({
     required this.slip,
     required this.period,
+    required this.periodStart,
+    required this.periodEnd,
     required this.readonly,
     required this.onChange,
   });
   final Payslip slip;
   final PayPeriodKind period;
+  final DateTime periodStart;
+  final DateTime periodEnd;
   final bool readonly;
   final ValueChanged<Payslip> onChange;
 
@@ -952,19 +958,29 @@ class _SlipRowState extends State<_SlipRow> {
     if (bonus == widget.slip.bonus && ded == widget.slip.deductions) {
       return;
     }
+    final s = widget.slip;
+    // Carry EVERY snapshot field forward — only bonus/deductions change here.
     widget.onChange(Payslip(
-      id: widget.slip.id,
-      employeeId: widget.slip.employeeId,
-      employeeName: widget.slip.employeeName,
-      employeeRole: widget.slip.employeeRole,
-      compensationType: widget.slip.compensationType,
-      hoursWorked: widget.slip.hoursWorked,
-      hourlyRate: widget.slip.hourlyRate,
-      dailyRate: widget.slip.dailyRate,
-      monthlySalary: widget.slip.monthlySalary,
+      id: s.id,
+      employeeId: s.employeeId,
+      employeeName: s.employeeName,
+      employeeRole: s.employeeRole,
+      compensationType: s.compensationType,
+      hoursWorked: s.hoursWorked,
+      hourlyRate: s.hourlyRate,
+      dailyRate: s.dailyRate,
+      monthlySalary: s.monthlySalary,
       bonus: bonus,
       deductions: ded,
-      regularHoursPerDay: widget.slip.regularHoursPerDay,
+      sss: s.sss,
+      philHealth: s.philHealth,
+      pagIbig: s.pagIbig,
+      regularHoursPerDay: s.regularHoursPerDay,
+      otHours: s.otHours,
+      undertimeHours: s.undertimeHours,
+      lateMinutes: s.lateMinutes,
+      otMultiplier: s.otMultiplier,
+      deductUndertime: s.deductUndertime,
     ));
   }
 
@@ -1012,7 +1028,29 @@ class _SlipRowState extends State<_SlipRow> {
               ],
             ),
           ]),
-          _statutoryBreakdown(s),
+          const SizedBox(height: 8),
+          _payBreakdown(s),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _openDtr(s),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.event_note_outlined,
+                      size: 14, color: YColor.brandDeep),
+                  const SizedBox(width: 5),
+                  Text('View daily time record',
+                      style: YFont.caption().copyWith(
+                          color: YColor.brandDeep,
+                          fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(
@@ -1036,53 +1074,94 @@ class _SlipRowState extends State<_SlipRow> {
     );
   }
 
-  /// Itemized, read-only breakdown of every deduction on this slip for the
-  /// run's pay period. Statutory amounts (SSS / PhilHealth / Pag-IBIG) come
-  /// from the employee record and are pro-rated by [Payslip]; the lump
-  /// `deductions` field is shown as "Other deductions". Each line only shows
-  /// when its amount is > 0 so a slip with no deductions stays clean.
-  Widget _statutoryBreakdown(Payslip s) {
+  /// Fully itemized payslip: EARNINGS (base pay + overtime) then DEDUCTIONS
+  /// (undertime, statutory pro-rated, other). Every line is derived from the
+  /// snapshot so the math reconciles to the net shown above, to the centavo.
+  Widget _payBreakdown(Payslip s) {
     final p = widget.period;
+    final perDay = s.regularHoursPerDay > 0 ? s.regularHoursPerDay : 8;
+    final bonusC = (s.bonus * 100).round();
+    // Base = gross minus OT minus bonus (the straight-time portion).
+    final base = s.grossCentavosFor(p) - s.otPayCentavos - bonusC;
+    final ot = s.otPayCentavos;
+    final ut = s.undertimeCentavos;
     final sss = s.sssCentavosFor(p);
-    final philHealth = s.philHealthCentavosFor(p);
-    final pagIbig = s.pagIbigCentavosFor(p);
+    final ph = s.philHealthCentavosFor(p);
+    final pi = s.pagIbigCentavosFor(p);
     final other = (s.deductions * 100).round();
-    if (sss == 0 && philHealth == 0 && pagIbig == 0 && other == 0) {
-      return const SizedBox.shrink();
-    }
+
+    final baseLabel = switch (s.compensationType) {
+      CompensationType.hourly =>
+        'Regular  ${s.hoursWorked.toStringAsFixed(1)}h × ₱${s.hourlyRate.toStringAsFixed(0)}',
+      CompensationType.daily =>
+        'Regular  ${(s.hoursWorked / perDay).toStringAsFixed(2)}d × ₱${s.dailyRate.toStringAsFixed(0)}',
+      CompensationType.salaried => 'Salary  (this pay run)',
+    };
+
+    final hasDeduction =
+        ut > 0 || sss > 0 || ph > 0 || pi > 0 || other > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _payLine(baseLabel, base, earning: true),
+        if (ot > 0)
+          _payLine(
+              'Overtime  ${s.otHours.toStringAsFixed(1)}h × ${s.otMultiplier.toStringAsFixed(2)}×',
+              ot,
+              earning: true),
+        if (bonusC > 0) _payLine('Bonus', bonusC, earning: true),
+        if (hasDeduction) ...[
+          const SizedBox(height: 2),
+          if (ut > 0)
+            _payLine('Undertime  ${s.undertimeHours.toStringAsFixed(1)}h', ut,
+                earning: false),
+          if (sss > 0) _payLine('SSS', sss, earning: false),
+          if (ph > 0) _payLine('PhilHealth', ph, earning: false),
+          if (pi > 0) _payLine('Pag-IBIG', pi, earning: false),
+          if (other > 0)
+            _payLine('Other deductions', other, earning: false),
+        ],
+      ],
+    );
+  }
+
+  /// One itemized line: label left, signed amount right (green for an earning,
+  /// danger red for a deduction).
+  Widget _payLine(String label, int centavos, {required bool earning}) {
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 1),
+      child: Row(
         children: [
-          if (sss > 0) _deductionLine('SSS', sss),
-          if (philHealth > 0) _deductionLine('PhilHealth', philHealth),
-          if (pagIbig > 0) _deductionLine('Pag-IBIG', pagIbig),
-          if (other > 0) _deductionLine('Other deductions', other),
+          Expanded(child: Text(label, style: YFont.caption())),
+          Text(
+            '${earning ? '+' : '−'} ${Money(centavos).formatted}',
+            style: YFont.caption().copyWith(
+              color: earning ? YColor.success : YColor.danger,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// One deduction row: label on the left, the negative amount on the right
-  /// in the danger color to match the "− ₱…" deduction styling.
-  Widget _deductionLine(String label, int centavos) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 1),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label, style: YFont.caption()),
-          ),
-          Text(
-            '− ${Money(centavos).formatted}',
-            style: YFont.caption().copyWith(
-              color: YColor.danger,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+  /// Open the per-day daily time record for this employee + period.
+  Future<void> _openDtr(Payslip s) async {
+    final store = context.read<HrStore>();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: YColor.surface1,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _DtrSheet(
+        slip: s,
+        start: widget.periodStart,
+        end: widget.periodEnd,
+        future: store.fetchEmployeeDtr(
+            s.employeeId, widget.periodStart, widget.periodEnd),
       ),
     );
   }
@@ -1109,5 +1188,207 @@ class _SlipRowState extends State<_SlipRow> {
     return widget.readonly
         ? Opacity(opacity: 0.55, child: IgnorePointer(child: field))
         : field;
+  }
+}
+
+/// Per-day daily time record for one employee + pay period. Pulls the
+/// schedule-aware server breakdown (regular / OT / undertime / late) and shows
+/// it day-by-day so the owner can see exactly how the payslip hours were built.
+class _DtrSheet extends StatelessWidget {
+  const _DtrSheet({
+    required this.slip,
+    required this.start,
+    required this.end,
+    required this.future,
+  });
+  final Payslip slip;
+  final DateTime start;
+  final DateTime end;
+  final Future<Map<String, dynamic>?> future;
+
+  String _clock(int? mins) {
+    if (mins == null) return '—';
+    final h = mins ~/ 60, m = mins % 60;
+    final ap = h < 12 ? 'AM' : 'PM';
+    final hh = h % 12 == 0 ? 12 : h % 12;
+    return '$hh:${m.toString().padLeft(2, '0')} $ap';
+  }
+
+  String _h(num minutes) {
+    final v = minutes / 60.0;
+    return v == v.roundToDouble()
+        ? '${v.toStringAsFixed(0)}h'
+        : '${v.toStringAsFixed(1)}h';
+  }
+
+  Widget _chip(String label, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(label,
+            style: YFont.caption().copyWith(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final df = DateFormat('MMM d');
+    final dfDay = DateFormat('EEE');
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                  color: YColor.hairline,
+                  borderRadius: BorderRadius.circular(999)),
+            ),
+            Row(children: [
+              const Icon(Icons.event_note_outlined,
+                  size: 18, color: YColor.brandDeep),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Daily time record',
+                        style: YFont.titleMD().copyWith(fontSize: 16)),
+                    Text(
+                        '${slip.employeeName} · ${df.format(start)} – ${df.format(end)}',
+                        style: YFont.caption()),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            FutureBuilder<Map<String, dynamic>?>(
+              future: future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  );
+                }
+                final data = snap.data;
+                final days = (data?['days'] as List?) ?? const [];
+                if (data == null || days.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 36),
+                    child: Column(children: [
+                      const Icon(Icons.inbox_outlined,
+                          size: 30, color: YColor.inkMuted),
+                      const SizedBox(height: 8),
+                      Text('No attendance punches in this period.',
+                          style: YFont.caption()),
+                      const SizedBox(height: 2),
+                      Text('Hours came from the manual timesheet.',
+                          style: YFont.caption()
+                              .copyWith(color: YColor.inkSubtle)),
+                    ]),
+                  );
+                }
+                final reg = (data['regular_hours'] as num?) ?? 0;
+                final ot = (data['ot_hours'] as num?) ?? 0;
+                final ut = (data['undertime_hours'] as num?) ?? 0;
+                final late = (data['late_minutes'] as num?) ?? 0;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Period totals strip.
+                    Wrap(spacing: 8, runSpacing: 6, children: [
+                      _chip('Regular ${reg.toStringAsFixed(1)}h',
+                          YColor.brandDeep),
+                      if (ot > 0)
+                        _chip('OT ${ot.toStringAsFixed(1)}h', YColor.success),
+                      if (ut > 0)
+                        _chip('Undertime ${ut.toStringAsFixed(1)}h',
+                            YColor.danger),
+                      if (late > 0)
+                        _chip('Late ${late.toStringAsFixed(0)}m',
+                            YColor.warning),
+                    ]),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight:
+                            MediaQuery.of(context).size.height * 0.45,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: days.length,
+                        separatorBuilder: (_, __) => Container(
+                            height: 0.5, color: YColor.hairline),
+                        itemBuilder: (_, i) {
+                          final day =
+                              days[i] as Map<String, dynamic>;
+                          final date =
+                              DateTime.parse(day['date'] as String);
+                          final inMin = (day['first_in'] as num?)?.toInt();
+                          final outMin = (day['last_out'] as num?)?.toInt();
+                          final dayOt = (day['ot_min'] as num?) ?? 0;
+                          final dayUt =
+                              (day['undertime_min'] as num?) ?? 0;
+                          final dayLate = (day['late_min'] as num?) ?? 0;
+                          final dayReg = (day['regular_min'] as num?) ?? 0;
+                          final dayRest =
+                              (day['restday_min'] as num?) ?? 0;
+                          return Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(children: [
+                              SizedBox(
+                                width: 64,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(dfDay.format(date),
+                                        style: YFont.bodyStrong()
+                                            .copyWith(fontSize: 12)),
+                                    Text(df.format(date),
+                                        style: YFont.caption()),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  '${_clock(inMin)}  –  ${_clock(outMin)}',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.ink),
+                                ),
+                              ),
+                              Wrap(spacing: 5, children: [
+                                _chip(_h(dayReg + dayRest), YColor.brandDeep),
+                                if (dayOt > 0)
+                                  _chip('OT ${_h(dayOt)}', YColor.success),
+                                if (dayUt > 0)
+                                  _chip('UT ${_h(dayUt)}', YColor.danger),
+                                if (dayLate > 0)
+                                  _chip('${dayLate.toStringAsFixed(0)}m',
+                                      YColor.warning),
+                              ]),
+                            ]),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
