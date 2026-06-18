@@ -403,18 +403,15 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                     const SizedBox(height: 18),
                     _lockedPortalSection(),
                     const SizedBox(height: 18),
-                    _section('Salary', [
-                      _row(_employmentTypeDropdown(),
-                          _compensationDropdown()),
-                      const SizedBox(height: 12),
-                      _rateFieldForCompType(),
-                      if (_templateForType != null) ...[
-                        const SizedBox(height: 6),
-                        _templateHint(),
+                    // Salary | Statutory side by side, 3 rows each column.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _salarySection()),
+                        const SizedBox(width: 18),
+                        Expanded(child: _statutorySection()),
                       ],
-                    ]),
-                    const SizedBox(height: 18),
-                    _statutorySection(),
+                    ),
                   ],
                   if (_step == 2) ...[
                     // Weekly schedule + Requirements side by side.
@@ -877,30 +874,11 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
           ),
           if (_portalEnabled) ...[
             const SizedBox(height: 14),
-            Text('LOGIN EMAIL',
-                style: YFont.caption().copyWith(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                  color: YColor.inkMuted,
-                )),
-            const SizedBox(height: 6),
-            TextField(
+            _field(
+              label: 'Login email',
               controller: _portalEmail,
               keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                hintText: 'employee@email.com',
-                filled: true,
-                fillColor: YColor.surface1,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(YRadius.md),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+              hint: 'employee@email.com',
             ),
             const SizedBox(height: 6),
             Text(
@@ -976,6 +954,22 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   /// "Compute from salary" shortcut that fills them from [phStatutory].
   /// Mirrors the [_section] container styling but adds a subtitle and a
   /// trailing action beside the title.
+  /// Salary column — 3 stacked rows: employment type, compensation, rate.
+  Widget _salarySection() {
+    return _section('Salary', [
+      _employmentTypeDropdown(),
+      const SizedBox(height: 12),
+      _compensationDropdown(),
+      const SizedBox(height: 12),
+      _rateFieldForCompType(),
+      if (_templateForType != null) ...[
+        const SizedBox(height: 6),
+        _templateHint(),
+      ],
+    ]);
+  }
+
+  /// Statutory column — 3 stacked rows: SSS, PhilHealth, Pag-IBIG.
   Widget _statutorySection() {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
@@ -986,61 +980,52 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text('STATUTORY DEDUCTIONS',
-                  style: YFont.caption().copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                    color: YColor.brandDeep,
-                  )),
-            ),
-            TextButton.icon(
+          Text('STATUTORY DEDUCTIONS',
+              style: YFont.caption().copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+                color: YColor.brandDeep,
+              )),
+          const SizedBox(height: 4),
+          Text('Monthly employee share. Tap Compute to fill from salary.',
+              style: YFont.caption()),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
               onPressed: _computeStatutory,
               icon: const Icon(Icons.auto_awesome_outlined, size: 14),
               label: const Text('Compute from salary'),
               style: TextButton.styleFrom(
                 foregroundColor: YColor.brand,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                textStyle: YFont.caption().copyWith(
-                    fontSize: 12, fontWeight: FontWeight.w700),
+                visualDensity: VisualDensity.compact,
+                textStyle: YFont.caption()
+                    .copyWith(fontSize: 12, fontWeight: FontWeight.w700),
               ),
             ),
-          ]),
-          const SizedBox(height: 4),
-          Text(
-            'Monthly employee share. Tap Compute to fill from salary; '
-            'edit any value.',
-            style: YFont.caption(),
+          ),
+          const SizedBox(height: 8),
+          _field(
+            label: 'SSS (₱)',
+            controller: _sss,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            hint: 'e.g., 900',
           ),
           const SizedBox(height: 12),
-          _row(
-            _field(
-              label: 'SSS (₱)',
-              controller: _sss,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              hint: 'e.g., 900',
-            ),
-            _field(
-              label: 'PhilHealth (₱)',
-              controller: _philHealth,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              hint: 'e.g., 700',
-            ),
+          _field(
+            label: 'PhilHealth (₱)',
+            controller: _philHealth,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            hint: 'e.g., 700',
           ),
           const SizedBox(height: 12),
-          _row(
-            _field(
-              label: 'Pag-IBIG (₱)',
-              controller: _pagIbig,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              hint: 'e.g., 200',
-            ),
-            const SizedBox.shrink(),
+          _field(
+            label: 'Pag-IBIG (₱)',
+            controller: _pagIbig,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            hint: 'e.g., 200',
           ),
         ],
       ),
