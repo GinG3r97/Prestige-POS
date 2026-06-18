@@ -938,58 +938,10 @@ class HrStore extends ChangeNotifier {
             'Delete it first if you want to regenerate.'
       );
     }
-    String ymd(DateTime x) => '${x.year.toString().padLeft(4, '0')}-'
-        '${x.month.toString().padLeft(2, '0')}-'
-        '${x.day.toString().padLeft(2, '0')}';
     final slips = <Payslip>[];
     for (final emp in _employees) {
       if (emp.status == EmployeeStatus.terminated) continue;
-      // Itemized hours from attendance (schedule-aware regular/OT/UT/late, OT
-      // capped by Allowed-OT/day). Falls back to the manual timesheet grid when
-      // the employee has no punches in the period.
-      double baseHrs = hoursIn(emp.id, start, end);
-      double otHrs = 0, utHrs = 0;
-      int lateMin = 0;
-      try {
-        final dtr = await supabase.rpc('payroll_dtr_period', params: {
-          'p_employee': emp.id,
-          'p_start': ymd(start),
-          'p_end': ymd(end),
-        });
-        if (dtr is Map && ((dtr['days_present'] as int?) ?? 0) > 0) {
-          baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
-          otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
-          utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
-          lateMin = (dtr['late_minutes'] as int?) ?? 0;
-        }
-      } catch (_) {
-        // Network/RPC hiccup — keep the grid hours as the base.
-      }
-      slips.add(Payslip(
-        employeeId: emp.id,
-        employeeName: emp.name,
-        employeeRole: emp.role,
-        compensationType: emp.compensationType,
-        hoursWorked: baseHrs,
-        hourlyRate: emp.hourlyRate,
-        dailyRate: emp.dailyRate,
-        monthlySalary: emp.monthlySalary,
-        // Itemized statutory deductions — snapshot the employee's monthly
-        // amounts, but only the ones the tenant has switched on. The pay run
-        // pro-rates them by pay frequency at display/net time.
-        sss: _payrollRules.deductSSS ? emp.sssContribution : 0,
-        philHealth:
-            _payrollRules.deductPhilHealth ? emp.philHealthContribution : 0,
-        pagIbig: _payrollRules.deductPagIBIG ? emp.pagIbigContribution : 0,
-        regularHoursPerDay: _payrollRules.regularHoursPerDay,
-        // Itemized OT / undertime from attendance.
-        otHours: otHrs,
-        undertimeHours: utHrs,
-        lateMinutes: lateMin,
-        otMultiplier:
-            templateFor(emp.employmentType)?.overtimeMultiplier ?? 1.25,
-        deductUndertime: _payrollRules.deductUndertime,
-      ));
+      slips.add(await _buildSlip(emp, start, end));
     }
     final draft = PayrollRun(
       periodStart: start,
@@ -1035,6 +987,122 @@ class HrStore extends ChangeNotifier {
       return (run: null, error: 'Could not generate run: ${e.message}');
     } catch (_) {
       return (run: null, error: 'Could not reach the server. Please try again.');
+    }
+  }
+
+  /// Build one fresh payslip snapshot for [emp] over the period — pulls
+  /// itemized hours/OT/undertime from attendance (falling back to the manual
+  /// timesheet grid when there are no punches) and freezes the CURRENT rates +
+  /// statutory + rules. [bonus]/[deductions]/[id] let a re-generate preserve
+  /// the owner's manual edits and the existing payslip row id.
+  Future<Payslip> _buildSlip(
+    Employee emp,
+    DateTime start,
+    DateTime end, {
+    double bonus = 0,
+    double deductions = 0,
+    String? id,
+  }) async {
+    String ymd(DateTime x) => '${x.year.toString().padLeft(4, '0')}-'
+        '${x.month.toString().padLeft(2, '0')}-'
+        '${x.day.toString().padLeft(2, '0')}';
+    double baseHrs = hoursIn(emp.id, start, end);
+    double otHrs = 0, utHrs = 0;
+    int lateMin = 0;
+    try {
+      final dtr = await supabase.rpc('payroll_dtr_period', params: {
+        'p_employee': emp.id,
+        'p_start': ymd(start),
+        'p_end': ymd(end),
+      });
+      if (dtr is Map && ((dtr['days_present'] as int?) ?? 0) > 0) {
+        baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
+        otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
+        utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
+        lateMin = (dtr['late_minutes'] as int?) ?? 0;
+      }
+    } catch (_) {
+      // Network/RPC hiccup — keep the grid hours as the base.
+    }
+    return Payslip(
+      id: id,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      employeeRole: emp.role,
+      compensationType: emp.compensationType,
+      hoursWorked: baseHrs,
+      hourlyRate: emp.hourlyRate,
+      dailyRate: emp.dailyRate,
+      monthlySalary: emp.monthlySalary,
+      bonus: bonus,
+      deductions: deductions,
+      // Itemized statutory — snapshot the employee's monthly amounts, but only
+      // the ones the tenant has switched on. Pro-rated by pay frequency at net.
+      sss: _payrollRules.deductSSS ? emp.sssContribution : 0,
+      philHealth:
+          _payrollRules.deductPhilHealth ? emp.philHealthContribution : 0,
+      pagIbig: _payrollRules.deductPagIBIG ? emp.pagIbigContribution : 0,
+      regularHoursPerDay: _payrollRules.regularHoursPerDay,
+      otHours: otHrs,
+      undertimeHours: utHrs,
+      lateMinutes: lateMin,
+      otMultiplier:
+          templateFor(emp.employmentType)?.overtimeMultiplier ?? 1.25,
+      deductUndertime: _payrollRules.deductUndertime,
+    );
+  }
+
+  /// Re-snapshot an existing (unpaid) run from CURRENT data — refreshes hours,
+  /// OT/undertime, rates and statutory while KEEPING each employee's manually
+  /// entered bonus + deductions. Replaces the run's payslips in place so any
+  /// edits to employee statutory / rates / time entries flow through.
+  Future<String?> regeneratePayrollRun(String runId) async {
+    final key = _cacheKey;
+    final tenantId = _tenantId;
+    if (key == null || tenantId == null) return 'No store selected.';
+    final runs = _payrollRunsByTenant[key];
+    if (runs == null) return 'No payroll runs yet.';
+    final ri = runs.indexWhere((r) => r.id == runId);
+    if (ri < 0) return 'That payroll run no longer exists.';
+    final run = runs[ri];
+    if (run.status == PayrollStatus.paid) {
+      return 'This run is already paid — it can\'t be re-generated.';
+    }
+    // Keep the owner's manual bonus / deductions, matched per employee.
+    final prevByEmp = {for (final s in run.slips) s.employeeId: s};
+    final fresh = <Payslip>[];
+    for (final emp in _employees) {
+      if (emp.status == EmployeeStatus.terminated) continue;
+      final prev = prevByEmp[emp.id];
+      fresh.add(await _buildSlip(
+        emp,
+        run.periodStart,
+        run.periodEnd,
+        bonus: prev?.bonus ?? 0,
+        deductions: prev?.deductions ?? 0,
+      ));
+    }
+    try {
+      // Swap the slips: drop the old rows, insert the refreshed set.
+      await supabase.from('payslips').delete().eq('payroll_run_id', runId);
+      final payloads = fresh
+          .map((s) =>
+              s.toRowPayload(tenantId: tenantId, payrollRunId: runId))
+          .toList();
+      final rows = payloads.isEmpty
+          ? <Map<String, dynamic>>[]
+          : (await supabase.from('payslips').insert(payloads).select('*'))
+              .cast<Map<String, dynamic>>();
+      run.slips = rows
+          .map((s) => Payslip.fromRow(s)
+            ..regularHoursPerDay = _payrollRules.regularHoursPerDay)
+          .toList();
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return 'Could not re-generate: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
     }
   }
 

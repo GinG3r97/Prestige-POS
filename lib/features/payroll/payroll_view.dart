@@ -846,6 +846,21 @@ class _RunDetail extends StatelessWidget {
                 ],
               ),
             ),
+            if (!readonly)
+              OutlinedButton.icon(
+                onPressed: () => _regenerate(context),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Re-generate'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: YColor.brandDeep,
+                  side: const BorderSide(color: YColor.hairline),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+              ),
+            const SizedBox(width: 6),
             PopupMenuButton<PayrollStatus>(
               tooltip: 'Change status',
               icon: const Icon(Icons.more_vert),
@@ -927,6 +942,49 @@ class _RunDetail extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Re-snapshot the run from current data (employee statutory / rates / time
+  /// entries / attendance) while keeping each slip's manual bonus + deductions.
+  Future<void> _regenerate(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(YRadius.lg)),
+        title: const Text('Re-generate this run?'),
+        content: const Text(
+          'Refreshes hours, overtime, undertime, rates and statutory '
+          'deductions from current data. Bonuses and manual deductions you '
+          'entered are kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand,
+                foregroundColor: Colors.white),
+            child: const Text('Re-generate'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final err = await state.regeneratePayrollRun(run.id);
+    if (!context.mounted) return;
+    PushToast.show(
+      context,
+      title: err == null ? 'Run re-generated' : 'Could not re-generate',
+      subtitle: err ??
+          'Hours, overtime, undertime and statutory were refreshed.',
+      leadingIcon:
+          err == null ? Icons.check_circle_outline : Icons.error_outline,
     );
   }
 }
