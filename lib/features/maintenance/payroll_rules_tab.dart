@@ -7,6 +7,7 @@ import '../../design_system/typography.dart';
 import '../../models/payroll_rules.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
+import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 import '../../design_system/icons.dart'
     show IconPickerField, iconFromKey, materialIconForName;
@@ -439,7 +440,10 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                   SizedBox(
                     width: 132,
                     child: _numField(
-                        label: '', controller: _grace, suffix: 'min'),
+                        label: '',
+                        title: 'Lateness grace',
+                        controller: _grace,
+                        suffix: 'min'),
                   ),
                 ]),
               ),
@@ -536,7 +540,8 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
         ),
         SizedBox(
           width: 140,
-          child: _numField(label: '', controller: controller, suffix: '×'),
+          child: _numField(
+              label: '', title: label, controller: controller, suffix: '×'),
         ),
       ]),
     );
@@ -646,27 +651,17 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   Widget _numField({
     required String label,
     required TextEditingController controller,
+    String? title,
     String? suffix,
   }) {
-    return KeyboardAccessoryField(
+    return NumpadField(
       controller: controller,
       label: label,
-      accessoryLabel: label.isEmpty ? 'VALUE' : label.toUpperCase(),
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      fillColor: YColor.surface2,
-      borderColor: YColor.hairline,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      textStyle: const TextStyle(
-        fontFamily: 'Menlo',
-        fontWeight: FontWeight.w600,
-      ),
-      suffix: suffix == null ? null : _unitSuffix(suffix),
+      title: title,
+      suffix: suffix,
+      decimal: true,
     );
   }
-
-  Widget _unitSuffix(String unit) =>
-      _UnitBadge(label: unit == '×' ? '×' : unit.toUpperCase());
 
   Future<void> _editLeave(LeaveType? initial) async {
     final saved = await showDialog<LeaveType>(
@@ -1004,31 +999,3 @@ class _LeaveTypeDialogState extends State<_LeaveTypeDialog> {
 /// A brand-colored chip suffix used inside numeric input fields to label the
 /// unit (× MULT, HR, MIN, PER DAY, etc.). Replaces the previous plain-grey
 /// '×' suffix that read like a close/clear button.
-class _UnitBadge extends StatelessWidget {
-  const _UnitBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, right: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: YColor.brand.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          label,
-          style: YFont.caption().copyWith(
-            fontSize: 9,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.9,
-            color: YColor.brand,
-          ),
-        ),
-      ),
-    );
-  }
-}
