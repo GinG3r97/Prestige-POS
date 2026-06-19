@@ -988,6 +988,14 @@ class HrStore extends ChangeNotifier {
       notifyListeners();
       return (run: hydrated, error: null);
     } on sb.PostgrestException catch (e) {
+      // DB unique constraint (race that slipped past the cache guard).
+      if (e.code == '23505') {
+        return (
+          run: null,
+          error: 'A run for this period already exists. '
+              'Open it from the list or delete it to regenerate.'
+        );
+      }
       return (run: null, error: 'Could not generate run: ${e.message}');
     } catch (_) {
       return (run: null, error: 'Could not reach the server. Please try again.');
