@@ -149,6 +149,36 @@ class PayrollRules {
       };
 }
 
+/// A holiday on the tenant's calendar. `kind` drives which premium multiplier
+/// applies (regular = e.g. 2.0×, special non-working = e.g. 1.3×).
+class Holiday {
+  final String id;
+  DateTime date;
+  String name;
+  String kind; // 'regular' | 'special'
+
+  Holiday({String? id, required this.date, required this.name, this.kind = 'regular'})
+      : id = id ?? _uuid.v4();
+
+  bool get isRegular => kind == 'regular';
+
+  factory Holiday.fromRow(Map<String, dynamic> row) => Holiday(
+        id: row['id'] as String,
+        date: DateTime.parse(row['holiday_date'] as String),
+        name: (row['name'] as String?) ?? '',
+        kind: (row['kind'] as String?) ?? 'regular',
+      );
+
+  Map<String, dynamic> toRow(String tenantId) => {
+        'tenant_id': tenantId,
+        'holiday_date': '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-'
+            '${date.day.toString().padLeft(2, '0')}',
+        'name': name,
+        'kind': kind,
+      };
+}
+
 /// A named leave bucket (Service Incentive Leave, Vacation, Sick, etc.).
 /// Owners can add/edit/remove these in Maintenance → Payroll → Leave types.
 class LeaveType {

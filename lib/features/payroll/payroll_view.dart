@@ -1216,9 +1216,10 @@ class _SlipRowState extends State<_SlipRow> {
     final ot = s.otPayCentavos;
     final restdayP = s.restdayPremiumCentavos;
     final nightP = s.nightdiffPremiumCentavos;
+    final holP = s.holidayPremiumCentavos;
     // Base = gross minus the itemized earnings (OT, premiums, bonus).
     final base =
-        s.grossCentavosFor(p) - ot - restdayP - nightP - bonusC;
+        s.grossCentavosFor(p) - ot - restdayP - nightP - holP - bonusC;
     final ut = s.undertimeCentavos;
     final absence = s.absenceDeductionCentavos;
     final sss = s.sssCentavosFor(p);
@@ -1256,6 +1257,8 @@ class _SlipRowState extends State<_SlipRow> {
               'Night differential  ${s.nightdiffHours.toStringAsFixed(1)}h',
               nightP,
               earning: true),
+        if (holP > 0)
+          _payLine('Holiday premium', holP, earning: true),
         if (bonusC > 0) _payLine('Bonus', bonusC, earning: true),
         if (hasDeduction) ...[
           const SizedBox(height: 2),
@@ -1452,6 +1455,7 @@ class _DtrSheet extends StatelessWidget {
                 final late = (data['late_minutes'] as num?) ?? 0;
                 final paidLeave = (data['paid_leave_hours'] as num?) ?? 0;
                 final absent = (data['absent_days'] as num?) ?? 0;
+                final holPrem = (data['holiday_premium_hours'] as num?) ?? 0;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1464,6 +1468,9 @@ class _DtrSheet extends StatelessWidget {
                       if (paidLeave > 0)
                         _chip('Paid leave ${paidLeave.toStringAsFixed(1)}h',
                             YColor.brand),
+                      if (holPrem > 0)
+                        _chip('Holiday +${holPrem.toStringAsFixed(1)}h',
+                            YColor.success),
                       if (ut > 0)
                         _chip('Undertime ${ut.toStringAsFixed(1)}h',
                             YColor.danger),
@@ -1504,6 +1511,10 @@ class _DtrSheet extends StatelessWidget {
                           final leaveMin = (day['leave_min'] as num?) ?? 0;
                           final leaveName =
                               (day['leave_name'] as String?) ?? 'Leave';
+                          final holName =
+                              (day['holiday_name'] as String?) ?? 'Holiday';
+                          final holPaidMin =
+                              (day['holiday_paid_min'] as num?) ?? 0;
 
                           // Middle text + trailing chips depend on the day's
                           // status (worked / on-leave / absent).
@@ -1529,6 +1540,35 @@ class _DtrSheet extends StatelessWidget {
                                   style: YFont.caption()
                                       .copyWith(color: YColor.inkMuted));
                               trailing = _chip('Unpaid', YColor.inkMuted);
+                              break;
+                            case 'holiday_paid':
+                              middle = Text('Holiday · $holName',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.ink));
+                              trailing = _chip(
+                                  'Paid ${_h(holPaidMin)}', YColor.brand);
+                              break;
+                            case 'holiday_off':
+                              middle = Text('Holiday · $holName',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.inkMuted));
+                              trailing = _chip('No pay', YColor.inkMuted);
+                              break;
+                            case 'holiday_worked':
+                              middle = Text(
+                                  '${_clock(inMin)} – ${_clock(outMin)}',
+                                  style: YFont.caption()
+                                      .copyWith(color: YColor.ink));
+                              trailing = Wrap(spacing: 5, children: [
+                                _chip(_h(dayReg + dayRest), YColor.brandDeep),
+                                _chip('Holiday', YColor.success),
+                                if (dayOt > 0)
+                                  _chip('OT ${_h(dayOt)}', YColor.success),
+                              ]);
                               break;
                             default: // worked / restday
                               middle = Text(

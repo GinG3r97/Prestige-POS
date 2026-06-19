@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
@@ -133,6 +134,11 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
       sub: 'Buckets staff can draw from — names, days per year, paid status.',
       icon: Icons.event_available_outlined,
     ),
+    (
+      title: 'Holidays',
+      sub: 'Regular & special holidays — drive holiday-pay premiums.',
+      icon: Icons.celebration_outlined,
+    ),
   ];
 
   @override
@@ -191,11 +197,13 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    if (_section == 2)
+                    if (_section == 2 || _section == 3)
                       ElevatedButton.icon(
-                        onPressed: () => _editLeave(null),
+                        onPressed: () => _section == 2
+                            ? _editLeave(null)
+                            : _editHoliday(null),
                         icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add type'),
+                        label: Text(_section == 2 ? 'Add type' : 'Add holiday'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: YColor.brand,
                           foregroundColor: Colors.white,
@@ -511,7 +519,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
             ]),
           ),
         ];
-      default:
+      case 2:
         final leaves = state.leaveTypes;
         return [
           _SectionCard(
@@ -536,7 +544,71 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                   ]),
           ),
         ];
+      default:
+        final hols = state.holidays;
+        return [
+          _SectionCard(
+            title: 'Holidays',
+            subtitle:
+                'Regular holidays pay 100% if not worked and a premium if worked; '
+                'special holidays are no-work-no-pay with a premium if worked. '
+                'Multipliers live in Hours & rates.',
+            child: hols.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: Text(
+                        'No holidays yet. Tap "Add holiday" to add PH regular & special days.',
+                        style: YFont.caption(),
+                      ),
+                    ),
+                  )
+                : Column(children: [
+                    for (var i = 0; i < hols.length; i++) ...[
+                      _holidayRow(hols[i]),
+                      if (i != hols.length - 1) const _CardDivider(),
+                    ],
+                  ]),
+          ),
+        ];
     }
+  }
+
+  Widget _holidayRow(Holiday h) {
+    final df = DateFormat('EEE · MMM d, yyyy');
+    final regular = h.isRegular;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: (regular ? YColor.brand : YColor.warning)
+                .withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.celebration_outlined,
+              size: 18, color: regular ? YColor.brandDeep : YColor.warning),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(h.name, style: YFont.bodyStrong()),
+              Text('${df.format(h.date)} · ${regular ? 'Regular' : 'Special'}',
+                  style: YFont.caption()),
+            ],
+          ),
+        ),
+        _rowMenu(
+          onEdit: () => _editHoliday(h),
+          onDelete: () => _confirmDeleteHoliday(h),
+        ),
+      ]),
+    );
   }
 
   Widget _multRow({
@@ -716,6 +788,129 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
     );
     if (!ok || !mounted) return;
     final err = await widget.state.removeLeaveType(lt.id);
+    if (!mounted) return;
+    if (err != null) {
+      PushToast.show(context,
+          title: 'Could not delete',
+          subtitle: err,
+          leadingIcon: Icons.error_outline);
+    }
+  }
+
+  Future<void> _editHoliday(Holiday? initial) async {
+    DateTime date = initial?.date ?? DateTime.now();
+    final nameCtrl = TextEditingController(text: initial?.name ?? '');
+    String kind = initial?.kind ?? 'regular';
+    final df = DateFormat('EEE · MMM d, yyyy');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSt) {
+        return AlertDialog(
+          backgroundColor: YColor.surface1,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(YRadius.lg)),
+          title: Text(initial == null ? 'Add holiday' : 'Edit holiday'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: date,
+                      firstDate: DateTime(date.year - 2),
+                      lastDate: DateTime(date.year + 3),
+                    );
+                    if (picked != null) setSt(() => date = picked);
+                  },
+                  icon: const Icon(Icons.calendar_today_outlined, size: 16),
+                  label: Text(df.format(date)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Holiday name',
+                    hintText: 'e.g. Independence Day',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(
+                      child: _holidayKindChip('regular', 'Regular', kind,
+                          (k) => setSt(() => kind = k))),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _holidayKindChip('special', 'Special', kind,
+                          (k) => setSt(() => kind = k))),
+                ]),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: YColor.brand,
+                  foregroundColor: Colors.white),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      }),
+    );
+    if (ok != true || !mounted) return;
+    final err = await widget.state.upsertHoliday(
+        Holiday(id: initial?.id, date: date, name: nameCtrl.text, kind: kind));
+    if (!mounted) return;
+    if (err != null) {
+      PushToast.show(context,
+          title: 'Could not save',
+          subtitle: err,
+          leadingIcon: Icons.error_outline);
+    }
+  }
+
+  Widget _holidayKindChip(
+      String value, String label, String current, ValueChanged<String> onTap) {
+    final on = current == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(YRadius.md),
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: on ? YColor.brand.withValues(alpha: 0.12) : YColor.surface2,
+          borderRadius: BorderRadius.circular(YRadius.md),
+          border: Border.all(color: on ? YColor.brand : YColor.hairline),
+        ),
+        child: Text(label,
+            style: YFont.bodyStrong().copyWith(
+                fontSize: 13, color: on ? YColor.brandDeep : YColor.inkMuted)),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteHoliday(Holiday h) async {
+    final ok = await showConfirm(
+      context,
+      title: 'Delete "${h.name}"?',
+      message: 'Pay runs already generated keep their snapshot; future runs '
+          'will no longer treat this date as a holiday.',
+      confirmLabel: 'Delete',
+      danger: true,
+      icon: Icons.delete_outline,
+    );
+    if (!ok || !mounted) return;
+    final err = await widget.state.removeHoliday(h.id);
     if (!mounted) return;
     if (err != null) {
       PushToast.show(context,

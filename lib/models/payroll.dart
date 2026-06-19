@@ -108,6 +108,10 @@ class Payslip {
   /// Unexcused absent scheduled days — docks SALARIED pay (hourly/daily already
   /// lose the hours).
   int absentDays;
+  /// Holiday premium, expressed as base-rate hours-equivalent (the extra above
+  /// base, already factored by the holiday multiplier server-side). Paid at the
+  /// plain hourly-equivalent. Regular-holiday-not-worked pay folds into regular.
+  double holidayPremiumHours;
 
   Payslip({
     String? id,
@@ -135,6 +139,7 @@ class Payslip {
     this.nightdiffHours = 0,
     this.nightdiffMultiplier = 1.10,
     this.absentDays = 0,
+    this.holidayPremiumHours = 0,
   }) : id = id ?? _uuid.v4();
 
   /// Copy with selected overrides — used when editing bonus/deductions so no
@@ -165,6 +170,7 @@ class Payslip {
         nightdiffHours: nightdiffHours,
         nightdiffMultiplier: nightdiffMultiplier,
         absentDays: absentDays,
+        holidayPremiumHours: holidayPremiumHours,
       );
 
   /// Pesos → whole centavos, rounded to the nearest centavo. ALL pay math runs
@@ -202,8 +208,14 @@ class Payslip {
         otPayCentavos +
         restdayPremiumCentavos +
         nightdiffPremiumCentavos +
+        holidayPremiumCentavos +
         _toCentavos(bonus);
   }
+
+  /// Holiday premium pay (the extra above base — base hours, incl. regular
+  /// holiday pay, are already in the regular total).
+  int get holidayPremiumCentavos =>
+      _toCentavos(holidayPremiumHours * hourlyEquivalent);
 
   /// Extra pay for rest-day work (the portion above base — base hours are
   /// already in the regular total).
@@ -307,6 +319,8 @@ class Payslip {
         nightdiffMultiplier:
             ((row['nightdiff_mult'] as num?) ?? 1.10).toDouble(),
         absentDays: ((row['absent_days'] as num?) ?? 0).toInt(),
+        holidayPremiumHours:
+            ((row['holiday_premium_hours'] as num?) ?? 0).toDouble(),
       );
 
   Map<String, dynamic> toRowPayload({
@@ -339,6 +353,7 @@ class Payslip {
         'nightdiff_hours': nightdiffHours,
         'nightdiff_mult': nightdiffMultiplier,
         'absent_days': absentDays,
+        'holiday_premium_hours': holidayPremiumHours,
       };
 }
 

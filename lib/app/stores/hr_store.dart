@@ -71,6 +71,9 @@ class HrStore extends ChangeNotifier {
   List<LeaveType> _leaveTypes = [];
   List<LeaveType> get leaveTypes => List.unmodifiable(_leaveTypes);
 
+  List<Holiday> _holidays = [];
+  List<Holiday> get holidays => List.unmodifiable(_holidays);
+
   List<EmploymentTemplate> _employmentTemplates = [];
   List<EmploymentTemplate> get employmentTemplates =>
       List.unmodifiable(_employmentTemplates);
@@ -164,6 +167,16 @@ class HrStore extends ChangeNotifier {
             .map((r) => EmploymentTemplate.fromRow(r as Map<String, dynamic>))
             .toList();
       }(),
+      () async {
+        final holRows = await supabase
+            .from('holidays')
+            .select('*')
+            .eq('tenant_id', tid)
+            .order('holiday_date');
+        _holidays = (holRows as List)
+            .map((r) => Holiday.fromRow(r as Map<String, dynamic>))
+            .toList();
+      }(),
     ]);
     notifyListeners();
   }
@@ -194,7 +207,7 @@ class HrStore extends ChangeNotifier {
             'monthly_salary, bonus, deductions, sss, philhealth, pagibig, '
             'ot_hours, undertime_hours, late_minutes, ot_multiplier, '
             'deduct_undertime, restday_hours, restday_mult, nightdiff_hours, '
-            'nightdiff_mult, absent_days)')
+            'nightdiff_mult, absent_days, holiday_premium_hours)')
         .eq('tenant_id', tenantDbId)
         .order('period_start', ascending: false)
         .limit(60);
@@ -230,6 +243,7 @@ class HrStore extends ChangeNotifier {
     _employeeRoles = [];
     _payrollRules = PayrollRules();
     _leaveTypes = [];
+    _holidays = [];
     _employmentTemplates = [];
     notifyListeners();
   }
@@ -742,6 +756,53 @@ class HrStore extends ChangeNotifier {
     }
   }
 
+  /// Add or update a holiday (upsert on the (tenant, date) unique key).
+  Future<String?> upsertHoliday(Holiday h) async {
+    final tenantId = _tenantId;
+    if (tenantId == null) return 'No store selected.';
+    if (h.name.trim().isEmpty) return 'Holiday name is required.';
+    try {
+      final row = await supabase
+          .from('holidays')
+          .upsert(h.toRow(tenantId)..['name'] = h.name.trim(),
+              onConflict: 'tenant_id,holiday_date')
+          .select('*')
+          .single();
+      final saved = Holiday.fromRow(row);
+      final i = _holidays.indexWhere((x) =>
+          x.id == saved.id ||
+          (x.date.year == saved.date.year &&
+              x.date.month == saved.date.month &&
+              x.date.day == saved.date.day));
+      if (i >= 0) {
+        _holidays[i] = saved;
+      } else {
+        _holidays.add(saved);
+      }
+      _holidays.sort((a, b) => a.date.compareTo(b.date));
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return 'Could not save holiday: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  Future<String?> removeHoliday(String id) async {
+    if (_tenantId == null) return 'No store selected.';
+    try {
+      await supabase.from('holidays').delete().eq('id', id);
+      _holidays.removeWhere((h) => h.id == id);
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return 'Could not delete holiday: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
   Future<String?> updateEmploymentTemplate(EmploymentTemplate t) async {
     final tenantId = _tenantId;
     if (tenantId == null) return 'No store selected.';
@@ -1020,7 +1081,7 @@ class HrStore extends ChangeNotifier {
         '${x.month.toString().padLeft(2, '0')}-'
         '${x.day.toString().padLeft(2, '0')}';
     double baseHrs = hoursIn(emp.id, start, end);
-    double otHrs = 0, utHrs = 0, restdayHrs = 0, nightdiffHrs = 0;
+    double otHrs = 0, utHrs = 0, restdayHrs = 0, nightdiffHrs = 0, holPremHrs = 0;
     int lateMin = 0, absentDays = 0;
     try {
       final dtr = await supabase.rpc('payroll_dtr_period', params: {
@@ -1033,6 +1094,8 @@ class HrStore extends ChangeNotifier {
         // gate (a fully-absent salaried employee still needs to be docked).
         restdayHrs = ((dtr['restday_hours'] as num?) ?? 0).toDouble();
         nightdiffHrs = ((dtr['nightdiff_hours'] as num?) ?? 0).toDouble();
+        holPremHrs =
+            ((dtr['holiday_premium_hours'] as num?) ?? 0).toDouble();
         absentDays = ((dtr['absent_days'] as num?) ?? 0).toInt();
         final present = ((dtr['days_present'] as num?) ?? 0).toInt();
         final paidLeave =
@@ -1080,6 +1143,7 @@ class HrStore extends ChangeNotifier {
       nightdiffHours: nightdiffHrs,
       nightdiffMultiplier: _payrollRules.nightDifferentialMultiplier,
       absentDays: absentDays,
+      holidayPremiumHours: holPremHrs,
     );
   }
 
@@ -1174,6 +1238,7 @@ class HrStore extends ChangeNotifier {
             'nightdiff_hours': updated.nightdiffHours,
             'nightdiff_mult': updated.nightdiffMultiplier,
             'absent_days': updated.absentDays,
+            'holiday_premium_hours': updated.holidayPremiumHours,
           })
           .eq('id', updated.id);
       final si = runs[ri].slips.indexWhere((s) => s.id == updated.id);
