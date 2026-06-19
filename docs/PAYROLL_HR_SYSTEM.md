@@ -82,7 +82,7 @@ except where a `SECURITY DEFINER` function intentionally bridges access for the 
 - **`leave_types`** — `id`, `tenant_id`, `name`, `emoji`, `annual_days` (0 = unlimited),
   `paid` (bool — **drives whether leave credits pay**), `notes`, `is_system`.
 - **`holidays`** — `id`, `tenant_id`, `holiday_date`, `name`, `kind` (`regular|special`),
-  UNIQUE `(tenant_id, holiday_date)`. (Calendar feature — see §11.)
+  UNIQUE `(tenant_id, holiday_date)`. Managed in Maintenance → Payroll → Holidays.
 - **`employment_templates`** — per `employment_type`: default rates +
   `overtime_multiplier` (1.25 typical) — pre-fills the Add-Employee form. The OT multiplier
   is snapshotted onto each payslip at generation.
@@ -307,14 +307,17 @@ never resolves an owner as an employee even if emails collide.
 
 Implemented & live: itemized payslips, OT (manual+capped), undertime (+toggle), paid/unpaid
 leave, absences (incl. salaried docking), per-employee statutory, rest-day & night-diff
-premiums, semi-monthly cutoffs, overnight shifts, OT-after-regular-hours + unpaid break,
+premiums, **holiday pay (regular & special, with a Maintenance Holidays calendar)**,
+semi-monthly cutoffs, overnight shifts, OT-after-regular-hours + unpaid break,
 employee payslip portal (centavo-exact), security hardening, dup-run constraint.
 
+Holiday rules implemented (`holidays` table + `kind regular|special`): regular holiday
+worked = base + premium (`regular_holiday_multiplier`); regular not-worked-scheduled =
+100% paid (folds into regular); special worked = base + premium
+(`special_holiday_multiplier`); special not-worked = no-work-no-pay (NOT an absence).
+The premium is returned as a base-rate hours-equivalent (`holiday_premium_hours`).
+
 In progress / deferred:
-- **Holiday calendar** — `holidays` table exists; the engine (`attendance_day_summary` /
-  `payroll_dtr_period`), `payslips.holiday_premium_hours`, the Maintenance Holidays UI,
-  and app/web payslip lines are the remaining wiring. `regular_holiday_multiplier` /
-  `special_holiday_multiplier` are configured but only fully paid once this lands.
 - **13th-month pay** and **BIR withholding** — toggles exist, labeled "coming soon";
   need accrual logic + PH tax tables.
 - **Re-generate atomicity** — `regeneratePayrollRun` deletes then inserts slips in two
