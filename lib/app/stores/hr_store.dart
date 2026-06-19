@@ -193,7 +193,8 @@ class HrStore extends ChangeNotifier {
             'compensation_type, hours_worked, hourly_rate, daily_rate, '
             'monthly_salary, bonus, deductions, sss, philhealth, pagibig, '
             'ot_hours, undertime_hours, late_minutes, ot_multiplier, '
-            'deduct_undertime)')
+            'deduct_undertime, restday_hours, restday_mult, nightdiff_hours, '
+            'nightdiff_mult, absent_days)')
         .eq('tenant_id', tenantDbId)
         .order('period_start', ascending: false)
         .limit(60);
@@ -1019,26 +1020,32 @@ class HrStore extends ChangeNotifier {
         '${x.month.toString().padLeft(2, '0')}-'
         '${x.day.toString().padLeft(2, '0')}';
     double baseHrs = hoursIn(emp.id, start, end);
-    double otHrs = 0, utHrs = 0;
-    int lateMin = 0;
+    double otHrs = 0, utHrs = 0, restdayHrs = 0, nightdiffHrs = 0;
+    int lateMin = 0, absentDays = 0;
     try {
       final dtr = await supabase.rpc('payroll_dtr_period', params: {
         'p_employee': emp.id,
         'p_start': ymd(start),
         'p_end': ymd(end),
       });
-      final present =
-          (dtr is Map) ? ((dtr['days_present'] as num?) ?? 0).toInt() : 0;
-      final paidLeave =
-          (dtr is Map) ? ((dtr['paid_leave_hours'] as num?) ?? 0).toDouble() : 0;
-      // Use attendance when the employee actually worked or had PAID leave in
-      // the period; otherwise fall back to the manual timesheet grid. NOTE:
-      // regular_hours already folds in paid-leave hours, so base pay covers them.
-      if (present > 0 || paidLeave > 0) {
-        baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
-        otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
-        utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
-        lateMin = ((dtr['late_minutes'] as num?) ?? 0).toInt();
+      if (dtr is Map) {
+        // Premiums + absences come from attendance regardless of the hours
+        // gate (a fully-absent salaried employee still needs to be docked).
+        restdayHrs = ((dtr['restday_hours'] as num?) ?? 0).toDouble();
+        nightdiffHrs = ((dtr['nightdiff_hours'] as num?) ?? 0).toDouble();
+        absentDays = ((dtr['absent_days'] as num?) ?? 0).toInt();
+        final present = ((dtr['days_present'] as num?) ?? 0).toInt();
+        final paidLeave =
+            ((dtr['paid_leave_hours'] as num?) ?? 0).toDouble();
+        // Use attendance when the employee actually worked or had PAID leave in
+        // the period; otherwise fall back to the manual timesheet grid. NOTE:
+        // regular_hours already folds in paid-leave hours, so base covers them.
+        if (present > 0 || paidLeave > 0) {
+          baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
+          otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
+          utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
+          lateMin = ((dtr['late_minutes'] as num?) ?? 0).toInt();
+        }
       }
     } catch (_) {
       // Network/RPC hiccup — keep the grid hours as the base.
@@ -1068,6 +1075,11 @@ class HrStore extends ChangeNotifier {
       otMultiplier:
           templateFor(emp.employmentType)?.overtimeMultiplier ?? 1.25,
       deductUndertime: _payrollRules.deductUndertime,
+      restdayHours: restdayHrs,
+      restdayMultiplier: _payrollRules.restDayMultiplier,
+      nightdiffHours: nightdiffHrs,
+      nightdiffMultiplier: _payrollRules.nightDifferentialMultiplier,
+      absentDays: absentDays,
     );
   }
 
@@ -1157,6 +1169,11 @@ class HrStore extends ChangeNotifier {
             'late_minutes': updated.lateMinutes,
             'ot_multiplier': updated.otMultiplier,
             'deduct_undertime': updated.deductUndertime,
+            'restday_hours': updated.restdayHours,
+            'restday_mult': updated.restdayMultiplier,
+            'nightdiff_hours': updated.nightdiffHours,
+            'nightdiff_mult': updated.nightdiffMultiplier,
+            'absent_days': updated.absentDays,
           })
           .eq('id', updated.id);
       final si = runs[ri].slips.indexWhere((s) => s.id == updated.id);

@@ -1111,30 +1111,9 @@ class _SlipRowState extends State<_SlipRow> {
     if (bonus == widget.slip.bonus && ded == widget.slip.deductions) {
       return;
     }
-    final s = widget.slip;
-    // Carry EVERY snapshot field forward — only bonus/deductions change here.
-    widget.onChange(Payslip(
-      id: s.id,
-      employeeId: s.employeeId,
-      employeeName: s.employeeName,
-      employeeRole: s.employeeRole,
-      compensationType: s.compensationType,
-      hoursWorked: s.hoursWorked,
-      hourlyRate: s.hourlyRate,
-      dailyRate: s.dailyRate,
-      monthlySalary: s.monthlySalary,
-      bonus: bonus,
-      deductions: ded,
-      sss: s.sss,
-      philHealth: s.philHealth,
-      pagIbig: s.pagIbig,
-      regularHoursPerDay: s.regularHoursPerDay,
-      otHours: s.otHours,
-      undertimeHours: s.undertimeHours,
-      lateMinutes: s.lateMinutes,
-      otMultiplier: s.otMultiplier,
-      deductUndertime: s.deductUndertime,
-    ));
+    // copyWith carries every snapshot field forward — only bonus/deductions
+    // change here, so no field can be accidentally dropped.
+    widget.onChange(widget.slip.copyWith(bonus: bonus, deductions: ded));
   }
 
   @override
@@ -1234,10 +1213,14 @@ class _SlipRowState extends State<_SlipRow> {
     final p = widget.period;
     final perDay = s.regularHoursPerDay > 0 ? s.regularHoursPerDay : 8;
     final bonusC = (s.bonus * 100).round();
-    // Base = gross minus OT minus bonus (the straight-time portion).
-    final base = s.grossCentavosFor(p) - s.otPayCentavos - bonusC;
     final ot = s.otPayCentavos;
+    final restdayP = s.restdayPremiumCentavos;
+    final nightP = s.nightdiffPremiumCentavos;
+    // Base = gross minus the itemized earnings (OT, premiums, bonus).
+    final base =
+        s.grossCentavosFor(p) - ot - restdayP - nightP - bonusC;
     final ut = s.undertimeCentavos;
+    final absence = s.absenceDeductionCentavos;
     final sss = s.sssCentavosFor(p);
     final ph = s.philHealthCentavosFor(p);
     final pi = s.pagIbigCentavosFor(p);
@@ -1252,7 +1235,7 @@ class _SlipRowState extends State<_SlipRow> {
     };
 
     final hasDeduction =
-        ut > 0 || sss > 0 || ph > 0 || pi > 0 || other > 0;
+        ut > 0 || absence > 0 || sss > 0 || ph > 0 || pi > 0 || other > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1263,11 +1246,24 @@ class _SlipRowState extends State<_SlipRow> {
               'Overtime  ${s.otHours.toStringAsFixed(1)}h × ${s.otMultiplier.toStringAsFixed(2)}×',
               ot,
               earning: true),
+        if (restdayP > 0)
+          _payLine(
+              'Rest-day premium  ${s.restdayHours.toStringAsFixed(1)}h × ${s.restdayMultiplier.toStringAsFixed(2)}×',
+              restdayP,
+              earning: true),
+        if (nightP > 0)
+          _payLine(
+              'Night differential  ${s.nightdiffHours.toStringAsFixed(1)}h',
+              nightP,
+              earning: true),
         if (bonusC > 0) _payLine('Bonus', bonusC, earning: true),
         if (hasDeduction) ...[
           const SizedBox(height: 2),
           if (ut > 0)
             _payLine('Undertime  ${s.undertimeHours.toStringAsFixed(1)}h', ut,
+                earning: false),
+          if (absence > 0)
+            _payLine('Absences  ${s.absentDays} day(s)', absence,
                 earning: false),
           if (sss > 0) _payLine('SSS', sss, earning: false),
           if (ph > 0) _payLine('PhilHealth', ph, earning: false),

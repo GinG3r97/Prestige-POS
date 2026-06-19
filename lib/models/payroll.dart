@@ -98,6 +98,17 @@ class Payslip {
   /// snapshotted so a finalized slip is stable if the rule later changes.
   bool deductUndertime;
 
+  // ── Premiums (paid on top of base) + salaried absences ──
+  /// Hours worked on a scheduled day off, paid at [restdayMultiplier].
+  double restdayHours;
+  double restdayMultiplier;
+  /// Night-differential hours, paid the extra at [nightdiffMultiplier].
+  double nightdiffHours;
+  double nightdiffMultiplier;
+  /// Unexcused absent scheduled days — docks SALARIED pay (hourly/daily already
+  /// lose the hours).
+  int absentDays;
+
   Payslip({
     String? id,
     required this.employeeId,
@@ -119,7 +130,42 @@ class Payslip {
     this.lateMinutes = 0,
     this.otMultiplier = 1.25,
     this.deductUndertime = true,
+    this.restdayHours = 0,
+    this.restdayMultiplier = 1.30,
+    this.nightdiffHours = 0,
+    this.nightdiffMultiplier = 1.10,
+    this.absentDays = 0,
   }) : id = id ?? _uuid.v4();
+
+  /// Copy with selected overrides — used when editing bonus/deductions so no
+  /// snapshot field is ever accidentally dropped.
+  Payslip copyWith({double? bonus, double? deductions}) => Payslip(
+        id: id,
+        employeeId: employeeId,
+        employeeName: employeeName,
+        employeeRole: employeeRole,
+        compensationType: compensationType,
+        hoursWorked: hoursWorked,
+        hourlyRate: hourlyRate,
+        dailyRate: dailyRate,
+        monthlySalary: monthlySalary,
+        bonus: bonus ?? this.bonus,
+        deductions: deductions ?? this.deductions,
+        sss: sss,
+        philHealth: philHealth,
+        pagIbig: pagIbig,
+        regularHoursPerDay: regularHoursPerDay,
+        otHours: otHours,
+        undertimeHours: undertimeHours,
+        lateMinutes: lateMinutes,
+        otMultiplier: otMultiplier,
+        deductUndertime: deductUndertime,
+        restdayHours: restdayHours,
+        restdayMultiplier: restdayMultiplier,
+        nightdiffHours: nightdiffHours,
+        nightdiffMultiplier: nightdiffMultiplier,
+        absentDays: absentDays,
+      );
 
   /// Pesos → whole centavos, rounded to the nearest centavo. ALL pay math runs
   /// in integer centavos so summing many slips can't drift by fractions of a
@@ -152,8 +198,31 @@ class Payslip {
       case CompensationType.salaried:
         base = _toCentavos(monthlySalary / periodsPerMonth(period));
     }
-    return base + otPayCentavos + _toCentavos(bonus);
+    return base +
+        otPayCentavos +
+        restdayPremiumCentavos +
+        nightdiffPremiumCentavos +
+        _toCentavos(bonus);
   }
+
+  /// Extra pay for rest-day work (the portion above base — base hours are
+  /// already in the regular total).
+  int get restdayPremiumCentavos => restdayMultiplier <= 1
+      ? 0
+      : _toCentavos(restdayHours * hourlyEquivalent * (restdayMultiplier - 1));
+
+  /// Night-differential premium (the extra above base for night hours).
+  int get nightdiffPremiumCentavos => nightdiffMultiplier <= 1
+      ? 0
+      : _toCentavos(
+          nightdiffHours * hourlyEquivalent * (nightdiffMultiplier - 1));
+
+  /// Salaried absence deduction — full unexcused days dock the daily-equivalent
+  /// (monthly ÷ 26). Hourly/daily already lose the hours, so 0 for them.
+  int get absenceDeductionCentavos =>
+      compensationType == CompensationType.salaried && absentDays > 0
+          ? _toCentavos(absentDays * monthlySalary / 26.0)
+          : 0;
 
   /// Per-hour rate used for OT pay and undertime deductions. Hourly staff use
   /// their hourly rate directly; daily/salaried derive an hourly-equivalent
@@ -199,6 +268,7 @@ class Payslip {
     final n = grossCentavosFor(period) -
         statutoryCentavosFor(period) -
         undertimeCentavos -
+        absenceDeductionCentavos -
         _toCentavos(deductions);
     return n < 0 ? 0 : n;
   }
@@ -230,6 +300,13 @@ class Payslip {
         lateMinutes: ((row['late_minutes'] as num?) ?? 0).toInt(),
         otMultiplier: ((row['ot_multiplier'] as num?) ?? 1.25).toDouble(),
         deductUndertime: (row['deduct_undertime'] as bool?) ?? true,
+        restdayHours: ((row['restday_hours'] as num?) ?? 0).toDouble(),
+        restdayMultiplier:
+            ((row['restday_mult'] as num?) ?? 1.30).toDouble(),
+        nightdiffHours: ((row['nightdiff_hours'] as num?) ?? 0).toDouble(),
+        nightdiffMultiplier:
+            ((row['nightdiff_mult'] as num?) ?? 1.10).toDouble(),
+        absentDays: ((row['absent_days'] as num?) ?? 0).toInt(),
       );
 
   Map<String, dynamic> toRowPayload({
@@ -257,6 +334,11 @@ class Payslip {
         'late_minutes': lateMinutes,
         'ot_multiplier': otMultiplier,
         'deduct_undertime': deductUndertime,
+        'restday_hours': restdayHours,
+        'restday_mult': restdayMultiplier,
+        'nightdiff_hours': nightdiffHours,
+        'nightdiff_mult': nightdiffMultiplier,
+        'absent_days': absentDays,
       };
 }
 
