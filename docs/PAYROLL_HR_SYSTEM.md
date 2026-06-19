@@ -265,7 +265,9 @@ never resolves an owner as an employee even if emails collide.
 - Identity is **always** the signed-in `auth.jwt()->>'email'`; `?store` only narrows.
 
 ### Portal RPCs (all `SECURITY DEFINER`, JWT-scoped)
-`portal_employee(store)` (resolves the caller→employee, excludes tenant owners),
+`portal_employee(store)` (resolves the caller→employee by the caller's verified
+JWT email, narrowed by store_code; an owner may also be a portal employee in
+their own store — owner-operators use one account),
 `portal_me`, `portal_my_summary`, `portal_week`, `portal_my_requests`,
 `portal_leave_types`, `portal_leave_credits`, `portal_clock_open`, `portal_punch`,
 `file_request`, `decide_request`, `portal_my_payslips`.
@@ -297,6 +299,9 @@ never resolves an owner as an employee even if emails collide.
 - Every `SECURITY DEFINER` function pins `search_path` and guards the caller
   (owner-of-tenant OR the employee themselves). `anon` EXECUTE revoked on sensitive ones.
 - `?store` / `p_store` only **narrows** a caller's matched identity; it can never widen it.
+  Identity is the caller's own verified JWT email — they can only ever be resolved to an
+  employee whose portal email equals it. (A per-tenant unique portal-email constraint is a
+  deferred hardening for the rare same-email-across-tenants case.)
 - Owner PIN + cashier PINs throttled (5 wrong → lockout). Cashier PINs are plaintext by
   design (owner visibility); owner PIN is bcrypt.
 - Duplicate pay runs prevented by a DB UNIQUE constraint (not just the app cache guard).
