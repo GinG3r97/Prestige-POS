@@ -33,6 +33,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
 
   late final TextEditingController _regHours;
   late final TextEditingController _otHours;
+  late final TextEditingController _breakMins;
   late final TextEditingController _restMul;
   late final TextEditingController _regHolMul;
   late final TextEditingController _specHolMul;
@@ -46,6 +47,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
     _regHours = TextEditingController(text: _fmt(_draft.regularHoursPerDay));
     _otHours =
         TextEditingController(text: _fmt(_draft.maxOvertimeHoursPerDay));
+    _breakMins = TextEditingController(text: _draft.breakMinutes.toString());
     _restMul = TextEditingController(text: _fmt(_draft.restDayMultiplier));
     _regHolMul =
         TextEditingController(text: _fmt(_draft.regularHolidayMultiplier));
@@ -61,6 +63,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   void dispose() {
     _regHours.dispose();
     _otHours.dispose();
+    _breakMins.dispose();
     _restMul.dispose();
     _regHolMul.dispose();
     _specHolMul.dispose();
@@ -75,6 +78,8 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
   Future<void> _save() async {
     _draft.regularHoursPerDay =
         double.tryParse(_regHours.text) ?? _draft.regularHoursPerDay;
+    _draft.breakMinutes =
+        int.tryParse(_breakMins.text) ?? _draft.breakMinutes;
     _draft.maxOvertimeHoursPerDay =
         (double.tryParse(_otHours.text) ?? _draft.maxOvertimeHoursPerDay)
             .clamp(0, 24)
@@ -346,13 +351,23 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
                         controller: _otHours,
                         suffix: 'hr'),
                   ),
+                  SizedBox(
+                    width: 240,
+                    child: _numField(
+                        label: 'Unpaid break / day',
+                        controller: _breakMins,
+                        suffix: 'min'),
+                  ),
                 ],
               ),
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 8),
-            child: Text('Allowed OT hours: 0 = no cap.',
+            child: Text(
+                'Allowed OT: 0 = no cap. Regular hours/day caps paid straight '
+                'time (extra needs filed OT). Unpaid break is deducted from each '
+                'worked day.',
                 style: YFont.caption()),
           ),
           const SizedBox(height: 16),

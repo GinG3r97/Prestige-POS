@@ -35,6 +35,8 @@ extension SemiMonthlyStyleX on SemiMonthlyStyle {
 /// labor-law-driven ones that don't vary by employment type.
 class PayrollRules {
   double regularHoursPerDay;
+  /// Unpaid break (e.g. lunch) in minutes, subtracted from paid straight-time.
+  int breakMinutes;
   /// Max overtime hours that can be claimed in a single day. 0 = no cap.
   double maxOvertimeHoursPerDay;
   /// Cutoff style for semi-monthly pay runs (15 & 30 vs 10 & 25).
@@ -58,6 +60,7 @@ class PayrollRules {
 
   PayrollRules({
     this.regularHoursPerDay = 8,
+    this.breakMinutes = 0,
     this.maxOvertimeHoursPerDay = 0,
     this.semiMonthlyStyle = SemiMonthlyStyle.fifteenThirty,
     this.restDayMultiplier = 1.30,
@@ -77,6 +80,7 @@ class PayrollRules {
 
   PayrollRules copy() => PayrollRules(
         regularHoursPerDay: regularHoursPerDay,
+        breakMinutes: breakMinutes,
         maxOvertimeHoursPerDay: maxOvertimeHoursPerDay,
         semiMonthlyStyle: semiMonthlyStyle,
         restDayMultiplier: restDayMultiplier,
@@ -97,6 +101,7 @@ class PayrollRules {
   factory PayrollRules.fromRow(Map<String, dynamic> row) => PayrollRules(
         regularHoursPerDay:
             (row['regular_hours_per_day'] as num?)?.toDouble() ?? 8,
+        breakMinutes: (row['break_minutes'] as num?)?.toInt() ?? 0,
         maxOvertimeHoursPerDay:
             (row['max_overtime_hours_per_day'] as num?)?.toDouble() ?? 0,
         semiMonthlyStyle:
@@ -125,6 +130,7 @@ class PayrollRules {
 
   Map<String, dynamic> toRow() => {
         'regular_hours_per_day': regularHoursPerDay,
+        'break_minutes': breakMinutes,
         'max_overtime_hours_per_day': maxOvertimeHoursPerDay,
         'semi_monthly_style': semiMonthlyStyle.dbValue,
         'rest_day_multiplier': restDayMultiplier,
