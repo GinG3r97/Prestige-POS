@@ -245,11 +245,24 @@ class _TimesheetPane extends StatelessWidget {
           icon: Icons.chevron_right,
           onTap: periodOffset > 0 ? () => onShift(-1) : null,
         ),
+        const SizedBox(width: 12),
+        // The pay run + DTR cover this whole cutoff, even though the grid only
+        // shows a week of it.
+        Flexible(
+          child: Text(
+            'Cutoff ${fmt.format(cutoffStart)} – ${fmt.format(cutoffEnd)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: YFont.caption().copyWith(color: YColor.inkMuted),
+          ),
+        ),
         const Spacer(),
         OutlinedButton.icon(
           onPressed: () async {
+            // Pull the WHOLE cutoff (not just the displayed week) so the run,
+            // which covers the full cutoff, isn't missing any days.
             final res =
-                await state.syncTimesheetFromAttendance(periodStart, periodEnd);
+                await state.syncTimesheetFromAttendance(cutoffStart, cutoffEnd);
             if (!context.mounted) return;
             final String title;
             final String subtitle;
@@ -321,6 +334,7 @@ class _TimesheetPane extends StatelessWidget {
                 onTap: () => _openEmployeeDtr(context, emp)),
             for (final d in days)
               DataCell(_HoursCell(
+                key: ValueKey('${emp.id}_${d.toIso8601String()}'),
                 employee: emp,
                 date: d,
                 width: dayW,
@@ -432,6 +446,7 @@ class _TimesheetPane extends StatelessWidget {
 
 class _HoursCell extends StatefulWidget {
   const _HoursCell({
+    super.key,
     required this.employee,
     required this.date,
     required this.width,

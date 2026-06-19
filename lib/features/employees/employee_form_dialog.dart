@@ -103,8 +103,13 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         text: e == null || e.monthlySalary == 0
             ? ''
             : e.monthlySalary.toStringAsFixed(0));
-    // Statutory deductions auto-fill from the monthly salary in real time.
-    _monthlySalary.addListener(_syncStatutoryFromSalary);
+    // Statutory deductions auto-fill from the monthly salary in real time —
+    // ONLY for a NEW employee. On an existing record we must not clobber the
+    // owner's manually-entered SSS/PhilHealth/Pag-IBIG when they tweak salary
+    // (they can still use the explicit "Compute" button).
+    if (e == null) {
+      _monthlySalary.addListener(_syncStatutoryFromSalary);
+    }
     _sss = TextEditingController(
         text: e == null || e.sssContribution == 0
             ? ''

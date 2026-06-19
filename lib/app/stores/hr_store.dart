@@ -1019,7 +1019,8 @@ class HrStore extends ChangeNotifier {
         'p_start': ymd(start),
         'p_end': ymd(end),
       });
-      final present = (dtr is Map) ? ((dtr['days_present'] as int?) ?? 0) : 0;
+      final present =
+          (dtr is Map) ? ((dtr['days_present'] as num?) ?? 0).toInt() : 0;
       final paidLeave =
           (dtr is Map) ? ((dtr['paid_leave_hours'] as num?) ?? 0).toDouble() : 0;
       // Use attendance when the employee actually worked or had PAID leave in
@@ -1029,7 +1030,7 @@ class HrStore extends ChangeNotifier {
         baseHrs = ((dtr['regular_hours'] as num?) ?? 0).toDouble();
         otHrs = ((dtr['ot_hours'] as num?) ?? 0).toDouble();
         utHrs = ((dtr['undertime_hours'] as num?) ?? 0).toDouble();
-        lateMin = (dtr['late_minutes'] as int?) ?? 0;
+        lateMin = ((dtr['late_minutes'] as num?) ?? 0).toInt();
       }
     } catch (_) {
       // Network/RPC hiccup — keep the grid hours as the base.

@@ -376,7 +376,9 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
           _SectionCard(
             title: 'Labor-law multipliers',
             subtitle:
-                'Applied on top of the employee\'s base rate. Standard overtime lives on each template.',
+                'Coming soon — rest-day, holiday and night-differential premiums '
+                'are saved here but not yet applied to pay. Overtime IS applied '
+                '(approved + capped). Standard OT rate lives on each template.',
             child: Column(children: [
               _multRow(
                 label: 'Rest day work',
@@ -458,7 +460,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
               _switchRow(
                 icon: Icons.card_giftcard_outlined,
                 title: '13th-month pay',
-                subtitle: 'Mandatory in the Philippines — accrued monthly',
+                subtitle: 'Coming soon — accrual not yet on payslips',
                 value: _draft.include13thMonth,
                 onChanged: (v) => setState(() => _draft.include13thMonth = v),
               ),
@@ -487,6 +489,7 @@ class _PayrollRulesTabState extends State<PayrollRulesTab> {
               _switchRow(
                 icon: Icons.receipt_long_outlined,
                 title: 'BIR withholding tax',
+                subtitle: 'Coming soon — tables not yet applied',
                 value: _draft.withholdBIR,
                 onChanged: (v) => setState(() => _draft.withholdBIR = v),
               ),

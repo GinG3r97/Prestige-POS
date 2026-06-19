@@ -192,12 +192,16 @@ class Payslip {
       pagIbigCentavosFor(period);
 
   /// Net pay in whole centavos: gross (incl. OT) − statutory (pro-rated) −
-  /// undertime − other.
-  int netCentavosFor(PayPeriodKind period) =>
-      grossCentavosFor(period) -
-      statutoryCentavosFor(period) -
-      undertimeCentavos -
-      _toCentavos(deductions);
+  /// undertime − other. Floored at 0 — you can't take home (or withhold more
+  /// than) a negative amount; any uncollectible statutory just isn't collected
+  /// this run rather than showing a negative payslip.
+  int netCentavosFor(PayPeriodKind period) {
+    final n = grossCentavosFor(period) -
+        statutoryCentavosFor(period) -
+        undertimeCentavos -
+        _toCentavos(deductions);
+    return n < 0 ? 0 : n;
+  }
 
   /// Gross/net in pesos for display — derived from the centavo math so the
   /// number shown matches the summed run total to the centavo.
@@ -223,7 +227,7 @@ class Payslip {
         pagIbig: ((row['pagibig'] as num?) ?? 0).toDouble(),
         otHours: ((row['ot_hours'] as num?) ?? 0).toDouble(),
         undertimeHours: ((row['undertime_hours'] as num?) ?? 0).toDouble(),
-        lateMinutes: (row['late_minutes'] as int?) ?? 0,
+        lateMinutes: ((row['late_minutes'] as num?) ?? 0).toInt(),
         otMultiplier: ((row['ot_multiplier'] as num?) ?? 1.25).toDouble(),
         deductUndertime: (row['deduct_undertime'] as bool?) ?? true,
       );
