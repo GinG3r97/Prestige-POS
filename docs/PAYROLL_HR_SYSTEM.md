@@ -62,7 +62,8 @@ except where a `SECURITY DEFINER` function intentionally bridges access for the 
   `compensation_type` (`hourly|daily|salaried`), `hourly_rate_cents`, `daily_rate_cents`,
   `monthly_salary_cents`, `employment_type` (`full_time|part_time|contract|seasonal`),
   `sss_cents`, `philhealth_cents`, `pagibig_cents` (monthly employee share),
-  `portal_enabled`, `portal_gmail` (login email; defaults to `email`), `portal_last_login_at`,
+  `portal_enabled`, `portal_last_login_at`, `portal_gmail` (legacy mirror of
+  `email`, kept in sync; **portal login is the `email` field the owner set**),
   geofence/selfie config, `status` (`active|terminated`).
 - **`employee_roles`** — `id`, `tenant_id`, `name`, `permissions` (jsonb string[]:
   `sell, orders, reports, employees, payroll, attendance, products, inventory,
@@ -265,9 +266,10 @@ never resolves an owner as an employee even if emails collide.
 - Identity is **always** the signed-in `auth.jwt()->>'email'`; `?store` only narrows.
 
 ### Portal RPCs (all `SECURITY DEFINER`, JWT-scoped)
-`portal_employee(store)` (resolves the caller→employee by the caller's verified
-JWT email, narrowed by store_code; an owner may also be a portal employee in
-their own store — owner-operators use one account),
+`portal_employee(store)` (resolves the caller→employee by matching the caller's
+verified JWT email to the employee's **`email` field** — the email the owner set —
+narrowed by store_code; an owner may also be a portal employee in their own store,
+so owner-operators can use one account),
 `portal_me`, `portal_my_summary`, `portal_week`, `portal_my_requests`,
 `portal_leave_types`, `portal_leave_credits`, `portal_clock_open`, `portal_punch`,
 `file_request`, `decide_request`, `portal_my_payslips`.
