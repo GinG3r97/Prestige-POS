@@ -30,6 +30,10 @@
 		<string>Connect to your Bluetooth receipt printer to print receipts and prep tickets.</string>
 		<key>NSBluetoothPeripheralUsageDescription</key>
 		<string>Connect to your Bluetooth receipt printer.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Prestige POS uses your location to set your store’s location so staff can clock in and out on-site.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>Prestige POS uses your location to set your store’s location so staff can clock in and out on-site.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
