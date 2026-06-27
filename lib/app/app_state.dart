@@ -688,6 +688,31 @@ class AppState extends ChangeNotifier {
 
   // ───── account-level auth (Supabase email OTP, passwordless) ─────
 
+  /// App Store reviewer demo account. The app is passwordless email OTP, which
+  /// a reviewer can't receive — so this one address skips the email and signs
+  /// in through the `reviewer-login` Edge Function with a fixed code (given to
+  /// Apple in App Review notes). It only ever opens the pre-seeded demo store.
+  static const String reviewerEmail = 'appreview@prestigeitsolutions.tech';
+
+  /// Signs the reviewer in via the Edge Function (which mints a real session
+  /// for the demo account when [code] matches). Returns null on success.
+  Future<String?> _reviewerSignIn(String code) async {
+    try {
+      final res = await supabase.functions
+          .invoke('reviewer-login', body: {'code': code});
+      final data = res.data;
+      final refresh = data is Map ? data['refresh_token'] as String? : null;
+      if (refresh == null) return 'Incorrect code. Try again.';
+      await supabase.auth.setSession(refresh);
+      _pendingOtpEmail = null;
+      notifyListeners();
+      return null;
+    } catch (_) {
+      // Edge Function throws on a wrong code (401) — treat as a bad code.
+      return 'Incorrect code. Try again.';
+    }
+  }
+
   /// Sends a 6-digit OTP to [email]. Used for both signup and login — Supabase
   /// will create the user if they don't exist (`shouldCreateUser: true`), which
   /// prevents email enumeration: an attacker can't tell whether an address is
@@ -701,6 +726,13 @@ class AppState extends ChangeNotifier {
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     if (cleanEmail.isEmpty) return 'Please enter your email.';
+    // Reviewer demo account: no email is sent — advance straight to the code
+    // screen where the fixed reviewer code is entered.
+    if (cleanEmail == reviewerEmail) {
+      _pendingOtpEmail = cleanEmail;
+      notifyListeners();
+      return null;
+    }
     try {
       // Shield: block sign-up for an address that already has an account.
       // Otherwise OTP would silently sign them into their existing store,
@@ -740,6 +772,11 @@ class AppState extends ChangeNotifier {
   Future<String?> sendLoginOtp({required String email}) async {
     final cleanEmail = email.trim().toLowerCase();
     if (cleanEmail.isEmpty) return 'Please enter your email.';
+    if (cleanEmail == reviewerEmail) {
+      _pendingOtpEmail = cleanEmail;
+      notifyListeners();
+      return null;
+    }
     try {
       await supabase.auth.signInWithOtp(
         email: cleanEmail,
@@ -765,6 +802,10 @@ class AppState extends ChangeNotifier {
     if (cleanToken.length != expectedLen ||
         int.tryParse(cleanToken) == null) {
       return 'Enter the $expectedLen-digit code from your email.';
+    }
+    // Reviewer demo account verifies through the Edge Function, not GoTrue OTP.
+    if (email == reviewerEmail) {
+      return _reviewerSignIn(cleanToken);
     }
     try {
       await supabase.auth.verifyOTP(
