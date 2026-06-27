@@ -151,6 +151,15 @@ class _SettingsViewState extends State<SettingsView> {
                     titleColor: YColor.danger,
                     onTap: () => _confirmSignOut(context, state),
                   ),
+                  const _Divider(),
+                  _Row(
+                    leading: const Icon(Icons.delete_forever_outlined,
+                        color: YColor.danger),
+                    title: 'Delete account',
+                    subtitle: 'Permanently erase your account and all store data',
+                    titleColor: YColor.danger,
+                    onTap: () => _confirmDeleteAccount(context, state),
+                  ),
                 ]),
 
                 const SizedBox(height: 32),
@@ -657,6 +666,25 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.logout,
     );
     if (ok) await state.signOutAccount();
+  }
+
+  /// Permanent account deletion (Apple-required). Strong confirm — the owner
+  /// must type DELETE — then calls the server. On success the root router
+  /// drops back to Welcome automatically (currentOwner becomes null).
+  Future<void> _confirmDeleteAccount(BuildContext context, AppState state) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final err = await state.deleteAccount();
+    if (!context.mounted) return;
+    if (err != null) {
+      PushToast.show(context,
+          title: 'Could not delete account',
+          subtitle: err,
+          leadingIcon: Icons.error_outline);
+    }
   }
 
   Future<void> _editStoreName(BuildContext context, AppState state) async {
@@ -1333,6 +1361,113 @@ class _OtpDialogState extends State<_OtpDialog> {
                   right,
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Permanent account-deletion confirm. The owner must type DELETE to enable
+/// the destructive button — guards against accidental taps. Pops `true` only
+/// when confirmed.
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _confirm = TextEditingController();
+  bool get _armed => _confirm.text.trim().toUpperCase() == 'DELETE';
+
+  @override
+  void dispose() {
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: YColor.surface1,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Icon(Icons.delete_forever_outlined,
+                    color: YColor.danger, size: 24),
+                const SizedBox(width: 8),
+                Text('Delete account',
+                    style: YFont.titleLG().copyWith(fontSize: 22)),
+              ]),
+              const SizedBox(height: 12),
+              Text(
+                'This permanently deletes your account and ALL store data — '
+                'products, orders, inventory, employees, payroll, and reports. '
+                'This cannot be undone.',
+                style: YFont.body().copyWith(color: YColor.inkMuted),
+              ),
+              const SizedBox(height: 16),
+              Text('Type DELETE to confirm',
+                  style: YFont.caption().copyWith(
+                      color: YColor.inkMuted,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _confirm,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'DELETE',
+                  filled: true,
+                  fillColor: YColor.surface2,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                    borderSide: const BorderSide(color: YColor.hairline),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                    borderSide: const BorderSide(color: YColor.danger, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(children: [
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('Cancel',
+                      style:
+                          YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed:
+                      _armed ? () => Navigator.of(context).pop(true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: YColor.danger,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md)),
+                  ),
+                  child: const Text('Delete forever'),
+                ),
+              ]),
             ],
           ),
         ),

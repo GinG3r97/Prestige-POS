@@ -839,6 +839,29 @@ class AppState extends ChangeNotifier {
     // currentOwner is cleared by the auth listener.
   }
 
+  /// Permanently deletes the owner's account and ALL their store data via the
+  /// `delete_my_account` RPC, then tears down the local session. Required by
+  /// Apple for any app that lets users create an account. Returns null on
+  /// success, or a user-safe error message.
+  Future<String?> deleteAccount() async {
+    try {
+      await supabase.rpc('delete_my_account');
+    } on sb.PostgrestException catch (e) {
+      return 'Could not delete your account: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+    // Account is gone server-side; clear the local session. The token is now
+    // invalid, so signOut may throw — the auth listener routes back to Welcome
+    // either way.
+    _pendingOtpEmail = null;
+    cart.clear();
+    try {
+      await supabase.auth.signOut();
+    } catch (_) {/* token already invalid — listener handles cleanup */}
+    return null;
+  }
+
   // ───── stores ─────
   void startAddingStore() {
     _addingStore = true;
