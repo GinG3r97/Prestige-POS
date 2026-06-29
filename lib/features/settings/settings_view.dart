@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import 'coowners_view.dart';
 import 'subscription_view.dart';
 import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
@@ -186,6 +187,17 @@ class _SettingsViewState extends State<SettingsView> {
                       leading: const Icon(Icons.schedule, color: YColor.brandDeep),
                       title: 'Timezone',
                       subtitle: tenant.timezone,
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.group_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Co-owners',
+                      subtitle:
+                          'Let others sign in online to see this store\'s sales',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CoOwnersView()),
+                      ),
                     ),
                   ]),
 
@@ -625,6 +637,7 @@ class _SettingsViewState extends State<SettingsView> {
       (icon: Icons.logout, title: 'Sign out', section: 'Account', keywords: const ['logout','exit'], onTap: () => _confirmSignOut(context, state)),
       (icon: Icons.storefront, title: 'Business name', section: 'This Store', keywords: const ['store','shop','name'], onTap: () => _editStoreName(context, state)),
       (icon: Icons.place_outlined, title: 'Business address', section: 'This Store', keywords: const ['address','location'], onTap: () => _editStoreAddress(context, state)),
+      (icon: Icons.group_outlined, title: 'Co-owners', section: 'This Store', keywords: const ['co-owner','coowner','access','share','member','partner'], onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoOwnersView()))),
       (icon: Icons.badge_outlined, title: 'TIN', section: 'Tax / BIR', keywords: const ['tax','bir','tin'], onTap: () => _editBirField(context, state, title: 'TIN', current: t?.tin, save: (v) => state.updateBirInfo(tin: v))),
       (icon: Icons.account_tree_outlined, title: 'Branch code', section: 'Tax / BIR', keywords: const ['bir','branch'], onTap: () => _editBirField(context, state, title: 'Branch code', current: t?.branchCode, save: (v) => state.updateBirInfo(branchCode: v))),
       (icon: Icons.memory_outlined, title: 'Machine ID (MIN)', section: 'Tax / BIR', keywords: const ['bir','min','machine'], onTap: () => _editBirField(context, state, title: 'Machine ID (MIN)', current: t?.birMin, save: (v) => state.updateBirInfo(birMin: v))),
