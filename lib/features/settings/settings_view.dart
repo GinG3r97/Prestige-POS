@@ -152,6 +152,15 @@ class _SettingsViewState extends State<SettingsView> {
                     titleColor: YColor.danger,
                     onTap: () => _confirmSignOut(context, state),
                   ),
+                  const _Divider(),
+                  _Row(
+                    leading: const Icon(Icons.delete_forever_outlined,
+                        color: YColor.danger),
+                    title: 'Delete account',
+                    subtitle: 'Permanently delete your account and store data',
+                    titleColor: YColor.danger,
+                    onTap: () => _confirmDeleteAccount(context, state),
+                  ),
                 ]),
 
                 const SizedBox(height: 32),
@@ -386,13 +395,6 @@ class _SettingsViewState extends State<SettingsView> {
                   _SectionHeader(title: 'Tax & Receipts'),
                   _Card(children: [
                     _Row(
-                      leading: const Icon(Icons.percent, color: YColor.brandDeep),
-                      title: 'VAT rate',
-                      subtitle: '12% (Philippines)',
-                      onTap: () => _comingSoon(context, 'VAT rate editor'),
-                    ),
-                    const _Divider(),
-                    _Row(
                       leading: const Icon(Icons.receipt_outlined, color: YColor.brandDeep),
                       title: 'Receipt header & footer',
                       subtitle: (tenant.receiptHeader?.isNotEmpty ?? false) ||
@@ -457,13 +459,6 @@ class _SettingsViewState extends State<SettingsView> {
                         context: context,
                         builder: (_) => const CashDrawerDialog(),
                       ),
-                    ),
-                    const _Divider(),
-                    _Row(
-                      leading: const Icon(Icons.credit_card, color: YColor.brandDeep),
-                      title: 'Card terminal',
-                      subtitle: 'Not paired',
-                      onTap: () => _comingSoon(context, 'Card terminal'),
                     ),
                   ]),
                 ],
@@ -653,11 +648,6 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   // ── Actions ──
-  void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label · coming soon')),
-    );
-  }
 
   Future<void> _confirmSignOut(BuildContext context, AppState state) async {
     final ok = await showConfirm(
@@ -670,6 +660,70 @@ class _SettingsViewState extends State<SettingsView> {
       icon: Icons.logout,
     );
     if (ok) await state.signOutAccount();
+  }
+
+  /// Apple 5.1.1(v): in-app account deletion. Double-confirms (destructive),
+  /// then permanently deletes the account + all store data server-side.
+  Future<void> _confirmDeleteAccount(
+      BuildContext context, AppState state) async {
+    final ok = await showConfirm(
+      context,
+      title: 'Delete your account?',
+      message:
+          'This permanently deletes your account and ALL of this account’s '
+          'store data — sales, products, inventory, staff and reports. '
+          'This cannot be undone.',
+      confirmLabel: 'Continue',
+      danger: true,
+      icon: Icons.delete_forever_outlined,
+    );
+    if (!ok || !context.mounted) return;
+
+    // Second, explicit confirmation to type the word DELETE.
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Type DELETE to confirm'),
+        content: KeyboardAccessoryField(
+          controller: controller,
+          accessoryLabel: 'Type DELETE',
+          hint: 'DELETE',
+          fillColor: YColor.surface2,
+          borderColor: YColor.hairline,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(
+                ctx, controller.text.trim().toUpperCase() == 'DELETE'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.danger, foregroundColor: Colors.white),
+            child: const Text('Delete forever'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final err = await state.deleteAccount();
+    if (!context.mounted) return;
+    if (err != null) {
+      PushToast.show(context,
+          title: 'Could not delete account',
+          subtitle: err,
+          leadingIcon: Icons.error_outline);
+    } else {
+      PushToast.show(context,
+          title: 'Account deleted',
+          subtitle: 'Your account and data have been removed.',
+          leadingIcon: Icons.check_circle_outline);
+    }
   }
 
   Future<void> _editStoreName(BuildContext context, AppState state) async {

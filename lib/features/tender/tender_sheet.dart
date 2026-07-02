@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -935,6 +937,21 @@ class _TenderSheetState extends State<TenderSheet> {
     });
   }
 
+  /// Stable idempotency key for THIS charge attempt. Generated once; reused on
+  /// retry so a lost response can't create a duplicate order. Cleared on a
+  /// successful sale so the next sale gets a fresh key.
+  String? _chargeRequestId;
+
+  String _newRequestId() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; // v4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant
+    String h(int i) => b[i].toRadixString(16).padLeft(2, '0');
+    return '${h(0)}${h(1)}${h(2)}${h(3)}-${h(4)}${h(5)}-${h(6)}${h(7)}-'
+        '${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
+  }
+
   /// Persists the cart as a paid order in Supabase, then deducts inventory
   /// and shows the success screen. The DB write is the source of truth —
   /// we don't claim "completed" until the RPC returns an order id.
@@ -950,6 +967,10 @@ class _TenderSheetState extends State<TenderSheet> {
       setState(() => _error = stockError);
       return;
     }
+
+    // One idempotency key per charge; reused if the cashier retries after a
+    // network hiccup so the DB returns the original order instead of a dupe.
+    _chargeRequestId ??= _newRequestId();
 
     setState(() {
       _busy = true;
@@ -1033,6 +1054,7 @@ class _TenderSheetState extends State<TenderSheet> {
       scPwdType: _scType,
       scPwdName: _scType == null ? null : _scName,
       scPwdId: _scType == null ? null : _scId,
+      clientRequestId: _chargeRequestId,
     );
 
     if (!mounted) return;
@@ -1043,6 +1065,8 @@ class _TenderSheetState extends State<TenderSheet> {
       });
       return;
     }
+    // Sale succeeded — retire this idempotency key so the next sale is fresh.
+    _chargeRequestId = null;
 
     // Order persisted ✅. Now deduct in-memory inventory for the recipe-built
     // items so the local cache stays consistent. (Inventory itself migrates

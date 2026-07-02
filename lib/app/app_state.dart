@@ -849,6 +849,20 @@ class AppState extends ChangeNotifier {
     // currentOwner is cleared by the auth listener.
   }
 
+  /// Permanently deletes the signed-in owner's account and all their store
+  /// data (server-side `delete_my_account`), then signs out. Required by
+  /// Apple 5.1.1(v): account deletion must be initiated from within the app.
+  Future<String?> deleteAccount() async {
+    try {
+      await supabase.rpc('delete_my_account');
+    } catch (_) {
+      return 'Could not delete your account. Please check your connection '
+          'and try again, or contact Prestige IT Solutions.';
+    }
+    await signOutAccount();
+    return null;
+  }
+
   // ───── stores ─────
   void startAddingStore() {
     _addingStore = true;
@@ -2638,6 +2652,7 @@ class AppState extends ChangeNotifier {
     String? scPwdType,
     String? scPwdName,
     String? scPwdId,
+    String? clientRequestId,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return (id: null, error: 'No store selected.');
@@ -2716,6 +2731,9 @@ class AppState extends ChangeNotifier {
         'p_sc_pwd_type': scPwdType,
         'p_sc_pwd_name': scPwdName,
         'p_sc_pwd_id': scPwdId,
+        // Idempotency: a retry of the same charge (e.g. after a lost response)
+        // returns the original order instead of creating a duplicate.
+        'p_client_request_id': clientRequestId,
       });
       _ordersToday += 1; // keep the top-bar usage meter live after each sale
       notifyListeners();
