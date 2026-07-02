@@ -318,25 +318,22 @@ class AppState extends ChangeNotifier {
         inv.hydrate(tid as String),
       ]);
 
-      // Configured receipt printer (single default).
-      await _loadPrinter();
-      // Open cashier shift (Z-reading), if any.
-      await _loadShift();
-      // Parked / held orders for this store (device-local).
-      await _loadHeldOrders();
-
-      // Bookable resources (rooms, hot desks, event spaces) live in
-      // BookingsStore. The actual [Booking] rows are loaded per-day on
-      // demand from BookingsView.
-      await bookings.hydrate(_currentTenantDbId!);
-
-      // Member plan templates + member roster live in MembersStore.
-      await members.hydrate(_currentTenantDbId!);
-
-      // Payroll — time entries + payroll runs live in HrStore. The per-tenant
-      // cache key is the in-memory Tenant id (matches what we initialised at
-      // the top of this method); the queries are scoped by the DB id.
-      await hr.hydratePayrollCache(_currentTenantDbId!, tenant!.id);
+      // These six are independent round-trips — run them concurrently instead
+      // of serially so login latency isn't the sum of all of them.
+      //   * _loadPrinter — configured receipt printer (single default)
+      //   * _loadShift — open cashier shift (Z-reading), if any
+      //   * _loadHeldOrders — parked / held orders (device-local)
+      //   * bookings.hydrate — bookable resources (rooms, desks, spaces)
+      //   * members.hydrate — member plan templates + roster
+      //   * hr.hydratePayrollCache — time entries + payroll runs
+      await Future.wait([
+        _loadPrinter(),
+        _loadShift(),
+        _loadHeldOrders(),
+        bookings.hydrate(_currentTenantDbId!),
+        members.hydrate(_currentTenantDbId!),
+        hr.hydratePayrollCache(_currentTenantDbId!, tenant!.id),
+      ]);
 
       _isHydrating = false;
       notifyListeners();

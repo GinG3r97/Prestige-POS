@@ -267,14 +267,25 @@ class InventoryStore extends ChangeNotifier {
     }
   }
 
+  /// Server-side atomic stock change (never a client-computed absolute value),
+  /// so two devices adjusting the same item can't clobber each other. Updates
+  /// the local cache from the authoritative value the DB returns.
   Future<String?> adjustStock(String id, double delta) async {
     final i = _inventory.indexWhere((it) => it.id == id);
     if (i < 0) return 'Item not found.';
-    final item = _inventory[i];
-    final newQty = (item.currentStock + delta).clamp(0.0, double.infinity);
-    item.currentStock = newQty;
-    final err = await updateInventoryItem(item);
-    return err;
+    try {
+      final newStock = await supabase.rpc('adjust_inventory_stock', params: {
+        'p_item_id': id,
+        'p_delta': delta,
+      });
+      _inventory[i].currentStock = (newStock as num).toDouble();
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return 'Could not adjust stock: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   Future<String?> restock(String id, double qty,
@@ -282,12 +293,26 @@ class InventoryStore extends ChangeNotifier {
     if (qty <= 0) return 'Quantity must be positive.';
     final i = _inventory.indexWhere((it) => it.id == id);
     if (i < 0) return 'Item not found.';
-    final item = _inventory[i];
-    item.currentStock += qty;
-    item.lastRestockedAt = DateTime.now();
-    if (newCostPerUnit != null && newCostPerUnit > 0) {
-      item.costPerUnit = newCostPerUnit;
+    try {
+      final newStock = await supabase.rpc('adjust_inventory_stock', params: {
+        'p_item_id': id,
+        'p_delta': qty,
+        'p_set_restocked': true,
+        if (newCostPerUnit != null && newCostPerUnit > 0)
+          'p_new_cost_cents': (newCostPerUnit * 100).round(),
+      });
+      final item = _inventory[i];
+      item.currentStock = (newStock as num).toDouble();
+      item.lastRestockedAt = DateTime.now();
+      if (newCostPerUnit != null && newCostPerUnit > 0) {
+        item.costPerUnit = newCostPerUnit;
+      }
+      notifyListeners();
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return 'Could not restock: ${e.message}';
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
     }
-    return updateInventoryItem(item);
   }
 }
