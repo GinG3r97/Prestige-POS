@@ -518,7 +518,7 @@ class AppState extends ChangeNotifier {
 
   String get plan => _plan;
   String get planLabel => _plan == 'trial'
-      ? 'Free'
+      ? 'Trial'
       : _plan == 'basic'
           ? 'Basic'
           : _plan == 'pro'
@@ -576,10 +576,20 @@ class AppState extends ChangeNotifier {
     try {
       final sub = await supabase
           .from('tenant_subscriptions')
-          .select('plan')
+          .select('plan, status, current_period_end')
           .eq('tenant_id', tid)
           .maybeSingle();
-      final plan = (sub?['plan'] as String?) ?? 'trial';
+      var plan = (sub?['plan'] as String?) ?? 'trial';
+      // A paid plan that has lapsed or isn't active behaves as Trial until it's
+      // renewed on the web. This mirrors immediately (the nightly job also flips
+      // the DB row), so the store can't keep paid caps past its paid period.
+      final status = (sub?['status'] as String?) ?? 'trialing';
+      final endStr = sub?['current_period_end'] as String?;
+      final end = endStr == null ? null : DateTime.tryParse(endStr);
+      final expired = end != null && end.toUtc().isBefore(DateTime.now().toUtc());
+      if (plan != 'trial' && (expired || status != 'active')) {
+        plan = 'trial';
+      }
       final pl = await supabase
           .from('plan_limits')
           .select()
