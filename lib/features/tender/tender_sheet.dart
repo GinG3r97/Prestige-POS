@@ -349,6 +349,23 @@ class _TenderSheetState extends State<TenderSheet> {
                 ]),
                 const SizedBox(height: 12),
                 _scPwdControl(state),
+                const SizedBox(height: 12),
+                // Pay later — fire the order to the kitchen/barista NOW but
+                // leave it unpaid, added to the customer's tab to settle later.
+                OutlinedButton.icon(
+                  onPressed: (_busy || state.atOrderCap)
+                      ? null
+                      : () => _payLater(state),
+                  icon: const Icon(Icons.schedule_outlined, size: 18),
+                  label: const Text('Pay later · add to tab'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: YColor.brandDeep,
+                    side: const BorderSide(color: YColor.hairline),
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(YRadius.md)),
+                  ),
+                ),
               ],
             ),
           ),
@@ -950,6 +967,132 @@ class _TenderSheetState extends State<TenderSheet> {
     String h(int i) => b[i].toRadixString(16).padLeft(2, '0');
     return '${h(0)}${h(1)}${h(2)}${h(3)}-${h(4)}${h(5)}-${h(6)}${h(7)}-'
         '${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
+  }
+
+  /// Ask for the customer/table name a tab is charged to.
+  Future<String?> _askCustomerName() async {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Add to tab'),
+        content: KeyboardAccessoryField(
+          controller: ctrl,
+          accessoryLabel: 'Customer name',
+          hint: 'e.g. Mr. Santos · Table 4',
+          fillColor: YColor.surface2,
+          borderColor: YColor.hairline,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.brand, foregroundColor: Colors.white),
+            child: const Text('Fire order'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Fire the current cart to the kitchen/barista NOW but leave it unpaid —
+  /// added to the named customer's tab, settled later from the Tabs screen.
+  Future<void> _payLater(AppState state) async {
+    if (_busy) return;
+    final stockError = state.validateCartStock();
+    if (stockError != null) {
+      setState(() => _error = stockError);
+      return;
+    }
+    final name = await _askCustomerName();
+    if (name == null || name.trim().isEmpty || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    _chargeRequestId ??= _newRequestId();
+    final cart = state.cart;
+
+    final lines = cart.lines.map((line) {
+      String? categoryName;
+      if (line.kind case CartLineCafe(:final item)) {
+        categoryName = item.categoryName.isNotEmpty
+            ? item.categoryName
+            : item.category.title;
+      }
+      return (
+        sellableId: null as String?,
+        name: line.title,
+        categoryName: categoryName,
+        emoji: line.emoji,
+        unitPriceCents: line.unitPrice.centavos,
+        quantity: line.quantity,
+        lineTotalCents: line.lineTotal.centavos,
+        modifiers: _modifiersSnapshot(line),
+        recipeDeductions: state.recipeDeductionsForCartLine(line),
+      );
+    }).toList();
+
+    // Empty payments → the DB records an OPEN (unpaid) order.
+    final result = await state.createPaidOrder(
+      lines: lines,
+      payments: const [],
+      customerName: name.trim(),
+      clientRequestId: _chargeRequestId,
+    );
+    if (!mounted) return;
+    if (result.error != null) {
+      setState(() {
+        _busy = false;
+        _error = result.error;
+      });
+      return;
+    }
+    _chargeRequestId = null;
+    state.deductCartFromInventory();
+
+    o.Order? order;
+    try {
+      await state.refreshOrders();
+      final fresh = state.recentOrders.where((x) => x.id == result.id);
+      if (fresh.isNotEmpty) order = fresh.first;
+    } catch (_) {/* best-effort */}
+
+    // Fire the prep tickets so the order actually gets made.
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (order != null && printer != null && tenant != null) {
+      final ord = order;
+      if (ReceiptBuilder.hasDrinks(ord)) {
+        await _doPrint(
+          () => PrintJobs.barista(order: ord, tenant: tenant, config: printer),
+          what: 'Barista ticket',
+        );
+      }
+      if (ReceiptBuilder.hasFood(ord)) {
+        await _doPrint(
+          () => PrintJobs.kitchen(order: ord, tenant: tenant, config: printer),
+          what: 'Kitchen ticket',
+        );
+      }
+    }
+
+    if (!mounted) return;
+    state.cart.clear();
+    Navigator.of(context).pop();
+    PushToast.show(
+      context,
+      title: 'Added to ${name.trim()}’s tab',
+      subtitle: 'Fired to the kitchen. Settle payment later in Tabs.',
+      leadingIcon: Icons.schedule_outlined,
+    );
   }
 
   /// Persists the cart as a paid order in Supabase, then deducts inventory

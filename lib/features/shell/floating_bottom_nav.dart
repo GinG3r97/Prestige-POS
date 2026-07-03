@@ -69,6 +69,10 @@ class _FloatingBottomNavState extends State<FloatingBottomNav> {
           icon: Icons.receipt_long_outlined,
           label: 'Orders'),
       const _NavSpec(
+          route: AppRoute.tabs,
+          icon: Icons.schedule_outlined,
+          label: 'Tabs'),
+      const _NavSpec(
           route: AppRoute.inventory,
           icon: Icons.inventory_2_outlined,
           label: 'Stock'),

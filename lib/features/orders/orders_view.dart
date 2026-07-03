@@ -474,6 +474,7 @@ class _OrderListRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tone = switch (order.status) {
       OrderStatus.completed => YColor.success,
+      OrderStatus.unpaid => YColor.brandDeep,
       OrderStatus.refunded => YColor.danger,
       OrderStatus.voided => YColor.inkMuted,
     };
@@ -923,6 +924,7 @@ class _OrderDetail extends StatelessWidget {
   Widget _statusPill(OrderStatus s) {
     final (color, label) = switch (s) {
       OrderStatus.completed => (YColor.success, 'Completed'),
+      OrderStatus.unpaid => (YColor.brandDeep, 'Unpaid'),
       OrderStatus.refunded => (YColor.danger, 'Refunded'),
       OrderStatus.voided => (YColor.inkMuted, 'Voided'),
     };
@@ -1197,5 +1199,5 @@ OrderStatus _adaptStatus(db.OrderStatus s) => switch (s) {
       db.OrderStatus.refunded => OrderStatus.refunded,
       db.OrderStatus.voided => OrderStatus.voided,
       db.OrderStatus.cancelled => OrderStatus.voided,
-      db.OrderStatus.open => OrderStatus.completed,
+      db.OrderStatus.open => OrderStatus.unpaid,
     };

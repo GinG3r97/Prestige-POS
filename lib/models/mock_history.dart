@@ -1,10 +1,11 @@
 import 'money.dart';
 
-enum OrderStatus { completed, refunded, voided }
+enum OrderStatus { completed, unpaid, refunded, voided }
 
 extension OrderStatusX on OrderStatus {
   String get label => switch (this) {
         OrderStatus.completed => 'Completed',
+        OrderStatus.unpaid => 'Unpaid',
         OrderStatus.refunded => 'Refunded',
         OrderStatus.voided => 'Voided',
       };

@@ -14,6 +14,7 @@ import '../inventory/inventory_view.dart';
 import '../maintenance/maintenance_view.dart';
 import '../members/members_view.dart';
 import '../orders/orders_view.dart';
+import '../tabs/tabs_view.dart';
 import '../payroll/payroll_view.dart';
 import '../products/products_view.dart';
 import '../reports/reports_view.dart';
@@ -183,6 +184,8 @@ class _ShellViewState extends State<ShellView> {
         return const MembersView();
       case AppRoute.orders:
         return const OrdersView();
+      case AppRoute.tabs:
+        return const TabsView();
       case AppRoute.reports:
         return const ReportsView();
       case AppRoute.employees:

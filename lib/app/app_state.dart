@@ -37,6 +37,7 @@ enum AppRoute {
   sessions,
   members,
   orders,
+  tabs,
   reports,
   employees,
   payroll,
@@ -2913,6 +2914,7 @@ class AppState extends ChangeNotifier {
     required DateTime since,
     DateTime? until,
     int limit = 100,
+    bool openOnly = false,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return const [];
@@ -2934,6 +2936,9 @@ class AppState extends ChangeNotifier {
               'change_cents, reference, refunded)')
           .eq('tenant_id', tenantId)
           .gte('created_at', since.toIso8601String());
+      if (openOnly) {
+        query = query.eq('status', 'open');
+      }
       if (until != null) {
         query = query.lt('created_at', until.toIso8601String());
       }
@@ -2958,6 +2963,27 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) debugPrint('fetchOrders failed: $e');
       return const [];
+    }
+  }
+
+  /// All unpaid (open) orders for the store — these are the customer tabs.
+  Future<List<o.Order>> fetchOpenOrders() =>
+      fetchOrders(since: DateTime(2000), openOnly: true, limit: 500);
+
+  /// Settle a tab: mark the given open orders paid (one payment per order at
+  /// its total, with [method]). Returns null on success, else a message.
+  Future<String?> settleTab(List<String> orderIds, String method) async {
+    if (orderIds.isEmpty) return 'Nothing to settle.';
+    try {
+      await supabase.rpc('settle_orders', params: {
+        'p_order_ids': orderIds,
+        'p_method': method,
+      });
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
     }
   }
 
