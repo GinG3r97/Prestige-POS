@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../app/stores/catalog_store.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/glass.dart';
 import '../../design_system/icons.dart';
@@ -70,14 +71,18 @@ class _SellViewState extends State<SellView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    // Catalog data (products / types / sub-types) lives in CatalogStore; the
-    // coordinator bits (arrangeMode, shift, cart, buildableCount) stay on
-    // AppState.
+    // Read AppState non-reactively, then subscribe ONLY to the two flags the
+    // grid depends on. This stops a post-sale notifyListeners (ordersToday++,
+    // refreshOrders) from rebuilding the whole product grid every time.
+    final state = context.read<AppState>();
+    final arrangeMode = context.select<AppState, bool>((s) => s.arrangeMode);
+    final hasOpenShift = context.select<AppState, bool>((s) => s.hasOpenShift);
+    // Catalog data (products / types / sub-types) lives in CatalogStore.
     final catalog = context.watch<CatalogStore>();
-    // Arrange mode is shared via AppState so the cart panel can react; mirror
-    // it into the local flag the build + helpers read.
-    _editMode = state.arrangeMode;
+    // Keep tile "Not available" badges + buildable counts live when stock moves.
+    context.watch<InventoryStore>();
+    // Mirror arrange mode into the local flag the build + helpers read.
+    _editMode = arrangeMode;
     // Show everything the owner marked Available. We no longer hide items
     // that are short on ingredient stock — instead the tile stays visible
     // with a "Not available" badge so the cashier can answer "do you have
@@ -183,7 +188,7 @@ class _SellViewState extends State<SellView> {
           // While a shift is OPEN the float/sales/orders + Close Cashier live
           // in the TopBar (see ShiftHeaderBar). Only the closed-state bar — the
           // Open Cashier entry point — stays on the page.
-          if (!state.hasOpenShift) ...[
+          if (!hasOpenShift) ...[
             const ShiftBar(),
             _hairline,
             Expanded(child: _cashierClosed(context)),
