@@ -71,7 +71,7 @@ class _FloatingBottomNavState extends State<FloatingBottomNav> {
       const _NavSpec(
           route: AppRoute.tabs,
           icon: Icons.schedule_outlined,
-          label: 'Tabs'),
+          label: 'Pay Later'),
       const _NavSpec(
           route: AppRoute.inventory,
           icon: Icons.inventory_2_outlined,

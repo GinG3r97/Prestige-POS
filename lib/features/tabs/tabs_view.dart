@@ -133,7 +133,7 @@ class _TabsViewState extends State<TabsView> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tabs', style: YFont.titleLG().copyWith(fontSize: 24)),
+              Text('Pay Later', style: YFont.titleLG().copyWith(fontSize: 24)),
               Text('Unpaid orders · settle when the customer pays',
                   style: YFont.caption().copyWith(color: YColor.inkMuted)),
             ],
