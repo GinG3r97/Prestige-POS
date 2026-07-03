@@ -984,44 +984,67 @@ class _TenderSheetState extends State<TenderSheet> {
         '${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
   }
 
-  /// Ask for the customer/table name a tab is charged to.
+  /// Ask for the customer/table name a tab is charged to. Uses the same
+  /// blurred keyboard accessory field as the rest of the app (proven in a
+  /// Dialog + Column layout — an AlertDialog crams the accessory field).
   Future<String?> _askCustomerName() async {
     final ctrl = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         backgroundColor: YColor.surface1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Who is paying later?'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (v) => Navigator.pop(ctx, v),
-          decoration: InputDecoration(
-            labelText: 'Customer name',
-            hintText: 'e.g. Mr. Santos · Table 4',
-            filled: true,
-            fillColor: YColor.surface2,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(YRadius.md),
-              borderSide: const BorderSide(color: YColor.hairline),
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Text('Who is paying later?',
+                      style: YFont.titleLG().copyWith(fontSize: 22)),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                KeyboardAccessoryField(
+                  controller: ctrl,
+                  accessoryLabel: 'Customer name',
+                  hint: 'e.g. Mr. Santos · Table 4',
+                  fillColor: YColor.surface2,
+                  borderColor: YColor.hairline,
+                ),
+                const SizedBox(height: 20),
+                Row(children: [
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, ctrl.text),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: YColor.brand,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(YRadius.md))),
+                    child: const Text('Add to tab'),
+                  ),
+                ]),
+              ],
             ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand, foregroundColor: Colors.white),
-            child: const Text('Add to tab'),
-          ),
-        ],
       ),
     );
   }
@@ -1065,12 +1088,14 @@ class _TenderSheetState extends State<TenderSheet> {
       );
     }).toList();
 
-    // Empty payments → the DB records an OPEN (unpaid) order.
+    // Empty payments → the DB records an OPEN (unpaid) order. The payment
+    // method is only chosen later, when the tab is settled.
     final result = await state.createPaidOrder(
       lines: lines,
       payments: const [],
       customerName: name.trim(),
       clientRequestId: _chargeRequestId,
+      unpaid: true,
     );
     if (!mounted) return;
     if (result.error != null) {

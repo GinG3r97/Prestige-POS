@@ -2670,11 +2670,14 @@ class AppState extends ChangeNotifier {
     String? scPwdName,
     String? scPwdId,
     String? clientRequestId,
+    bool unpaid = false,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return (id: null, error: 'No store selected.');
     if (lines.isEmpty) return (id: null, error: 'Cart is empty.');
-    if (payments.isEmpty) {
+    // A tab (pay-later) order is intentionally unpaid — the payment method is
+    // chosen when it's settled, not now.
+    if (!unpaid && payments.isEmpty) {
       return (id: null, error: 'At least one payment is required.');
     }
     try {
