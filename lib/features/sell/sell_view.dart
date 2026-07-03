@@ -77,6 +77,7 @@ class _SellViewState extends State<SellView> {
     final state = context.read<AppState>();
     final arrangeMode = context.select<AppState, bool>((s) => s.arrangeMode);
     final hasOpenShift = context.select<AppState, bool>((s) => s.hasOpenShift);
+    final activeTab = context.select<AppState, String?>((s) => s.activeTabName);
     // Catalog data (products / types / sub-types) lives in CatalogStore.
     final catalog = context.watch<CatalogStore>();
     // Keep tile "Not available" badges + buildable counts live when stock moves.
@@ -185,6 +186,9 @@ class _SellViewState extends State<SellView> {
       color: YColor.surface2,
       child: Column(
         children: [
+          // Adding to a customer's tab — banner reminds the cashier; checkout's
+          // "Pay later" fires straight onto this tab.
+          if (activeTab != null) _tabBanner(context, activeTab),
           // While a shift is OPEN the float/sales/orders + Close Cashier live
           // in the TopBar (see ShiftHeaderBar). Only the closed-state bar — the
           // Open Cashier entry point — stays on the page.
@@ -573,6 +577,31 @@ class _SellViewState extends State<SellView> {
   }
 
   // ───── Arrange mode: handlers + shared bits ───────────────────────────
+
+  /// Banner shown while building another order onto a customer's tab.
+  Widget _tabBanner(BuildContext context, String name) {
+    return Container(
+      width: double.infinity,
+      color: YColor.brandTint,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.schedule_outlined,
+              size: 18, color: YColor.brandDeep),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Adding to $name’s tab · charge with “Pay later”',
+                style: YFont.bodyStrong()
+                    .copyWith(color: YColor.brandDeep, fontSize: 13)),
+          ),
+          TextButton(
+            onPressed: () => context.read<AppState>().clearActiveTab(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Enter arrange mode — but only with an empty cart, so reordering can't
   /// disturb a sale in progress.

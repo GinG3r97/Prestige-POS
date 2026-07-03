@@ -1058,7 +1058,9 @@ class _TenderSheetState extends State<TenderSheet> {
       setState(() => _error = stockError);
       return;
     }
-    final name = await _askCustomerName();
+    // If we're already adding to a customer's tab, use that name; otherwise ask.
+    final active = state.activeTabName;
+    final name = active ?? await _askCustomerName();
     if (name == null || name.trim().isEmpty || !mounted) return;
 
     setState(() {
@@ -1140,7 +1142,10 @@ class _TenderSheetState extends State<TenderSheet> {
 
     if (!mounted) return;
     state.cart.clear();
+    state.clearActiveTab();
     Navigator.of(context).pop();
+    // If they were building onto an existing tab, jump back to Tabs to see it.
+    if (active != null) state.selectRoute(AppRoute.tabs);
     PushToast.show(
       context,
       title: 'Added to ${name.trim()}’s tab',

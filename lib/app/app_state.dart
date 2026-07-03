@@ -2990,6 +2990,28 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ── Adding items to an existing tab ──
+  String? _activeTabName;
+
+  /// When set, the Sell screen shows a banner and checkout's "Pay later" fires
+  /// straight onto this customer's tab (no re-typing the name).
+  String? get activeTabName => _activeTabName;
+
+  /// Start another order for [name]'s tab — clears the cart and jumps to Sell
+  /// with the tab context set.
+  void startTabOrder(String name) {
+    _activeTabName = name;
+    cart.clear();
+    selectRoute(AppRoute.sell); // notifies
+  }
+
+  void clearActiveTab() {
+    if (_activeTabName != null) {
+      _activeTabName = null;
+      notifyListeners();
+    }
+  }
+
   // ───── shell ─────
   void selectRoute(AppRoute route) {
     selectedRoute = route;

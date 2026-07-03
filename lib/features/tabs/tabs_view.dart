@@ -200,20 +200,40 @@ class _TabsViewState extends State<TabsView> {
           children: [
             for (final ord in tab.orders) _orderBlock(ord),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _busy ? null : () => _settle(tab),
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: Text('Settle ${Money(tab.totalCents).formatted}'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: YColor.brand,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(46),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(YRadius.md)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => context.read<AppState>().startTabOrder(tab.name),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add order'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: YColor.brandDeep,
+                      side: const BorderSide(color: YColor.hairline),
+                      minimumSize: const Size.fromHeight(46),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(YRadius.md)),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _busy ? null : () => _settle(tab),
+                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    label: Text('Settle ${Money(tab.totalCents).formatted}'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: YColor.brand,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(46),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(YRadius.md)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
