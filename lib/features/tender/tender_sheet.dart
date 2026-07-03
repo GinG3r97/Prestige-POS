@@ -352,18 +352,33 @@ class _TenderSheetState extends State<TenderSheet> {
                 const SizedBox(height: 12),
                 // Pay later — fire the order to the kitchen/barista NOW but
                 // leave it unpaid, added to the customer's tab to settle later.
-                OutlinedButton.icon(
-                  onPressed: (_busy || state.atOrderCap)
-                      ? null
-                      : () => _payLater(state),
-                  icon: const Icon(Icons.schedule_outlined, size: 18),
-                  label: const Text('Pay later · add to tab'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: YColor.brandDeep,
-                    side: const BorderSide(color: YColor.hairline),
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
+                // Same dashed treatment as the Senior/PWD control.
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: (_busy || state.atOrderCap)
+                        ? null
+                        : () => _payLater(state),
+                    child: CustomPaint(
+                      painter: _DashedRRectPainter(
+                          color: YColor.brandDeep.withValues(alpha: 0.6),
+                          radius: YRadius.md),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule_outlined,
+                                size: 18, color: YColor.brandDeep),
+                            const SizedBox(width: 8),
+                            Text('Pay later',
+                                style: YFont.bodyStrong().copyWith(
+                                    color: YColor.brandDeep, fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -977,13 +992,23 @@ class _TenderSheetState extends State<TenderSheet> {
       builder: (ctx) => AlertDialog(
         backgroundColor: YColor.surface1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Add to tab'),
-        content: KeyboardAccessoryField(
+        title: const Text('Who is paying later?'),
+        content: TextField(
           controller: ctrl,
-          accessoryLabel: 'Customer name',
-          hint: 'e.g. Mr. Santos · Table 4',
-          fillColor: YColor.surface2,
-          borderColor: YColor.hairline,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+          decoration: InputDecoration(
+            labelText: 'Customer name',
+            hintText: 'e.g. Mr. Santos · Table 4',
+            filled: true,
+            fillColor: YColor.surface2,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(YRadius.md),
+              borderSide: const BorderSide(color: YColor.hairline),
+            ),
+          ),
         ),
         actions: [
           TextButton(
@@ -994,7 +1019,7 @@ class _TenderSheetState extends State<TenderSheet> {
             onPressed: () => Navigator.pop(ctx, ctrl.text),
             style: ElevatedButton.styleFrom(
                 backgroundColor: YColor.brand, foregroundColor: Colors.white),
-            child: const Text('Fire order'),
+            child: const Text('Add to tab'),
           ),
         ],
       ),
@@ -1053,6 +1078,10 @@ class _TenderSheetState extends State<TenderSheet> {
         _busy = false;
         _error = result.error;
       });
+      PushToast.show(context,
+          title: 'Could not add to tab',
+          subtitle: result.error!,
+          leadingIcon: Icons.error_outline);
       return;
     }
     _chargeRequestId = null;
