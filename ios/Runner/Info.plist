@@ -15,7 +15,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>yosef_pos_hybrid</string>
+		<string>Prestige POS</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -32,8 +32,8 @@
 		<string>Connect to your Bluetooth receipt printer.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Prestige POS uses your location to set your store’s location so staff can clock in and out on-site.</string>
-		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>Prestige POS uses your location to set your store’s location so staff can clock in and out on-site.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Choose a photo from your library to use as your product image or store logo.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
