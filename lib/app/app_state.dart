@@ -2754,6 +2754,9 @@ class AppState extends ChangeNotifier {
         // Idempotency: a retry of the same charge (e.g. after a lost response)
         // returns the original order instead of creating a duplicate.
         'p_client_request_id': clientRequestId,
+        // A pay-later tab must stay 'open' even at ₱0, so it shows under Tabs
+        // instead of being auto-closed as paid.
+        'p_unpaid': unpaid,
       });
       _ordersToday += 1; // keep the top-bar usage meter live after each sale
       notifyListeners();
