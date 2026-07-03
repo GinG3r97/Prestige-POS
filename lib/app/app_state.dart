@@ -1087,6 +1087,25 @@ class AppState extends ChangeNotifier {
   /// Verifies a 4-digit owner PIN against the stored bcrypt hash. The RPC
   /// throttles brute force: 5 wrong attempts in a row → 5-minute lockout.
   /// Returns null on success, or a user-safe error message.
+  /// Pure owner-PIN check with NO session side effects — used to gate a
+  /// sensitive screen (e.g. Payroll) on a shared, already-signed-in tablet.
+  Future<bool> confirmOwnerPin(String pin) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return false;
+    final clean = pin.trim();
+    if (clean.length != 4 || int.tryParse(clean) == null) return false;
+    try {
+      final ok = await supabase.rpc('verify_owner_pin', params: {
+        'p_tenant_id': tenantId,
+        'p_pin': clean,
+        'p_count_failure': true,
+      });
+      return ok == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<String?> verifyOwnerPin(String pin) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return 'No store selected.';

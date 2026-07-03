@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/app_state.dart';
 import '../../app/stores/hr_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
@@ -10,6 +11,7 @@ import '../../models/employee.dart';
 import '../../models/money.dart';
 import '../../models/payroll.dart';
 import '../../models/payroll_rules.dart';
+import '../auth/otp_numpad.dart';
 import '../widgets/numpad_field.dart';
 import '../widgets/push_toast.dart';
 
@@ -23,6 +25,94 @@ class PayrollView extends StatefulWidget {
   State<PayrollView> createState() => _PayrollViewState();
 }
 
+/// Owner-PIN lock shown over Payroll so salaries aren't exposed on a shared,
+/// already signed-in tablet. Verifies with no session side effects.
+class _PayrollPinGate extends StatefulWidget {
+  const _PayrollPinGate({required this.onUnlocked});
+  final VoidCallback onUnlocked;
+
+  @override
+  State<_PayrollPinGate> createState() => _PayrollPinGateState();
+}
+
+class _PayrollPinGateState extends State<_PayrollPinGate> {
+  String _code = '';
+  bool _busy = false;
+  String? _error;
+
+  void _onDigit(String d) {
+    if (_busy || _code.length >= 4) return;
+    setState(() {
+      _code += d;
+      _error = null;
+    });
+    if (_code.length == 4) _verify();
+  }
+
+  void _onBackspace() {
+    if (_busy || _code.isEmpty) return;
+    setState(() {
+      _code = _code.substring(0, _code.length - 1);
+      _error = null;
+    });
+  }
+
+  Future<void> _verify() async {
+    setState(() => _busy = true);
+    final ok = await context.read<AppState>().confirmOwnerPin(_code);
+    if (!mounted) return;
+    if (ok) {
+      widget.onUnlocked();
+      return;
+    }
+    setState(() {
+      _busy = false;
+      _error = 'Wrong PIN — try again.';
+      _code = '';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: YColor.surface2,
+      alignment: Alignment.center,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lock_outline, size: 40, color: YColor.brandDeep),
+            const SizedBox(height: 14),
+            Text('Payroll is protected',
+                style: YFont.titleMD().copyWith(fontSize: 18)),
+            const SizedBox(height: 6),
+            Text('Enter your owner PIN to view salaries and pay runs.',
+                textAlign: TextAlign.center,
+                style: YFont.caption().copyWith(color: YColor.inkMuted)),
+            const SizedBox(height: 22),
+            OtpCells(code: _code, length: 4, hasError: _error != null),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style:
+                      YFont.body().copyWith(color: YColor.danger, fontSize: 13)),
+            ],
+            const SizedBox(height: 20),
+            OtpNumpad(
+              onDigit: _onDigit,
+              onBackspace: _onBackspace,
+              enabled: !_busy,
+              keyWidth: 66,
+              keyHeight: 52,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PayrollViewState extends State<PayrollView> {
   // The pay period is ALWAYS the semi-monthly cutoff the owner set in
   // Maintenance → Payroll (15 & 30 vs 10 & 25) — no weekly/monthly choice.
@@ -31,6 +121,9 @@ class _PayrollViewState extends State<PayrollView> {
   int _periodOffset = 0;
   PayrollRun? _selectedRun;
   bool _generating = false;
+  // Salary screens are protected by the owner PIN on a shared, already
+  // signed-in tablet. Unlocked once per visit to this screen.
+  bool _unlocked = false;
 
   /// The 7-day week shown in the timesheet grid (navigable by [_periodOffset]
   /// weeks). The grid only ever shows a week so it stays readable; the PAY RUN
@@ -65,6 +158,14 @@ class _PayrollViewState extends State<PayrollView> {
 
   @override
   Widget build(BuildContext context) {
+    // Gate salaries behind the owner PIN (only when one is set — otherwise the
+    // owner would be locked out of their own payroll).
+    final app = context.watch<AppState>();
+    if (app.isOwnerSession && app.hasOwnerPin && !_unlocked) {
+      return _PayrollPinGate(
+        onUnlocked: () => setState(() => _unlocked = true),
+      );
+    }
     final state = context.watch<HrStore>();
     final style = state.payrollRules.semiMonthlyStyle;
     // Grid shows a week; the pay run + DTR modal use the cutoff that week is in.

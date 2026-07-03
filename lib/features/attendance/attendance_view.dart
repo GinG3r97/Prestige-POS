@@ -42,12 +42,18 @@ class _AttendanceViewState extends State<AttendanceView> {
   DateTime _day = DateTime.now();
   bool _loading = true;
   String? _error;
+  // All maps below are keyed by employee_id (not name) so two staff with the
+  // same name never merge into one row.
   // Punches shown for the selected day (display).
   final Map<String, List<_Punch>> _byEmployee = {};
   // Pre-computed worked-hours label per employee. Computed from a wider window
   // than the day so a shift that crosses midnight is counted on its start day
   // (instead of showing 0h on both days).
   final Map<String, String> _hours = {};
+  // employee_id → display name.
+  final Map<String, String> _names = {};
+  // employee_ids whose punches don't pair cleanly (e.g. two INs, missing OUT).
+  final Set<String> _anomalies = {};
 
   bool _geoSet = false;
   int _radius = 50;
@@ -88,6 +94,8 @@ class _AttendanceViewState extends State<AttendanceView> {
       _error = null;
       _byEmployee.clear();
       _hours.clear();
+      _names.clear();
+      _anomalies.clear();
     });
     // Day bounds in Manila (UTC+8) expressed as UTC instants.
     final start = DateTime.utc(_day.year, _day.month, _day.day)
@@ -101,16 +109,19 @@ class _AttendanceViewState extends State<AttendanceView> {
       final rows = await supabase
           .from('attendance_punches')
           .select(
-              'employee_name, kind, punched_at, selfie, distance_m, within_geofence, flagged, flag_reason')
+              'employee_id, employee_name, kind, punched_at, selfie, distance_m, within_geofence, flagged, flag_reason')
           .eq('tenant_id', tid)
           .gte('punched_at', start.toIso8601String())
           .lt('punched_at', windowEnd.toIso8601String())
           .order('punched_at');
       // Full window (for hour pairing) vs the day's punches (for display).
+      // Keyed by employee_id; falls back to name only for legacy rows with no id.
       final full = <String, List<_Punch>>{};
       for (final r in rows as List) {
         final m = r as Map<String, dynamic>;
         final name = (m['employee_name'] as String?) ?? 'Unknown';
+        final id = (m['employee_id'] as String?) ?? 'name:$name';
+        _names[id] = name;
         final atUtc = DateTime.parse(m['punched_at'] as String);
         final punch = _Punch(
           (m['kind'] as String?) ?? '', // null-safe: bad row can't blank the day
@@ -120,14 +131,16 @@ class _AttendanceViewState extends State<AttendanceView> {
           m['flag_reason'] as String?,
           (m['distance_m'] as num?)?.toInt(),
         );
-        (full[name] ??= []).add(punch);
+        (full[id] ??= []).add(punch);
         // Display only the selected day's punches (before tomorrow's start).
-        if (atUtc.isBefore(end)) (_byEmployee[name] ??= []).add(punch);
+        if (atUtc.isBefore(end)) (_byEmployee[id] ??= []).add(punch);
       }
       // Worked hours: pair across the window, count a session on the day its
       // 'in' falls (so overnight shifts land on their start day, once).
       for (final entry in full.entries) {
-        _hours[entry.key] = _hoursFor(entry.value, start, end);
+        final res = _hoursFor(entry.value, start, end);
+        _hours[entry.key] = res.label;
+        if (res.unpaired) _anomalies.add(entry.key);
       }
       final t = await supabase
           .from('tenants')
@@ -151,33 +164,45 @@ class _AttendanceViewState extends State<AttendanceView> {
   /// session that clocks out after midnight is still paired. A session is
   /// attributed to the day of its IN punch, so overnight shifts count once on
   /// their start day rather than 0h on both days.
-  String _hoursFor(List<_Punch> punches, DateTime start, DateTime end) {
+  ({String label, bool unpaired}) _hoursFor(
+      List<_Punch> punches, DateTime start, DateTime end) {
     Duration total = Duration.zero;
     DateTime? openIn; // local time of the open IN
     bool openInToday = false; // does that IN belong to the selected day?
     bool stillIn = false;
+    bool unpaired = false; // a punch sequence that doesn't cleanly pair
     for (final p in punches) {
       if (p.kind == 'in') {
+        // A second IN before an OUT means the previous session never closed.
+        if (openIn != null) unpaired = true;
         openIn = p.at;
         final inUtc = p.at.toUtc();
         openInToday = !inUtc.isBefore(start) && inUtc.isBefore(end);
-      } else if (p.kind == 'out' && openIn != null) {
-        if (openInToday) total += p.at.difference(openIn);
-        openIn = null;
-        openInToday = false;
+      } else if (p.kind == 'out') {
+        if (openIn != null) {
+          if (openInToday) total += p.at.difference(openIn);
+          openIn = null;
+          openInToday = false;
+        } else {
+          // An OUT with no matching IN.
+          unpaired = true;
+        }
       }
     }
     // An IN for the selected day with no matching OUT yet → still clocked in.
     if (openIn != null && openInToday) stillIn = true;
     final h = total.inMinutes / 60.0;
-    return stillIn
+    final label = stillIn
         ? '${h.toStringAsFixed(1)}h · still in'
         : '${h.toStringAsFixed(1)}h';
+    return (label: label, unpaired: unpaired);
   }
 
   @override
   Widget build(BuildContext context) {
-    final names = _byEmployee.keys.toList()..sort();
+    // Sort employee_ids by display name.
+    final ids = _byEmployee.keys.toList()
+      ..sort((a, b) => (_names[a] ?? '').compareTo(_names[b] ?? ''));
     final body = Column(
       children: [
         _setupBar(),
@@ -190,7 +215,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                   ? Center(
                       child: Text(_error!,
                           style: YFont.body().copyWith(color: YColor.inkMuted)))
-                  : names.isEmpty
+                  : ids.isEmpty
                       ? Center(
                           child: Text('No punches on this day.',
                               style: YFont.body()
@@ -204,7 +229,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                             // but never more columns than there are employees
                             // (1 → 1 col, 2 → 2 cols, 6 → 2 rows × 3 cols).
                             final widthMax = (usable ~/ 320).clamp(1, 3);
-                            final cols = names.length < widthMax ? names.length : widthMax;
+                            final cols = ids.length < widthMax ? ids.length : widthMax;
                             final cardW = cols <= 1
                                 ? usable
                                 : (usable - gap * (cols - 1)) / cols;
@@ -213,10 +238,11 @@ class _AttendanceViewState extends State<AttendanceView> {
                               child: Wrap(
                                 spacing: gap,
                                 children: [
-                                  for (final name in names)
+                                  for (final id in ids)
                                     SizedBox(
                                       width: cardW,
-                                      child: _employeeCard(name, _byEmployee[name]!),
+                                      child: _employeeCard(
+                                          id, _names[id] ?? 'Unknown', _byEmployee[id]!),
                                     ),
                                 ],
                               ),
@@ -555,8 +581,8 @@ class _AttendanceViewState extends State<AttendanceView> {
     );
   }
 
-  Widget _employeeCard(String name, List<_Punch> punches) {
-    final anyFlag = punches.any((p) => p.flagged);
+  Widget _employeeCard(String id, String name, List<_Punch> punches) {
+    final anyFlag = punches.any((p) => p.flagged) || _anomalies.contains(id);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -575,11 +601,28 @@ class _AttendanceViewState extends State<AttendanceView> {
                   child: Text(name,
                       style: YFont.titleMD().copyWith(fontSize: 16)),
                 ),
-                Text(_hours[name] ?? '0.0h',
+                Text(_hours[id] ?? '0.0h',
                     style: YFont.bodyStrong().copyWith(color: YColor.brandDeep)),
               ],
             ),
           ),
+          if (_anomalies.contains(id))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 14, color: YColor.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Punches don’t pair cleanly — check for a missing clock-in/out.',
+                      style: YFont.caption().copyWith(color: YColor.danger),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1, color: YColor.hairline),
           for (final p in punches) _punchRow(p),
         ],
