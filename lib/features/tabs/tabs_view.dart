@@ -203,7 +203,10 @@ class _TabsViewState extends State<TabsView> {
     );
   }
 
-  Widget _empty() => Center(
+  // Biased slightly above dead-centre so the floating bottom nav doesn't
+  // make the empty state read as sitting too low.
+  Widget _empty() => Align(
+        alignment: const Alignment(0, -0.25),
         child: Padding(
           padding: const EdgeInsets.all(40),
           child: Column(

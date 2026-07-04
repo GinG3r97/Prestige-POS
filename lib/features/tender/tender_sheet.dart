@@ -1469,6 +1469,14 @@ class _TenderSheetState extends State<TenderSheet> {
       _paidChangeCents = changeCents;
       completed = true;
     });
+
+    // Cash settle → pop the drawer so the cashier can make change.
+    final printer = state.printerConfig;
+    if (m == TenderMethod.cash && printer != null) {
+      await PrintJobs.openDrawer(printer, pin5: await DrawerPrefs.usesPin5());
+    }
+    // Auto-print the customer receipt (leaves the button as "Reprint receipt").
+    if (mounted) await _printSettleReceipts();
   }
 
   Widget _payRow(String label, String value, {bool big = false}) {
