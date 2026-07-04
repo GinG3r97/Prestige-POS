@@ -3023,6 +3023,7 @@ class AppState extends ChangeNotifier {
   // can pay through the normal tender flow. The orders stay OPEN in the DB
   // (still visible on Pay Later) until the payment actually completes.
   List<String> _settleOrderIds = const [];
+  List<o.Order> _settleOrders = const [];
   String? _settleName;
 
   /// True while the cart holds a tab being settled (read-only lines).
@@ -3030,12 +3031,17 @@ class AppState extends ChangeNotifier {
   String? get settleName => _settleName;
   List<String> get settleOrderIds => List.unmodifiable(_settleOrderIds);
 
+  /// The full orders being settled — captured so the success screen can print
+  /// their receipts even if the post-settle refresh hasn't landed yet.
+  List<o.Order> get settleOrders => List.unmodifiable(_settleOrders);
+
   /// Load [orders] (one customer's unpaid tab) into the cart as read-only
   /// settle lines. The caller (Pay Later page) then opens the tender modal
   /// right there to collect payment — no navigation to Sell.
   void startSettleTab(String name, List<o.Order> orders) {
     _activeTabName = null; // settling is not the same as adding
     _settleOrderIds = orders.map((x) => x.id).toList();
+    _settleOrders = List.of(orders);
     _settleName = name;
     final settleLines = <CartLine>[
       for (final ord in orders)
@@ -3068,6 +3074,7 @@ class AppState extends ChangeNotifier {
   void clearSettle() {
     if (_settleOrderIds.isEmpty && _settleName == null) return;
     _settleOrderIds = const [];
+    _settleOrders = const [];
     _settleName = null;
     if (cart.isSettling) cart.clear();
     notifyListeners();

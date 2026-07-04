@@ -1424,7 +1424,10 @@ class _TenderSheetState extends State<TenderSheet> {
     final m = method ?? TenderMethod.cash;
     final totalCents = state.cart.total.centavos;
     _settledTotalCents = totalCents;
-    final settledIds = state.settleOrderIds; // capture before settle clears it
+    // Capture before the settle clears the session, so the success screen
+    // always has orders to print even if the refresh below returns nothing.
+    final settledIds = state.settleOrderIds;
+    final capturedOrders = state.settleOrders;
 
     int? tenderedCents;
     int? changeCents;
@@ -1457,10 +1460,12 @@ class _TenderSheetState extends State<TenderSheet> {
       return;
     }
     // completeSettle refreshed the order cache — pull the now-paid orders so
-    // the success screen can print their receipts.
-    final settled = state.recentOrders
+    // the receipt shows the tender. Fall back to the captured orders if the
+    // refresh hasn't surfaced them yet, so the receipt button never vanishes.
+    var settled = state.recentOrders
         .where((x) => settledIds.contains(x.id))
         .toList();
+    if (settled.isEmpty) settled = capturedOrders;
     setState(() {
       _busy = false;
       _settled = true;
@@ -1475,8 +1480,10 @@ class _TenderSheetState extends State<TenderSheet> {
     if (m == TenderMethod.cash && printer != null) {
       await PrintJobs.openDrawer(printer, pin5: await DrawerPrefs.usesPin5());
     }
-    // Auto-print the customer receipt (leaves the button as "Reprint receipt").
-    if (mounted) await _printSettleReceipts();
+    // Auto-print the customer receipt when a printer is set (the button then
+    // reads "Reprint receipt"). With no printer we skip the auto-print — the
+    // button still shows so the cashier can print once a printer is paired.
+    if (mounted && printer != null) await _printSettleReceipts();
   }
 
   Widget _payRow(String label, String value, {bool big = false}) {
@@ -1749,10 +1756,7 @@ class _TenderSheetState extends State<TenderSheet> {
   /// orders, so this prints each order's receipt (post-payment, so they show
   /// the tender). Shown only on the settle success screen.
   Widget _settleReceiptActions(AppState state) {
-    final printer = state.printerConfig;
-    if (printer == null || _settledOrders.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (_settledOrders.isEmpty) return const SizedBox.shrink();
     if (_printBusy) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 16),
@@ -1786,7 +1790,15 @@ class _TenderSheetState extends State<TenderSheet> {
     final state = context.read<AppState>();
     final printer = state.printerConfig;
     final tenant = state.tenant;
-    if (printer == null || tenant == null || _settledOrders.isEmpty) return;
+    if (_settledOrders.isEmpty) return;
+    if (printer == null) {
+      PushToast.show(context,
+          title: 'No printer connected',
+          subtitle: 'Pair a printer in Settings to print the receipt.',
+          leadingIcon: Icons.print_disabled_outlined);
+      return;
+    }
+    if (tenant == null) return;
     setState(() {
       _printBusy = true;
       _printStatus = 'Printing receipt…';
