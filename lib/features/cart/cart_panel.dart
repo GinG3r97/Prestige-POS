@@ -746,19 +746,43 @@ class _CartPanelState extends State<CartPanel> {
             Text(cart.total.formatted, style: YFont.titleMD().copyWith(color: YColor.brand)),
           ]),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => context.read<AppState>().openTender(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: YColor.brand,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
+          // In pay-later add mode the button names the customer (and glows)
+          // instead of saying "Pay" — nothing is collected on this order.
+          Builder(builder: (context) {
+            final activeTab =
+                context.select<AppState, String?>((s) => s.activeTabName);
+            return Container(
+              width: double.infinity,
+              decoration: activeTab == null
+                  ? null
+                  : BoxDecoration(
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                      boxShadow: [
+                        BoxShadow(
+                            color: YColor.brand.withValues(alpha: 0.5),
+                            blurRadius: 14,
+                            spreadRadius: 1),
+                      ],
+                    ),
+              child: ElevatedButton(
+                onPressed: () => context.read<AppState>().openTender(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      activeTab == null ? YColor.brand : YColor.brandDeep,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
+                ),
+                child: Text(
+                    activeTab == null
+                        ? 'Pay ${cart.total.formatted}'
+                        : 'Add to $activeTab · ${cart.total.formatted}',
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.bodyStrong()
+                        .copyWith(color: Colors.white, fontSize: 15)),
               ),
-              child: Text('Pay ${cart.total.formatted}', style: YFont.bodyStrong().copyWith(color: Colors.white, fontSize: 15)),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );

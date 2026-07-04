@@ -578,24 +578,55 @@ class _SellViewState extends State<SellView> {
 
   // ───── Arrange mode: handlers + shared bits ───────────────────────────
 
-  /// Banner shown while building another order onto a customer's tab.
+  /// Banner shown while building another order for a pay-later customer.
+  /// Deliberately loud (filled + glow) so the cashier can't confuse this
+  /// with a normal cash sale.
   Widget _tabBanner(BuildContext context, String name) {
     return Container(
       width: double.infinity,
-      color: YColor.brandTint,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: YColor.brandDeep,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        boxShadow: [
+          BoxShadow(
+              color: YColor.brand.withValues(alpha: 0.55),
+              blurRadius: 16,
+              spreadRadius: 1),
+        ],
+      ),
       child: Row(
         children: [
-          const Icon(Icons.schedule_outlined,
-              size: 18, color: YColor.brandDeep),
-          const SizedBox(width: 10),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.schedule_outlined,
+                size: 17, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text('Adding to $name’s tab · charge with “Pay later”',
-                style: YFont.bodyStrong()
-                    .copyWith(color: YColor.brandDeep, fontSize: 13)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Adding order for $name',
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.bodyStrong()
+                        .copyWith(color: Colors.white, fontSize: 14)),
+                Text('No payment now — finish with “Add to $name”',
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.caption().copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 11.5)),
+              ],
+            ),
           ),
           TextButton(
             onPressed: () => context.read<AppState>().clearActiveTab(),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
             child: const Text('Cancel'),
           ),
         ],

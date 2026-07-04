@@ -351,8 +351,10 @@ class _TenderSheetState extends State<TenderSheet> {
                 _scPwdControl(state),
                 const SizedBox(height: 12),
                 // Pay later — fire the order to the kitchen/barista NOW but
-                // leave it unpaid, added to the customer's tab to settle later.
-                // Same dashed treatment as the Senior/PWD control.
+                // leave it unpaid; the customer settles from the Pay Later
+                // page. Same dashed treatment as the Senior/PWD control.
+                // When adding onto an existing pay-later customer, the label
+                // names them and the control glows so it can't be missed.
                 SizedBox(
                   width: double.infinity,
                   child: GestureDetector(
@@ -366,15 +368,35 @@ class _TenderSheetState extends State<TenderSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         alignment: Alignment.center,
+                        decoration: state.activeTabName == null
+                            ? null
+                            : BoxDecoration(
+                                color: YColor.brandTint,
+                                borderRadius:
+                                    BorderRadius.circular(YRadius.md),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: YColor.brand
+                                          .withValues(alpha: 0.5),
+                                      blurRadius: 14,
+                                      spreadRadius: 1),
+                                ],
+                              ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.schedule_outlined,
                                 size: 18, color: YColor.brandDeep),
                             const SizedBox(width: 8),
-                            Text('Pay later',
-                                style: YFont.bodyStrong().copyWith(
-                                    color: YColor.brandDeep, fontSize: 14)),
+                            Flexible(
+                              child: Text(
+                                  state.activeTabName == null
+                                      ? 'Pay later'
+                                      : 'Add to ${state.activeTabName}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: YFont.bodyStrong().copyWith(
+                                      color: YColor.brandDeep, fontSize: 14)),
+                            ),
                           ],
                         ),
                       ),
@@ -1038,7 +1060,7 @@ class _TenderSheetState extends State<TenderSheet> {
                             horizontal: 22, vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(YRadius.md))),
-                    child: const Text('Add to tab'),
+                    child: const Text('Confirm'),
                   ),
                 ]),
               ],
@@ -1106,7 +1128,7 @@ class _TenderSheetState extends State<TenderSheet> {
         _error = result.error;
       });
       PushToast.show(context,
-          title: 'Could not add to tab',
+          title: 'Could not save pay-later order',
           subtitle: result.error!,
           leadingIcon: Icons.error_outline);
       return;
@@ -1148,8 +1170,8 @@ class _TenderSheetState extends State<TenderSheet> {
     if (active != null) state.selectRoute(AppRoute.tabs);
     PushToast.show(
       context,
-      title: 'Added to ${name.trim()}’s tab',
-      subtitle: 'Fired to the kitchen. Settle payment later in Tabs.',
+      title: 'Order saved for ${name.trim()}',
+      subtitle: 'Fired to the kitchen. Collect from the Pay Later page.',
       leadingIcon: Icons.schedule_outlined,
     );
   }

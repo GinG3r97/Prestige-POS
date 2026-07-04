@@ -84,7 +84,7 @@ class _TabsViewState extends State<TabsView> {
       return;
     }
     PushToast.show(context,
-        title: '${tab.name}’s tab settled',
+        title: '${tab.name} settled',
         subtitle: '${Money(tab.totalCents).formatted} · ${_methodLabel(method)}',
         leadingIcon: Icons.check_circle_outline);
     await state.refreshOrders();
@@ -113,7 +113,8 @@ class _TabsViewState extends State<TabsView> {
             Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(color: YColor.brandDeep))
                 : _tabs.isEmpty
                     ? _empty()
                     : RefreshIndicator(
@@ -153,10 +154,26 @@ class _TabsViewState extends State<TabsView> {
                 ],
               ),
               const Spacer(),
-              IconButton(
-                  onPressed: _loading ? null : _load,
-                  tooltip: 'Refresh',
-                  icon: const Icon(Icons.refresh)),
+              // Themed action button — matches the outlined chip style used
+              // on Orders/Sell instead of a bare Material IconButton.
+              Material(
+                color: YColor.surface1,
+                borderRadius: BorderRadius.circular(YRadius.md),
+                child: InkWell(
+                  onTap: _loading ? null : _load,
+                  borderRadius: BorderRadius.circular(YRadius.md),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: YColor.hairline),
+                      borderRadius: BorderRadius.circular(YRadius.md),
+                    ),
+                    child: const Icon(Icons.refresh_rounded,
+                        size: 20, color: YColor.brandDeep),
+                  ),
+                ),
+              ),
             ],
           ),
           if (!_loading && _tabs.isNotEmpty) ...[
@@ -218,12 +235,12 @@ class _TabsViewState extends State<TabsView> {
                     size: 32, color: YColor.brandDeep),
               ),
               const SizedBox(height: YSpacing.md),
-              Text('No pay-later tabs', style: YFont.titleMD()),
+              Text('No unpaid orders', style: YFont.titleMD()),
               const SizedBox(height: YSpacing.xxs),
               SizedBox(
                 width: 300,
                 child: Text(
-                  'When a customer says “pay later” at checkout, their order lands here until they settle.',
+                  'When a customer pays later at checkout, their orders show here until settled.',
                   textAlign: TextAlign.center,
                   style: YFont.caption().copyWith(color: YColor.inkMuted),
                 ),
@@ -245,6 +262,8 @@ class _TabsViewState extends State<TabsView> {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          iconColor: YColor.brandDeep,
+          collapsedIconColor: YColor.inkSubtle,
           leading: _avatar(tab.name),
           title: Text(tab.name,
               style: YFont.bodyStrong().copyWith(fontSize: 16)),
@@ -454,7 +473,7 @@ class _SettleSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: YSpacing.md),
-                Text('Settle ${tab.name}’s tab',
+                Text('Settle ${tab.name}',
                     textAlign: TextAlign.center, style: YFont.titleMD()),
                 const SizedBox(height: 2),
                 Text(
