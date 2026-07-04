@@ -3003,6 +3003,8 @@ class AppState extends ChangeNotifier {
   /// Start another order for [name]'s tab — clears the cart and jumps to Sell
   /// with the tab context set.
   void startTabOrder(String name) {
+    _settleOrderIds = const [];
+    _settleName = null;
     _activeTabName = name;
     cart.clear();
     selectRoute(AppRoute.sell); // notifies
@@ -3013,6 +3015,76 @@ class AppState extends ChangeNotifier {
       _activeTabName = null;
       notifyListeners();
     }
+  }
+
+  // ── Settling a tab through the Sell screen ──
+  // The cashier taps "Settle" on the Pay Later page; we load the customer's
+  // unpaid orders into the cart as read-only lines and jump to Sell so they
+  // can pay through the normal tender flow. The orders stay OPEN in the DB
+  // (still visible on Pay Later) until the payment actually completes.
+  List<String> _settleOrderIds = const [];
+  String? _settleName;
+
+  /// True while the cart holds a tab being settled (read-only lines).
+  bool get isSettling => cart.isSettling && _settleOrderIds.isNotEmpty;
+  String? get settleName => _settleName;
+  List<String> get settleOrderIds => List.unmodifiable(_settleOrderIds);
+
+  /// Load [orders] (one customer's unpaid tab) into the cart as read-only
+  /// settle lines and jump to Sell to collect payment.
+  void startSettleTab(String name, List<o.Order> orders) {
+    _activeTabName = null; // settling is not the same as adding
+    _settleOrderIds = orders.map((x) => x.id).toList();
+    _settleName = name;
+    final settleLines = <CartLine>[
+      for (final ord in orders)
+        for (final l in ord.lines)
+          CartLine(
+            kind: CartLineSettle(
+              name: l.name,
+              detail: _settleLineDetail(l),
+              emojiChar: l.emoji,
+              unitPriceCents: l.unitPriceCents,
+            ),
+            quantity: l.quantity,
+          ),
+    ];
+    cart.loadForSettle(settleLines);
+    selectRoute(AppRoute.sell); // notifies
+  }
+
+  String? _settleLineDetail(o.OrderLine l) {
+    final mods = l.modifiers;
+    if (mods == null) return null;
+    final opts = mods['options'];
+    if (opts is Map && opts.isNotEmpty) {
+      return opts.values.map((v) => v.toString()).join(' · ');
+    }
+    return null;
+  }
+
+  /// Cancel a settle in progress (cart cleared / cashier backed out). The
+  /// orders remain open on the Pay Later page.
+  void clearSettle() {
+    if (_settleOrderIds.isEmpty && _settleName == null) return;
+    _settleOrderIds = const [];
+    _settleName = null;
+    if (cart.isSettling) cart.clear();
+    notifyListeners();
+  }
+
+  /// Settle the loaded tab with the chosen [method]. Marks the orders paid
+  /// server-side (via [settleTab]) and resets the settle session. Returns
+  /// null on success, else an error message.
+  Future<String?> completeSettle(String method) async {
+    if (_settleOrderIds.isEmpty) return 'Nothing to settle.';
+    final err = await settleTab(_settleOrderIds, method);
+    if (err != null) return err;
+    _settleOrderIds = const [];
+    _settleName = null;
+    cart.clear();
+    await refreshOrders();
+    return null;
   }
 
   // ───── shell ─────

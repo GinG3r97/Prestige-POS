@@ -9,6 +9,7 @@ import '../../design_system/colors.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../cafe/product_detail_sheet.dart';
+import '../tender/pay_later.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/keyboard_accessory_field.dart';
 import '../widgets/push_toast.dart';
@@ -746,14 +747,31 @@ class _CartPanelState extends State<CartPanel> {
             Text(cart.total.formatted, style: YFont.titleMD().copyWith(color: YColor.brand)),
           ]),
           const SizedBox(height: 16),
-          // In pay-later add mode the button names the customer (and glows)
-          // instead of saying "Pay" — nothing is collected on this order.
+          // Three checkout modes:
+          //  • add mode (activeTab set)  → "Add to <name>" fires the order
+          //    onto that tab with NO payment method (pay-later add sheet).
+          //  • settle mode (isSettling) → "Settle <total>" opens the normal
+          //    tender to collect payment for the loaded unpaid orders.
+          //  • normal                   → "Pay <total>" opens the tender.
           Builder(builder: (context) {
             final activeTab =
                 context.select<AppState, String?>((s) => s.activeTabName);
+            final settling =
+                context.select<AppState, bool>((s) => s.isSettling);
+            final settleName =
+                context.select<AppState, String?>((s) => s.settleName);
+            final glow = activeTab != null || settling;
+            final String label;
+            if (activeTab != null) {
+              label = 'Add to $activeTab · ${cart.total.formatted}';
+            } else if (settling) {
+              label = 'Settle ${settleName ?? ''} · ${cart.total.formatted}';
+            } else {
+              label = 'Pay ${cart.total.formatted}';
+            }
             return Container(
               width: double.infinity,
-              decoration: activeTab == null
+              decoration: !glow
                   ? null
                   : BoxDecoration(
                       borderRadius: BorderRadius.circular(YRadius.md),
@@ -765,18 +783,20 @@ class _CartPanelState extends State<CartPanel> {
                       ],
                     ),
               child: ElevatedButton(
-                onPressed: () => context.read<AppState>().openTender(),
+                onPressed: () {
+                  if (activeTab != null) {
+                    showPayLaterAddSheet(context);
+                  } else {
+                    context.read<AppState>().openTender();
+                  }
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      activeTab == null ? YColor.brand : YColor.brandDeep,
+                  backgroundColor: glow ? YColor.brandDeep : YColor.brand,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(YRadius.md)),
                 ),
-                child: Text(
-                    activeTab == null
-                        ? 'Pay ${cart.total.formatted}'
-                        : 'Add to $activeTab · ${cart.total.formatted}',
+                child: Text(label,
                     overflow: TextOverflow.ellipsis,
                     style: YFont.bodyStrong()
                         .copyWith(color: Colors.white, fontSize: 15)),

@@ -7,7 +7,6 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
-import '../widgets/push_toast.dart';
 
 /// Pay Later — unpaid orders grouped by customer, settled when they pay.
 /// Populated when a cashier chooses "Pay later" at checkout.
@@ -62,42 +61,12 @@ class _TabsViewState extends State<TabsView> {
     });
   }
 
-  Future<void> _settle(_Tab tab) async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: YColor.surface1,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => _SettleSheet(tab: tab),
-    );
-    if (method == null || !mounted) return;
-    setState(() => _busy = true);
-    final state = context.read<AppState>();
-    final err = await state.settleTab(tab.orderIds, method);
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (err != null) {
-      PushToast.show(context,
-          title: 'Could not settle',
-          subtitle: err,
-          leadingIcon: Icons.error_outline);
-      return;
-    }
-    PushToast.show(context,
-        title: '${tab.name} settled',
-        subtitle: '${Money(tab.totalCents).formatted} · ${_methodLabel(method)}',
-        leadingIcon: Icons.check_circle_outline);
-    await state.refreshOrders();
-    _load();
+  /// Settle → load this customer's unpaid orders into the Sell cart and
+  /// jump there to collect payment through the normal tender flow. The
+  /// orders stay open (visible here) until the payment actually completes.
+  void _settle(_Tab tab) {
+    context.read<AppState>().startSettleTab(tab.name, tab.orders);
   }
-
-  static String _methodLabel(String m) => switch (m) {
-        'cash' => 'Cash',
-        'gcash' => 'GCash',
-        'qrph' => 'QR Ph',
-        'bank_transfer' => 'Bank',
-        _ => m,
-      };
 
   @override
   Widget build(BuildContext context) {
@@ -438,121 +407,3 @@ class _TabsViewState extends State<TabsView> {
   }
 }
 
-class _SettleSheet extends StatelessWidget {
-  const _SettleSheet({required this.tab});
-  final _Tab tab;
-
-  static const _methods = <(String, String, IconData)>[
-    ('cash', 'Cash', Icons.payments_outlined),
-    ('gcash', 'GCash', Icons.account_balance_wallet_outlined),
-    ('qrph', 'QR Ph', Icons.qr_code_2),
-    ('bank_transfer', 'Bank transfer', Icons.account_balance_outlined),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: YColor.surface4,
-                      borderRadius: BorderRadius.circular(YRadius.pill),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: YSpacing.md),
-                Text('Settle ${tab.name}',
-                    textAlign: TextAlign.center, style: YFont.titleMD()),
-                const SizedBox(height: 2),
-                Text(
-                  '${tab.orders.length} order${tab.orders.length == 1 ? '' : 's'} · '
-                  '${tab.itemCount} item${tab.itemCount == 1 ? '' : 's'}',
-                  textAlign: TextAlign.center,
-                  style: YFont.caption(),
-                ),
-                const SizedBox(height: YSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: YColor.brandTint,
-                    borderRadius: BorderRadius.circular(YRadius.md),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Total to collect',
-                          style:
-                              YFont.caption().copyWith(color: YColor.brandDeep)),
-                      Text(Money(tab.totalCents).formatted,
-                          style: YFont.titleXL()
-                              .copyWith(color: YColor.brandDeep, fontSize: 28)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: YSpacing.md),
-                Text('How did they pay?', style: YFont.bodyStrong()),
-                const SizedBox(height: YSpacing.xs),
-                for (var i = 0; i < _methods.length; i += 2) ...[
-                  if (i > 0) const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(child: _methodTile(context, _methods[i])),
-                      const SizedBox(width: 10),
-                      Expanded(child: _methodTile(context, _methods[i + 1])),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _methodTile(BuildContext context, (String, String, IconData) m) {
-    return Material(
-      color: YColor.surface1,
-      borderRadius: BorderRadius.circular(YRadius.md),
-      child: InkWell(
-        onTap: () => Navigator.pop(context, m.$1),
-        borderRadius: BorderRadius.circular(YRadius.md),
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: YColor.hairline),
-            borderRadius: BorderRadius.circular(YRadius.md),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: const BoxDecoration(
-                    color: YColor.brandTint, shape: BoxShape.circle),
-                child: Icon(m.$3, size: 17, color: YColor.brandDeep),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(m.$2,
-                    style: YFont.bodyStrong(), overflow: TextOverflow.ellipsis),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

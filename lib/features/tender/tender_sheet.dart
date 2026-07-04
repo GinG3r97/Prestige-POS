@@ -176,6 +176,8 @@ class _TenderSheetState extends State<TenderSheet> {
     );
   }
   bool completed = false;
+  bool _settled = false; // completed via tab-settle (no new order created)
+  int _settledTotalCents = 0; // captured before the settle clears the cart
   bool _busy = false;
   String? _error;
   int? _orderNumber;
@@ -260,7 +262,8 @@ class _TenderSheetState extends State<TenderSheet> {
               children: [
                 Row(
                   children: [
-                    Text('Payment', style: YFont.titleMD()),
+                    Text(cart.isSettling ? 'Settle tab' : 'Payment',
+                        style: YFont.titleMD()),
                     if (state.ordersCap != null) ...[
                       const Spacer(),
                       Container(
@@ -347,6 +350,10 @@ class _TenderSheetState extends State<TenderSheet> {
                       style: YFont.titleMD()
                           .copyWith(color: YColor.brand, fontSize: 22)),
                 ]),
+                // Discounts and the pay-later control don't apply while
+                // settling an existing tab — the cashier is only collecting
+                // payment for orders that were already fired.
+                if (!cart.isSettling) ...[
                 const SizedBox(height: 12),
                 _scPwdControl(state),
                 const SizedBox(height: 12),
@@ -403,6 +410,7 @@ class _TenderSheetState extends State<TenderSheet> {
                     ),
                   ),
                 ),
+                ],
               ],
             ),
           ),
@@ -703,7 +711,10 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || !isEnough || entered <= 0 || state.atOrderCap)
+              onPressed: (_busy ||
+                      !isEnough ||
+                      entered <= 0 ||
+                      (state.atOrderCap && !state.cart.isSettling))
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -723,10 +734,10 @@ class _TenderSheetState extends State<TenderSheet> {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      state.atOrderCap
+                      (state.atOrderCap && !state.cart.isSettling)
                           ? 'Daily limit reached'
                           : isEnough
-                              ? 'Complete'
+                              ? (state.cart.isSettling ? 'Settle' : 'Complete')
                               : 'Enter at least ${total.formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white),
@@ -827,7 +838,9 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || _reference.trim().isEmpty || state.atOrderCap)
+              onPressed: (_busy ||
+                      _reference.trim().isEmpty ||
+                      (state.atOrderCap && !state.cart.isSettling))
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -847,9 +860,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      state.atOrderCap
+                      (state.atOrderCap && !state.cart.isSettling)
                           ? 'Daily limit reached'
-                          : 'Charge ${_amountDue(state).formatted}',
+                          : state.cart.isSettling
+                              ? 'Settle ${_amountDue(state).formatted}'
+                              : 'Charge ${_amountDue(state).formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white)),
             ),
@@ -1182,6 +1197,10 @@ class _TenderSheetState extends State<TenderSheet> {
   Future<void> _complete(AppState state) async {
     if (_busy) return;
 
+    // Settling an existing tab — no new order, no stock deduction (stock was
+    // taken when each order was fired). Just mark those orders paid.
+    if (state.cart.isSettling) return _completeSettle(state);
+
     // Stock guard — refuses the sale up-front if any inventory item would
     // be pushed below zero by this cart (taking modifier multipliers +
     // add-on recipes into account). Plain-English error names the
@@ -1395,6 +1414,54 @@ class _TenderSheetState extends State<TenderSheet> {
     return null;
   }
 
+  /// Settle the loaded tab: mark its unpaid orders paid with the chosen
+  /// method. No new order and no stock deduction (both happened when the
+  /// orders were fired). Shows the same success screen with change.
+  Future<void> _completeSettle(AppState state) async {
+    if (_busy) return;
+    final m = method ?? TenderMethod.cash;
+    final totalCents = state.cart.total.centavos;
+    _settledTotalCents = totalCents;
+
+    int? tenderedCents;
+    int? changeCents;
+    if (m == TenderMethod.cash) {
+      final entered = double.tryParse(cashReceived) ?? 0;
+      tenderedCents = Money.pesos(entered).centavos;
+      changeCents = tenderedCents - totalCents;
+      if (changeCents < 0) changeCents = 0;
+    }
+
+    final dbMethod = switch (m) {
+      TenderMethod.cash => 'cash',
+      TenderMethod.gcash => 'gcash',
+      TenderMethod.bank => 'bank_transfer',
+      TenderMethod.qrph => 'qrph',
+    };
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final err = await state.completeSettle(dbMethod);
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _busy = false;
+        _error = err;
+      });
+      return;
+    }
+    setState(() {
+      _busy = false;
+      _settled = true;
+      _paidTenderedCents = tenderedCents;
+      _paidChangeCents = changeCents;
+      completed = true;
+    });
+  }
+
   Widget _payRow(String label, String value, {bool big = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1428,7 +1495,8 @@ class _TenderSheetState extends State<TenderSheet> {
                 size: 40, color: YColor.success),
           ),
           const SizedBox(height: 10),
-          Text('Payment Complete', style: YFont.titleLG()),
+          Text(_settled ? 'Tab settled' : 'Payment Complete',
+              style: YFont.titleLG()),
           if (_orderNumber != null) ...[
             const SizedBox(height: 4),
             Text('Order #${_orderNumber.toString().padLeft(4, '0')}',
@@ -1444,30 +1512,33 @@ class _TenderSheetState extends State<TenderSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // LEFT — buzzer / table number input above the number pad.
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('BUZZER / TABLE NO. (optional)',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: YColor.brandDeep)),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(width: 190, child: _buzzerDisplay()),
-                    const SizedBox(height: 12),
-                    OtpNumpad(
-                      onDigit: _onBuzzerDigit,
-                      onBackspace: _onBuzzerBackspace,
-                      keyWidth: 58,
-                      keyHeight: 44,
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 28),
+                // Settling has no prep ticket to number, so it's hidden then.
+                if (!_settled) ...[
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('BUZZER / TABLE NO. (optional)',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: YColor.brandDeep)),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(width: 190, child: _buzzerDisplay()),
+                      const SizedBox(height: 12),
+                      OtpNumpad(
+                        onDigit: _onBuzzerDigit,
+                        onBackspace: _onBuzzerBackspace,
+                        keyWidth: 58,
+                        keyHeight: 44,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 28),
+                ],
                 // RIGHT — totals + prints on top; finish + printer-down pinned
                 // to the bottom so the column matches the numpad's height.
                 Expanded(
@@ -1483,7 +1554,12 @@ class _TenderSheetState extends State<TenderSheet> {
                         ),
                         child: Column(
                           children: [
-                            _payRow('Total', _amountDue(state).formatted),
+                            _payRow(
+                                'Total',
+                                (_settled
+                                        ? Money(_settledTotalCents)
+                                        : _amountDue(state))
+                                    .formatted),
                             if (_paidTenderedCents != null) ...[
                               const SizedBox(height: 10),
                               _payRow('Amount received',
@@ -1508,6 +1584,12 @@ class _TenderSheetState extends State<TenderSheet> {
                             : () {
                                 state.cart.clear();
                                 Navigator.of(context).pop();
+                                // After settling, drop back to the Pay Later
+                                // page so the cashier sees the tab is gone.
+                                if (_settled) {
+                                  state.clearSettle();
+                                  state.selectRoute(AppRoute.tabs);
+                                }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: YColor.brand,
@@ -1518,8 +1600,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(YRadius.md)),
                         ),
-                        child:
-                            Text(pending ? 'Print to continue' : 'New Order'),
+                        child: Text(pending
+                            ? 'Print to continue'
+                            : _settled
+                                ? 'Done'
+                                : 'New Order'),
                       ),
                       if (pending)
                         Center(
