@@ -100,17 +100,38 @@ class _TabsViewState extends State<TabsView> {
                     : RefreshIndicator(
                         color: YColor.brandDeep,
                         onRefresh: _load,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(YSpacing.md),
-                          itemCount: _tabs.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: YSpacing.sm),
-                          itemBuilder: (_, i) => _tabCard(_tabs[i]),
-                        ),
+                        child: _grid(),
                       ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Responsive card layout — auto-fits 1, 2 or 3 columns to the available
+  /// width (3 is the max). Cards keep their natural (expandable) height, so a
+  /// Wrap in a scroll view handles the uneven heights cleanly.
+  Widget _grid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = YSpacing.sm;
+        const pad = YSpacing.md;
+        final w = constraints.maxWidth;
+        final cols = w >= 1050 ? 3 : (w >= 700 ? 2 : 1);
+        final cardW = (w - pad * 2 - gap * (cols - 1)) / cols;
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(pad),
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final t in _tabs)
+                SizedBox(width: cardW, child: _tabCard(t)),
+            ],
+          ),
+        );
+      },
     );
   }
 
