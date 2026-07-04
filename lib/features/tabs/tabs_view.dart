@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../design_system/colors.dart';
+import '../../design_system/icons.dart';
 import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
+import '../../models/catalog.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
 import '../tender/tender_sheet.dart';
@@ -33,7 +35,6 @@ class _Tab {
 
 class _TabsViewState extends State<TabsView> {
   bool _loading = true;
-  bool _busy = false;
   List<_Tab> _tabs = const [];
 
   @override
@@ -89,11 +90,7 @@ class _TabsViewState extends State<TabsView> {
       child: Column(
         children: [
           _header(),
-          if (_busy)
-            const LinearProgressIndicator(
-                minHeight: 2, color: YColor.brand, backgroundColor: YColor.brandTint)
-          else
-            Container(height: 0.5, color: YColor.hairline),
+          Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: _loading
                 ? const Center(
@@ -300,9 +297,8 @@ class _TabsViewState extends State<TabsView> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () => context.read<AppState>().startTabOrder(tab.name),
+                    onPressed: () =>
+                        context.read<AppState>().startTabOrder(tab.name),
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Add order'),
                     style: OutlinedButton.styleFrom(
@@ -317,7 +313,7 @@ class _TabsViewState extends State<TabsView> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _busy ? null : () => _settle(tab),
+                    onPressed: () => _settle(tab),
                     icon: const Icon(Icons.payments_outlined, size: 18),
                     label: Text('Settle ${Money(tab.totalCents).formatted}'),
                     style: ElevatedButton.styleFrom(
@@ -382,18 +378,20 @@ class _TabsViewState extends State<TabsView> {
         const SizedBox(height: 6),
         for (final l in ord.lines)
           Padding(
-            padding: const EdgeInsets.only(top: 3),
+            padding: const EdgeInsets.only(top: 5),
             child: Row(
               children: [
-                SizedBox(
-                  width: 26,
-                  child: Text('${l.quantity}×',
-                      style: YFont.caption()
-                          .copyWith(fontWeight: FontWeight.w600)),
-                ),
+                // Same product visual ladder the Sell grid uses:
+                // uploaded image → curated icon → keyword icon → label.
+                _lineVisual(l),
+                const SizedBox(width: 8),
+                Text('${l.quantity}×',
+                    style:
+                        YFont.caption().copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    l.emoji.isNotEmpty ? '${l.emoji} ${l.name}' : l.name,
+                    l.name,
                     style: YFont.caption().copyWith(color: YColor.ink),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -404,6 +402,32 @@ class _TabsViewState extends State<TabsView> {
             ),
           ),
       ],
+    );
+  }
+
+  /// Renders a line's product icon exactly like the Sell grid. Order lines
+  /// don't carry the icon, so we resolve the product from the catalog by id
+  /// (when present) or name; ProductVisual falls back gracefully if unfound.
+  Widget _lineVisual(o.OrderLine l) {
+    final products = context.read<AppState>().products;
+    final n = l.name.trim().toLowerCase();
+    CafeItem? prod;
+    for (final p in products) {
+      if (l.sellableId != null && p.id == l.sellableId) {
+        prod = p;
+        break;
+      }
+      if (p.name.trim().toLowerCase() == n) {
+        prod = p; // keep looking for an id match, but this is a good fallback
+      }
+    }
+    return ProductVisual(
+      imageUrl: prod?.imageUrl,
+      name: l.name,
+      iconName: prod?.iconName,
+      size: 26,
+      iconSize: 15,
+      borderRadius: 7,
     );
   }
 
