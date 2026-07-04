@@ -17,10 +17,9 @@ import '../widgets/push_toast.dart';
 /// Add-to-pay-later flow.
 ///
 /// When the cashier is building an order for an existing pay-later customer,
-/// they don't choose a payment method — the order is just fired (unpaid) onto
-/// that customer's tab. This sheet does that fire and then shows the
-/// barista/kitchen ticket print buttons, so the cashier can print the prep
-/// tickets before returning to the Pay Later page.
+/// they don't choose a payment method — the order is fired (unpaid) onto that
+/// customer's tab. This sheet fires it and then shows the barista/kitchen
+/// ticket print buttons before returning to the Pay Later page.
 Future<void> showPayLaterAddSheet(BuildContext context) {
   final state = context.read<AppState>();
   if (state.activeTabName == null || state.cart.lines.isEmpty) {
@@ -41,6 +40,31 @@ Future<void> showPayLaterAddSheet(BuildContext context) {
     builder: (_) => ChangeNotifierProvider.value(
       value: state,
       child: const _PayLaterAddSheet(),
+    ),
+  );
+}
+
+/// Shows the "order saved → print barista/kitchen" sheet for an order that was
+/// ALREADY created (e.g. the first-time "Pay later" from the tender sheet).
+/// Returns when the cashier taps Done.
+Future<void> showSavedOrderPrintSheet(
+  BuildContext context, {
+  required o.Order order,
+  required String name,
+}) {
+  final state = context.read<AppState>();
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => ChangeNotifierProvider.value(
+      value: state,
+      child: _SavedOrderDialog(
+        child: _PrintTicketsSheet(
+          order: order,
+          name: name,
+          onDone: () => Navigator.of(ctx).pop(),
+        ),
+      ),
     ),
   );
 }
@@ -84,6 +108,25 @@ Map<String, dynamic>? _modifiersSnapshot(CartLine line) {
   return null;
 }
 
+/// Dialog chrome shared by the saved-order sheets.
+class _SavedOrderDialog extends StatelessWidget {
+  const _SavedOrderDialog({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: YColor.surface1,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(YRadius.lg)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(padding: const EdgeInsets.all(24), child: child),
+      ),
+    );
+  }
+}
+
 class _PayLaterAddSheet extends StatefulWidget {
   const _PayLaterAddSheet();
 
@@ -96,11 +139,7 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
   String? _error;
   o.Order? _order;
   String _name = '';
-
   String? _requestId;
-  bool _printBusy = false;
-  bool _baristaPrinted = false;
-  bool _kitchenPrinted = false;
 
   @override
   void initState() {
@@ -134,7 +173,6 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
       );
     }).toList();
 
-    // Empty payments + unpaid → the DB records an OPEN order onto this tab.
     final result = await state.createPaidOrder(
       lines: lines,
       payments: const [],
@@ -167,38 +205,6 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
     });
   }
 
-  Future<void> _print(bool barista) async {
-    if (_printBusy) return;
-    final state = context.read<AppState>();
-    final order = _order;
-    final printer = state.printerConfig;
-    final tenant = state.tenant;
-    if (order == null || printer == null || tenant == null) {
-      PushToast.show(context,
-          title: 'No printer connected',
-          subtitle: 'Pair a printer in Settings to print tickets.',
-          leadingIcon: Icons.print_disabled_outlined);
-      return;
-    }
-    setState(() => _printBusy = true);
-    final ok = barista
-        ? await PrintJobs.barista(order: order, tenant: tenant, config: printer)
-        : await PrintJobs.kitchen(order: order, tenant: tenant, config: printer);
-    if (!mounted) return;
-    setState(() {
-      _printBusy = false;
-      if (ok && barista) _baristaPrinted = true;
-      if (ok && !barista) _kitchenPrinted = true;
-    });
-    PushToast.show(context,
-        title: ok
-            ? '${barista ? 'Barista' : 'Kitchen'} ticket printed'
-            : 'Ticket didn\'t print',
-        subtitle: ok ? null : 'Check the printer is on and nearby.',
-        leadingIcon:
-            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
-  }
-
   void _done() {
     final state = context.read<AppState>();
     state.cart.clear();
@@ -209,21 +215,12 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: YColor.surface1,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(YRadius.lg)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: _firing
-              ? _firingBody()
-              : _error != null
-                  ? _errorBody()
-                  : _doneBody(),
-        ),
-      ),
+    return _SavedOrderDialog(
+      child: _firing
+          ? _firingBody()
+          : _error != null
+              ? _errorBody()
+              : _PrintTicketsSheet(order: _order, name: _name, onDone: _done),
     );
   }
 
@@ -266,9 +263,64 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
           ),
         ],
       );
+}
 
-  Widget _doneBody() {
-    final order = _order;
+/// "Order saved for <name>" success card with Print barista / Print kitchen
+/// buttons. Reused by both the add-to-tab flow and the first-time pay-later.
+class _PrintTicketsSheet extends StatefulWidget {
+  const _PrintTicketsSheet({
+    required this.order,
+    required this.name,
+    required this.onDone,
+  });
+  final o.Order? order;
+  final String name;
+  final VoidCallback onDone;
+
+  @override
+  State<_PrintTicketsSheet> createState() => _PrintTicketsSheetState();
+}
+
+class _PrintTicketsSheetState extends State<_PrintTicketsSheet> {
+  bool _printBusy = false;
+  bool _baristaPrinted = false;
+  bool _kitchenPrinted = false;
+
+  Future<void> _print(bool barista) async {
+    if (_printBusy) return;
+    final state = context.read<AppState>();
+    final order = widget.order;
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (order == null || printer == null || tenant == null) {
+      PushToast.show(context,
+          title: 'No printer connected',
+          subtitle: 'Pair a printer in Settings to print tickets.',
+          leadingIcon: Icons.print_disabled_outlined);
+      return;
+    }
+    setState(() => _printBusy = true);
+    final ok = barista
+        ? await PrintJobs.barista(order: order, tenant: tenant, config: printer)
+        : await PrintJobs.kitchen(order: order, tenant: tenant, config: printer);
+    if (!mounted) return;
+    setState(() {
+      _printBusy = false;
+      if (ok && barista) _baristaPrinted = true;
+      if (ok && !barista) _kitchenPrinted = true;
+    });
+    PushToast.show(context,
+        title: ok
+            ? '${barista ? 'Barista' : 'Kitchen'} ticket printed'
+            : 'Ticket didn\'t print',
+        subtitle: ok ? null : 'Check the printer is on and nearby.',
+        leadingIcon:
+            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
     final hasDrinks = order != null && ReceiptBuilder.hasDrinks(order);
     final hasFood = order != null && ReceiptBuilder.hasFood(order);
     final total = order == null ? null : Money(order.totalCents);
@@ -276,17 +328,20 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 56,
-          height: 56,
+        Align(
           alignment: Alignment.center,
-          decoration:
-              const BoxDecoration(color: YColor.brandTint, shape: BoxShape.circle),
-          child: const Icon(Icons.schedule_outlined,
-              size: 28, color: YColor.brandDeep),
-        ).paddedCenter(),
+          child: Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+                color: YColor.brandTint, shape: BoxShape.circle),
+            child: const Icon(Icons.schedule_outlined,
+                size: 28, color: YColor.brandDeep),
+          ),
+        ),
         const SizedBox(height: 14),
-        Text('Order added for $_name',
+        Text('Order saved for ${widget.name}',
             textAlign: TextAlign.center, style: YFont.titleMD()),
         const SizedBox(height: 4),
         Text(
@@ -300,8 +355,8 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
         const SizedBox(height: 18),
         if (hasDrinks || hasFood) ...[
           Text('Print prep tickets',
-              style: YFont.caption()
-                  .copyWith(color: YColor.brandDeep, fontWeight: FontWeight.w700)),
+              style: YFont.caption().copyWith(
+                  color: YColor.brandDeep, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           if (_printBusy)
             const Padding(
@@ -339,7 +394,7 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
           const SizedBox(height: 16),
         ],
         ElevatedButton(
-          onPressed: _printBusy ? null : _done,
+          onPressed: _printBusy ? null : widget.onDone,
           style: ElevatedButton.styleFrom(
             backgroundColor: YColor.brandDeep,
             foregroundColor: Colors.white,
@@ -368,8 +423,4 @@ class _PayLaterAddSheetState extends State<_PayLaterAddSheet> {
       ),
     );
   }
-}
-
-extension on Widget {
-  Widget paddedCenter() => Align(alignment: Alignment.center, child: this);
 }

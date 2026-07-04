@@ -12,6 +12,7 @@ import '../../models/cart.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
 import '../auth/otp_numpad.dart';
+import 'pay_later.dart';
 import '../printing/drawer_prefs.dart';
 import '../printing/print_jobs.dart';
 import '../printing/receipt_builder.dart';
@@ -1160,23 +1161,16 @@ class _TenderSheetState extends State<TenderSheet> {
       if (fresh.isNotEmpty) order = fresh.first;
     } catch (_) {/* best-effort */}
 
-    // Fire the prep tickets so the order actually gets made.
-    final printer = state.printerConfig;
-    final tenant = state.tenant;
-    if (order != null && printer != null && tenant != null) {
-      final ord = order;
-      if (ReceiptBuilder.hasDrinks(ord)) {
-        await _doPrint(
-          () => PrintJobs.barista(order: ord, tenant: tenant, config: printer),
-          what: 'Barista ticket',
-        );
-      }
-      if (ReceiptBuilder.hasFood(ord)) {
-        await _doPrint(
-          () => PrintJobs.kitchen(order: ord, tenant: tenant, config: printer),
-          what: 'Kitchen ticket',
-        );
-      }
+    if (!mounted) return;
+    // Show the saved-order sheet so the cashier can print the barista /
+    // kitchen tickets — same modal as adding to an existing tab.
+    if (order != null) {
+      await showSavedOrderPrintSheet(context, order: order, name: name.trim());
+    } else {
+      PushToast.show(context,
+          title: 'Order saved for ${name.trim()}',
+          subtitle: 'Collect from the Pay Later page.',
+          leadingIcon: Icons.schedule_outlined);
     }
 
     if (!mounted) return;
@@ -1185,12 +1179,6 @@ class _TenderSheetState extends State<TenderSheet> {
     Navigator.of(context).pop();
     // If they were building onto an existing tab, jump back to Tabs to see it.
     if (active != null) state.selectRoute(AppRoute.tabs);
-    PushToast.show(
-      context,
-      title: 'Order saved for ${name.trim()}',
-      subtitle: 'Fired to the kitchen. Collect from the Pay Later page.',
-      leadingIcon: Icons.schedule_outlined,
-    );
   }
 
   /// Persists the cart as a paid order in Supabase, then deducts inventory
