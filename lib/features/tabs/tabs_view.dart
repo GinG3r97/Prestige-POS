@@ -9,7 +9,7 @@ import '../../models/money.dart';
 import '../../models/order.dart' as o;
 import '../widgets/push_toast.dart';
 
-/// Open customer tabs — unpaid orders grouped by customer, settled later.
+/// Pay Later — unpaid orders grouped by customer, settled when they pay.
 /// Populated when a cashier chooses "Pay later" at checkout.
 class TabsView extends StatefulWidget {
   const TabsView({super.key});
@@ -26,6 +26,9 @@ class _Tab {
   int get itemCount =>
       orders.fold(0, (a, x) => a + x.lines.fold<int>(0, (b, l) => b + l.quantity));
   List<String> get orderIds => orders.map((x) => x.id).toList();
+  DateTime get oldest => orders
+      .map((x) => x.createdAt)
+      .reduce((a, b) => a.isBefore(b) ? a : b);
 }
 
 class _TabsViewState extends State<TabsView> {
@@ -50,7 +53,8 @@ class _TabsViewState extends State<TabsView> {
       (map[key] ??= []).add(ord);
     }
     final tabs = map.entries.map((e) => _Tab(e.key, e.value)).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      // Oldest tab first — the customer who's been waiting longest to settle.
+      ..sort((a, b) => a.oldest.compareTo(b.oldest));
     if (!mounted) return;
     setState(() {
       _tabs = tabs;
@@ -63,7 +67,7 @@ class _TabsViewState extends State<TabsView> {
       context: context,
       backgroundColor: YColor.surface1,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => _SettleSheet(tab: tab),
     );
     if (method == null || !mounted) return;
@@ -102,18 +106,24 @@ class _TabsViewState extends State<TabsView> {
       child: Column(
         children: [
           _header(),
-          Container(height: 0.5, color: YColor.hairline),
+          if (_busy)
+            const LinearProgressIndicator(
+                minHeight: 2, color: YColor.brand, backgroundColor: YColor.brandTint)
+          else
+            Container(height: 0.5, color: YColor.hairline),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _tabs.isEmpty
                     ? _empty()
                     : RefreshIndicator(
+                        color: YColor.brandDeep,
                         onRefresh: _load,
                         child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(YSpacing.md),
                           itemCount: _tabs.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: YSpacing.sm),
                           itemBuilder: (_, i) => _tabCard(_tabs[i]),
                         ),
                       ),
@@ -125,34 +135,69 @@ class _TabsViewState extends State<TabsView> {
 
   Widget _header() {
     final grand = _tabs.fold<int>(0, (a, t) => a + t.totalCents);
+    final orderCount = _tabs.fold<int>(0, (a, t) => a + t.orders.length);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       color: YColor.surface1,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text('Pay Later', style: YFont.titleLG().copyWith(fontSize: 24)),
-              Text('Unpaid orders · settle when the customer pays',
-                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Pay Later', style: YFont.titleLG().copyWith(fontSize: 24)),
+                  Text('Unpaid orders · settle when the customer pays',
+                      style: YFont.caption().copyWith(color: YColor.inkMuted)),
+                ],
+              ),
+              const Spacer(),
+              IconButton(
+                  onPressed: _loading ? null : _load,
+                  tooltip: 'Refresh',
+                  icon: const Icon(Icons.refresh)),
             ],
           ),
-          const Spacer(),
-          if (_tabs.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('Outstanding',
-                    style: YFont.caption().copyWith(color: YColor.inkMuted)),
-                Text(Money(grand).formatted,
-                    style: YFont.titleMD().copyWith(color: YColor.brandDeep)),
-              ],
+          if (!_loading && _tabs.isNotEmpty) ...[
+            const SizedBox(height: YSpacing.sm),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: YColor.brandTint,
+                borderRadius: BorderRadius.circular(YRadius.md),
+                border: Border.all(color: YColor.brandSoft),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                        color: YColor.brandSoft, shape: BoxShape.circle),
+                    child: const Icon(Icons.schedule_outlined,
+                        size: 19, color: YColor.brandDeep),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Outstanding',
+                          style: YFont.caption().copyWith(color: YColor.brandDeep)),
+                      Text(Money(grand).formatted,
+                          style: YFont.priceLG().copyWith(color: YColor.brandDeep)),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_tabs.length} customer${_tabs.length == 1 ? '' : 's'} · '
+                    '$orderCount order${orderCount == 1 ? '' : 's'}',
+                    style: YFont.caption().copyWith(color: YColor.brandDeep),
+                  ),
+                ],
+              ),
             ),
-          const SizedBox(width: 8),
-          IconButton(
-              onPressed: _loading ? null : _load,
-              icon: const Icon(Icons.refresh)),
+          ],
         ],
       ),
     );
@@ -164,15 +209,24 @@ class _TabsViewState extends State<TabsView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.receipt_long_outlined,
-                  size: 44, color: YColor.inkSubtle),
-              const SizedBox(height: 12),
-              Text('No open tabs', style: YFont.titleMD()),
-              const SizedBox(height: 4),
-              Text(
-                'When a customer says “pay later” at checkout, their order lands here.',
-                textAlign: TextAlign.center,
-                style: YFont.caption().copyWith(color: YColor.inkMuted),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                    color: YColor.brandTint, shape: BoxShape.circle),
+                child: const Icon(Icons.schedule_outlined,
+                    size: 32, color: YColor.brandDeep),
+              ),
+              const SizedBox(height: YSpacing.md),
+              Text('No pay-later tabs', style: YFont.titleMD()),
+              const SizedBox(height: YSpacing.xxs),
+              SizedBox(
+                width: 300,
+                child: Text(
+                  'When a customer says “pay later” at checkout, their order lands here until they settle.',
+                  textAlign: TextAlign.center,
+                  style: YFont.caption().copyWith(color: YColor.inkMuted),
+                ),
               ),
             ],
           ),
@@ -186,20 +240,57 @@ class _TabsViewState extends State<TabsView> {
         borderRadius: BorderRadius.circular(YRadius.lg),
         border: Border.all(color: YColor.hairline),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          title: Text(tab.name, style: YFont.titleMD().copyWith(fontSize: 16)),
-          subtitle: Text(
-              '${tab.orders.length} order${tab.orders.length == 1 ? '' : 's'} · ${tab.itemCount} items',
-              style: YFont.caption()),
-          trailing: Text(Money(tab.totalCents).formatted,
-              style: YFont.titleMD().copyWith(color: YColor.brandDeep)),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: _avatar(tab.name),
+          title: Text(tab.name,
+              style: YFont.bodyStrong().copyWith(fontSize: 16)),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '${tab.orders.length} order${tab.orders.length == 1 ? '' : 's'} · '
+              '${tab.itemCount} item${tab.itemCount == 1 ? '' : 's'}',
+              style: YFont.caption(),
+            ),
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(Money(tab.totalCents).formatted,
+                  style: YFont.price().copyWith(color: YColor.brandDeep)),
+              const SizedBox(height: 2),
+              Text(_ago(tab.oldest),
+                  style: YFont.caption()
+                      .copyWith(fontSize: 11, color: YColor.inkSubtle)),
+            ],
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           children: [
-            for (final ord in tab.orders) _orderBlock(ord),
-            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                color: YColor.surface2,
+                borderRadius: BorderRadius.circular(YRadius.md),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < tab.orders.length; i++) ...[
+                    if (i > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Container(height: 0.5, color: YColor.hairline),
+                      ),
+                    _orderBlock(tab.orders[i]),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: YSpacing.sm),
             Row(
               children: [
                 Expanded(
@@ -211,7 +302,7 @@ class _TabsViewState extends State<TabsView> {
                     label: const Text('Add order'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: YColor.brandDeep,
-                      side: const BorderSide(color: YColor.hairline),
+                      side: const BorderSide(color: YColor.brandSoft),
                       minimumSize: const Size.fromHeight(46),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(YRadius.md)),
@@ -225,8 +316,9 @@ class _TabsViewState extends State<TabsView> {
                     icon: const Icon(Icons.payments_outlined, size: 18),
                     label: Text('Settle ${Money(tab.totalCents).formatted}'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: YColor.brand,
+                      backgroundColor: YColor.brandDeep,
                       foregroundColor: Colors.white,
+                      elevation: 0,
                       minimumSize: const Size.fromHeight(46),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(YRadius.md)),
@@ -241,33 +333,72 @@ class _TabsViewState extends State<TabsView> {
     );
   }
 
+  Widget _avatar(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    var initials = parts.take(2).map((p) => p[0].toUpperCase()).join();
+    if (initials.isEmpty) initials = '?';
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: const BoxDecoration(
+          color: YColor.brandTint, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text(initials,
+          style: YFont.bodyStrong().copyWith(color: YColor.brandDeep)),
+    );
+  }
+
   Widget _orderBlock(o.Order ord) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('#${ord.orderNumber}',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: YColor.brandTint,
+                borderRadius: BorderRadius.circular(YRadius.pill),
+              ),
+              child: Text('#${ord.orderNumber}',
                   style: YFont.caption().copyWith(
-                      color: YColor.brandDeep, fontWeight: FontWeight.w700)),
-              const SizedBox(width: 8),
-              Text(_time(ord.createdAt),
-                  style: YFont.caption().copyWith(color: YColor.inkSubtle)),
-              const Spacer(),
-              Text(Money(ord.totalCents).formatted,
-                  style: YFont.caption().copyWith(fontWeight: FontWeight.w600)),
-            ],
-          ),
-          for (final l in ord.lines)
-            Padding(
-              padding: const EdgeInsets.only(left: 2, top: 2),
-              child: Text('${l.quantity}× ${l.name}',
-                  style: YFont.caption().copyWith(color: YColor.inkMuted)),
+                      fontSize: 11,
+                      color: YColor.brandDeep,
+                      fontWeight: FontWeight.w700)),
             ),
-        ],
-      ),
+            const SizedBox(width: 8),
+            Text(_time(ord.createdAt),
+                style: YFont.caption().copyWith(color: YColor.inkSubtle)),
+            const Spacer(),
+            Text(Money(ord.totalCents).formatted, style: YFont.bodyStrong()),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (final l in ord.lines)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 26,
+                  child: Text('${l.quantity}×',
+                      style: YFont.caption()
+                          .copyWith(fontWeight: FontWeight.w600)),
+                ),
+                Expanded(
+                  child: Text(
+                    l.emoji.isNotEmpty ? '${l.emoji} ${l.name}' : l.name,
+                    style: YFont.caption().copyWith(color: YColor.ink),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(Money(l.lineTotalCents).formatted,
+                    style: YFont.caption().copyWith(color: YColor.inkSubtle)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -277,51 +408,130 @@ class _TabsViewState extends State<TabsView> {
     final ap = l.hour < 12 ? 'AM' : 'PM';
     return '$h:${l.minute.toString().padLeft(2, '0')} $ap';
   }
+
+  /// Relative age of the tab's oldest order: "just now", "12m", "3h", "2d".
+  String _ago(DateTime dt) {
+    final d = DateTime.now().difference(dt);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
+  }
 }
 
 class _SettleSheet extends StatelessWidget {
   const _SettleSheet({required this.tab});
   final _Tab tab;
 
+  static const _methods = <(String, String, IconData)>[
+    ('cash', 'Cash', Icons.payments_outlined),
+    ('gcash', 'GCash', Icons.account_balance_wallet_outlined),
+    ('qrph', 'QR Ph', Icons.qr_code_2),
+    ('bank_transfer', 'Bank transfer', Icons.account_balance_outlined),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final methods = <(String, String, IconData)>[
-      ('cash', 'Cash', Icons.payments_outlined),
-      ('gcash', 'GCash', Icons.account_balance_wallet_outlined),
-      ('qrph', 'QR Ph', Icons.qr_code_2),
-      ('bank_transfer', 'Bank transfer', Icons.account_balance_outlined),
-    ];
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Settle ${tab.name}’s tab',
-                style: YFont.titleMD().copyWith(fontSize: 18)),
-            const SizedBox(height: 4),
-            Text('${Money(tab.totalCents).formatted} · how did they pay?',
-                style: YFont.caption().copyWith(color: YColor.inkMuted)),
-            const SizedBox(height: 16),
-            for (final m in methods)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context, m.$1),
-                  icon: Icon(m.$3, size: 18),
-                  label: Align(
-                      alignment: Alignment.centerLeft, child: Text(m.$2)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: YColor.ink,
-                    side: const BorderSide(color: YColor.hairline),
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: YColor.surface4,
+                      borderRadius: BorderRadius.circular(YRadius.pill),
+                    ),
                   ),
                 ),
+                const SizedBox(height: YSpacing.md),
+                Text('Settle ${tab.name}’s tab',
+                    textAlign: TextAlign.center, style: YFont.titleMD()),
+                const SizedBox(height: 2),
+                Text(
+                  '${tab.orders.length} order${tab.orders.length == 1 ? '' : 's'} · '
+                  '${tab.itemCount} item${tab.itemCount == 1 ? '' : 's'}',
+                  textAlign: TextAlign.center,
+                  style: YFont.caption(),
+                ),
+                const SizedBox(height: YSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: YColor.brandTint,
+                    borderRadius: BorderRadius.circular(YRadius.md),
+                  ),
+                  child: Column(
+                    children: [
+                      Text('Total to collect',
+                          style:
+                              YFont.caption().copyWith(color: YColor.brandDeep)),
+                      Text(Money(tab.totalCents).formatted,
+                          style: YFont.titleXL()
+                              .copyWith(color: YColor.brandDeep, fontSize: 28)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: YSpacing.md),
+                Text('How did they pay?', style: YFont.bodyStrong()),
+                const SizedBox(height: YSpacing.xs),
+                for (var i = 0; i < _methods.length; i += 2) ...[
+                  if (i > 0) const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _methodTile(context, _methods[i])),
+                      const SizedBox(width: 10),
+                      Expanded(child: _methodTile(context, _methods[i + 1])),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _methodTile(BuildContext context, (String, String, IconData) m) {
+    return Material(
+      color: YColor.surface1,
+      borderRadius: BorderRadius.circular(YRadius.md),
+      child: InkWell(
+        onTap: () => Navigator.pop(context, m.$1),
+        borderRadius: BorderRadius.circular(YRadius.md),
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: YColor.hairline),
+            borderRadius: BorderRadius.circular(YRadius.md),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                    color: YColor.brandTint, shape: BoxShape.circle),
+                child: Icon(m.$3, size: 17, color: YColor.brandDeep),
               ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(m.$2,
+                    style: YFont.bodyStrong(), overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
         ),
       ),
     );
