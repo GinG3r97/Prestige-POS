@@ -79,8 +79,6 @@ class _SellViewState extends State<SellView> {
     final arrangeMode = context.select<AppState, bool>((s) => s.arrangeMode);
     final hasOpenShift = context.select<AppState, bool>((s) => s.hasOpenShift);
     final activeTab = context.select<AppState, String?>((s) => s.activeTabName);
-    final settleName = context.select<AppState, String?>(
-        (s) => s.isSettling ? s.settleName : null);
     // Catalog data (products / types / sub-types) lives in CatalogStore.
     final catalog = context.watch<CatalogStore>();
     // Keep tile "Not available" badges + buildable counts live when stock moves.
@@ -192,9 +190,6 @@ class _SellViewState extends State<SellView> {
           // Adding to a customer's tab — banner reminds the cashier; checkout's
           // "Pay later" fires straight onto this tab.
           if (activeTab != null) _tabBanner(context, activeTab),
-          // Settling a tab — the cart holds that customer's unpaid orders,
-          // ready to pay. Cancel keeps the tab open on the Pay Later page.
-          if (settleName != null) _settleBanner(context, settleName),
           // While a shift is OPEN the float/sales/orders + Close Cashier live
           // in the TopBar (see ShiftHeaderBar). Only the closed-state bar — the
           // Open Cashier entry point — stays on the page.
@@ -660,78 +655,6 @@ class _SellViewState extends State<SellView> {
     state.clearActiveTab();
   }
 
-  /// Banner shown while settling a customer's tab through checkout. The cart
-  /// is read-only (their unpaid orders); Cancel keeps the tab open.
-  Widget _settleBanner(BuildContext context, String name) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: YColor.brandDeep,
-        borderRadius: BorderRadius.circular(YRadius.md),
-        boxShadow: [
-          BoxShadow(
-              color: YColor.brand.withValues(alpha: 0.55),
-              blurRadius: 16,
-              spreadRadius: 1),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                shape: BoxShape.circle),
-            child: const Icon(Icons.receipt_long_outlined,
-                size: 17, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Settling $name',
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.bodyStrong()
-                        .copyWith(color: Colors.white, fontSize: 14)),
-                Text('Tap “Settle” to collect payment for these orders',
-                    overflow: TextOverflow.ellipsis,
-                    style: YFont.caption().copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 11.5)),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => _cancelSettling(context),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Cancel a settle in progress — the customer's orders stay open on the
-  /// Pay Later page (nothing was collected).
-  Future<void> _cancelSettling(BuildContext context) async {
-    final state = context.read<AppState>();
-    final ok = await showConfirm(
-      context,
-      title: 'Stop settling?',
-      message:
-          'The tab stays open on the Pay Later page. You can settle it later.',
-      confirmLabel: 'Stop settling',
-      cancelLabel: 'Keep going',
-      danger: true,
-    );
-    if (!ok || !context.mounted) return;
-    state.clearSettle();
-    state.selectRoute(AppRoute.tabs);
-  }
 
   /// Enter arrange mode — but only with an empty cart, so reordering can't
   /// disturb a sale in progress.

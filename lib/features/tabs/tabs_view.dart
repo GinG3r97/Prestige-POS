@@ -7,6 +7,7 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
+import '../tender/tender_sheet.dart';
 
 /// Pay Later — unpaid orders grouped by customer, settled when they pay.
 /// Populated when a cashier chooses "Pay later" at checkout.
@@ -61,11 +62,24 @@ class _TabsViewState extends State<TabsView> {
     });
   }
 
-  /// Settle → load this customer's unpaid orders into the Sell cart and
-  /// jump there to collect payment through the normal tender flow. The
-  /// orders stay open (visible here) until the payment actually completes.
-  void _settle(_Tab tab) {
-    context.read<AppState>().startSettleTab(tab.name, tab.orders);
+  /// Settle → load this customer's unpaid orders and open the payment modal
+  /// right here on the Pay Later page. The orders stay open (still listed)
+  /// until the payment actually completes.
+  Future<void> _settle(_Tab tab) async {
+    final state = context.read<AppState>();
+    state.startSettleTab(tab.name, tab.orders);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      builder: (_) => const TenderSheet(),
+    );
+    if (!mounted) return;
+    // Dropped out without paying → clear the settle session (orders stay
+    // open). If they DID pay, completeSettle already reset it — this no-ops.
+    state.clearSettle();
+    _load();
   }
 
   @override

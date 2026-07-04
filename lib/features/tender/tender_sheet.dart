@@ -178,6 +178,8 @@ class _TenderSheetState extends State<TenderSheet> {
   bool completed = false;
   bool _settled = false; // completed via tab-settle (no new order created)
   int _settledTotalCents = 0; // captured before the settle clears the cart
+  List<o.Order> _settledOrders = const []; // the now-paid orders, for receipts
+  bool _settleReceiptPrinted = false;
   bool _busy = false;
   String? _error;
   int? _orderNumber;
@@ -262,7 +264,7 @@ class _TenderSheetState extends State<TenderSheet> {
               children: [
                 Row(
                   children: [
-                    Text(cart.isSettling ? 'Settle tab' : 'Payment',
+                    Text(cart.isSettling ? 'Settle' : 'Payment',
                         style: YFont.titleMD()),
                     if (state.ordersCap != null) ...[
                       const Spacer(),
@@ -1422,6 +1424,7 @@ class _TenderSheetState extends State<TenderSheet> {
     final m = method ?? TenderMethod.cash;
     final totalCents = state.cart.total.centavos;
     _settledTotalCents = totalCents;
+    final settledIds = state.settleOrderIds; // capture before settle clears it
 
     int? tenderedCents;
     int? changeCents;
@@ -1453,9 +1456,15 @@ class _TenderSheetState extends State<TenderSheet> {
       });
       return;
     }
+    // completeSettle refreshed the order cache — pull the now-paid orders so
+    // the success screen can print their receipts.
+    final settled = state.recentOrders
+        .where((x) => settledIds.contains(x.id))
+        .toList();
     setState(() {
       _busy = false;
       _settled = true;
+      _settledOrders = settled;
       _paidTenderedCents = tenderedCents;
       _paidChangeCents = changeCents;
       completed = true;
@@ -1495,7 +1504,7 @@ class _TenderSheetState extends State<TenderSheet> {
                 size: 40, color: YColor.success),
           ),
           const SizedBox(height: 10),
-          Text(_settled ? 'Tab settled' : 'Payment Complete',
+          Text(_settled ? 'Pay Later settled' : 'Payment Complete',
               style: YFont.titleLG()),
           if (_orderNumber != null) ...[
             const SizedBox(height: 4),
@@ -1577,6 +1586,7 @@ class _TenderSheetState extends State<TenderSheet> {
                       ),
                       const SizedBox(height: 16),
                       _printActions(state),
+                      if (_settled) _settleReceiptActions(state),
                       const Spacer(),
                       ElevatedButton(
                         onPressed: pending
@@ -1725,6 +1735,71 @@ class _TenderSheetState extends State<TenderSheet> {
       ),
       const SizedBox(height: 16),
     ]);
+  }
+
+  /// Receipt print/reprint for a settled tab. Settling covers one or more
+  /// orders, so this prints each order's receipt (post-payment, so they show
+  /// the tender). Shown only on the settle success screen.
+  Widget _settleReceiptActions(AppState state) {
+    final printer = state.printerConfig;
+    if (printer == null || _settledOrders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (_printBusy) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Text(_printStatus ?? 'Printing…',
+              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+        ]),
+      );
+    }
+    final n = _settledOrders.length;
+    final label = _settleReceiptPrinted
+        ? (n > 1 ? 'Reprint receipts' : 'Reprint receipt')
+        : (n > 1 ? 'Print receipts' : 'Print receipt');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Center(
+        child: _prepBtn(label, Icons.receipt_long_outlined,
+            _printSettleReceipts,
+            done: _settleReceiptPrinted),
+      ),
+    );
+  }
+
+  Future<void> _printSettleReceipts() async {
+    if (_printBusy) return;
+    final state = context.read<AppState>();
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (printer == null || tenant == null || _settledOrders.isEmpty) return;
+    setState(() {
+      _printBusy = true;
+      _printStatus = 'Printing receipt…';
+    });
+    var ok = true;
+    for (final order in _settledOrders) {
+      final r =
+          await PrintJobs.receipt(order: order, tenant: tenant, config: printer);
+      ok = ok && r;
+    }
+    if (!mounted) return;
+    setState(() {
+      _printBusy = false;
+      _printStatus = null;
+      if (ok) _settleReceiptPrinted = true;
+    });
+    PushToast.show(context,
+        title: ok ? 'Receipt printed' : 'Receipt didn\'t print',
+        subtitle: ok ? null : 'Check the printer is on and nearby.',
+        leadingIcon:
+            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
   }
 
   /// True when a printer is set and something still needs printing (and the

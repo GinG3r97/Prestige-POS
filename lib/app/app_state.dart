@@ -3031,7 +3031,8 @@ class AppState extends ChangeNotifier {
   List<String> get settleOrderIds => List.unmodifiable(_settleOrderIds);
 
   /// Load [orders] (one customer's unpaid tab) into the cart as read-only
-  /// settle lines and jump to Sell to collect payment.
+  /// settle lines. The caller (Pay Later page) then opens the tender modal
+  /// right there to collect payment — no navigation to Sell.
   void startSettleTab(String name, List<o.Order> orders) {
     _activeTabName = null; // settling is not the same as adding
     _settleOrderIds = orders.map((x) => x.id).toList();
@@ -3049,8 +3050,7 @@ class AppState extends ChangeNotifier {
             quantity: l.quantity,
           ),
     ];
-    cart.loadForSettle(settleLines);
-    selectRoute(AppRoute.sell); // notifies
+    cart.loadForSettle(settleLines); // notifies
   }
 
   String? _settleLineDetail(o.OrderLine l) {
