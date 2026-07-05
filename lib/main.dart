@@ -215,7 +215,7 @@ class YosefPOSApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Prestige POS',
+        title: 'Prestige Café',
         debugShowCheckedModeBanner: false,
         theme: theme,
         // Global guard: after ANY route closes (dropdown menu, dialog, date/

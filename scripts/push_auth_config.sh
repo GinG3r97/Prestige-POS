@@ -64,11 +64,11 @@ OTP_LENGTH=${OTP_LENGTH:-6}
 
 BODY=$(cat <<EOF
 {
-  "mailer_subjects_confirmation": "Your Prestige POS sign-in code",
+  "mailer_subjects_confirmation": "Your Prestige Café sign-in code",
   "mailer_templates_confirmation_content": $TEMPLATE_JSON,
-  "mailer_subjects_magic_link": "Your Prestige POS sign-in code",
+  "mailer_subjects_magic_link": "Your Prestige Café sign-in code",
   "mailer_templates_magic_link_content": $TEMPLATE_JSON,
-  "mailer_subjects_recovery": "Your Prestige POS sign-in code",
+  "mailer_subjects_recovery": "Your Prestige Café sign-in code",
   "mailer_templates_recovery_content": $TEMPLATE_JSON,
   "mailer_otp_exp": 600,
   "mailer_otp_length": $OTP_LENGTH

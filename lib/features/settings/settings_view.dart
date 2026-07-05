@@ -509,7 +509,7 @@ class _SettingsViewState extends State<SettingsView> {
                   _Row(
                     leading: const Icon(Icons.info_outline, color: YColor.brandDeep),
                     title: 'Version',
-                    subtitle: 'Prestige POS · v1.0.0',
+                    subtitle: 'Prestige Café · v1.0.0',
                   ),
                   const _Divider(),
                   _Row(
@@ -2006,7 +2006,7 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
 }
 
 const String _kTermsText = '''
-By using Prestige POS ("the app"), provided by Prestige IT Solutions, you agree to these terms.
+By using Prestige Café ("the app"), provided by Prestige IT Solutions, you agree to these terms.
 
 1. Licence. The app is licensed to you to operate your point-of-sale. You are responsible for the accuracy of your products, prices, taxes, and the sales you record.
 
@@ -2080,7 +2080,7 @@ class _LegalDialog extends StatelessWidget {
           Container(height: 0.5, color: YColor.hairline),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text('Prestige POS · v1.0.0',
+            child: Text('Prestige Café · v1.0.0',
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
           ),
         ]),

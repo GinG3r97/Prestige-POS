@@ -1,4 +1,4 @@
-# Prestige POS — client onboarding data format
+# Prestige Café — client onboarding data format
 
 This is the **canonical xlsx schema** every new tenant fills out before
 seeding. One template, one importer, every store. The xlsx is sent to

@@ -60,7 +60,7 @@ class LegalDocumentView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Effective ${doc.effectiveDate} · Prestige POS by Prestige IT Solutions',
+                  'Effective ${doc.effectiveDate} · Prestige Café by Prestige IT Solutions',
                   style: YFont.caption().copyWith(color: YColor.inkMuted),
                 ),
                 const SizedBox(height: 20),

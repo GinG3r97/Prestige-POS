@@ -324,7 +324,7 @@ class ReceiptBuilder {
             styles: PosStyles(fontType: font, align: PosAlign.center)));
       }
       bytes.addAll(g.feed(1));
-      bytes.addAll(g.text('Acquired from: Prestige POS',
+      bytes.addAll(g.text('Acquired from: Prestige Cafe',
           styles: PosStyles(fontType: font, align: PosAlign.center)));
       if ((tenant.birAccreditationNo ?? '').trim().isNotEmpty) {
         bytes.addAll(g.text(_san('Accred No: ${tenant.birAccreditationNo}'),
@@ -457,7 +457,7 @@ class ReceiptBuilder {
     bytes.addAll(g.feed(1));
     bytes.addAll(g.text('Printer connected!',
         styles: PosStyles(fontType: font, align: PosAlign.center, bold: true)));
-    bytes.addAll(g.text('Prestige POS test print',
+    bytes.addAll(g.text('Prestige Cafe test print',
         styles: PosStyles(fontType: font, align: PosAlign.center)));
     bytes.addAll(g.text('${printer.paperWidth}mm paper',
         styles: PosStyles(fontType: font, align: PosAlign.center)));

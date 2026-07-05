@@ -1,4 +1,4 @@
-# Prestige POS — onboarding importer
+# Prestige Café — onboarding importer
 
 Standalone Dart CLI that reads the canonical client xlsx (see
 [../README.md](../README.md)) and writes the data into a tenant via the
@@ -25,7 +25,7 @@ dart run bin/import.dart \
 You should see something like:
 
 ```
-━━━ Prestige POS importer ━━━
+━━━ Prestige Café importer ━━━
 File:   ../examples/yosef_coffee/canonical.xlsx
 Mode:   dry-run (no DB writes)
 
