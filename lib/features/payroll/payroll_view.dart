@@ -507,6 +507,8 @@ class _TimesheetPane extends StatelessWidget {
                     'Daily · ₱${e.dailyRate.toStringAsFixed(0)}/day',
                   CompensationType.salaried =>
                     'Salaried · ₱${e.monthlySalary.toStringAsFixed(0)}/mo',
+                  CompensationType.fixed =>
+                    'Fixed · ₱${e.monthlySalary.toStringAsFixed(0)}/mo',
                 },
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1230,6 +1232,8 @@ class _SlipRowState extends State<_SlipRow> {
         '${(s.hoursWorked / (s.regularHoursPerDay > 0 ? s.regularHoursPerDay : 8)).toStringAsFixed(1)}d × ₱${s.dailyRate.toStringAsFixed(0)}',
       CompensationType.salaried =>
         'Salaried · ₱${s.monthlySalary.toStringAsFixed(0)}/mo',
+      CompensationType.fixed =>
+        'Fixed · ₱${s.monthlySalary.toStringAsFixed(0)}/mo',
     };
 
     return Padding(
@@ -1334,6 +1338,7 @@ class _SlipRowState extends State<_SlipRow> {
       CompensationType.daily =>
         'Regular  ${(s.hoursWorked / perDay).toStringAsFixed(2)}d × ₱${s.dailyRate.toStringAsFixed(0)}',
       CompensationType.salaried => 'Salary  (this pay run)',
+      CompensationType.fixed => 'Fixed pay  (this pay run)',
     };
 
     final hasDeduction =

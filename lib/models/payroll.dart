@@ -202,6 +202,7 @@ class Payslip {
         final daysWorked = hoursWorked / perDay;
         base = _toCentavos(daysWorked * dailyRate);
       case CompensationType.salaried:
+      case CompensationType.fixed:
         base = _toCentavos(monthlySalary / periodsPerMonth(period));
     }
     return base +
@@ -245,6 +246,7 @@ class Payslip {
       CompensationType.hourly => hourlyRate,
       CompensationType.daily => dailyRate / perDay,
       CompensationType.salaried => monthlySalary / 26.0 / perDay,
+      CompensationType.fixed => monthlySalary / 26.0 / perDay,
     };
   }
 
@@ -253,9 +255,12 @@ class Payslip {
       _toCentavos(otHours * hourlyEquivalent * otMultiplier);
 
   /// Undertime deduction, in centavos. 0 when the tenant has undertime
-  /// deduction switched off (snapshotted in [deductUndertime]).
+  /// deduction switched off (snapshotted in [deductUndertime]), and always 0
+  /// for a FIXED-rate employee (their pay is guaranteed).
   int get undertimeCentavos =>
-      deductUndertime ? _toCentavos(undertimeHours * hourlyEquivalent) : 0;
+      (compensationType == CompensationType.fixed || !deductUndertime)
+          ? 0
+          : _toCentavos(undertimeHours * hourlyEquivalent);
 
   /// Each itemized statutory deduction (SSS / PhilHealth / Pag-IBIG), in
   /// centavos, pro-rated to THIS pay run from the stored monthly amount.

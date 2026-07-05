@@ -4127,6 +4127,7 @@ class _StaffKpiStrip extends StatelessWidget {
         CompensationType.hourly => e.hourlyRate * 8 * 22,
         CompensationType.daily => e.dailyRate * 22,
         CompensationType.salaried => e.monthlySalary,
+        CompensationType.fixed => e.monthlySalary,
       };
 }
 
@@ -4154,6 +4155,7 @@ class _StaffRosterSection extends StatelessWidget {
             CompensationType.daily => e.dailyRate.toStringAsFixed(2),
             CompensationType.salaried =>
               e.monthlySalary.toStringAsFixed(2),
+            CompensationType.fixed => e.monthlySalary.toStringAsFixed(2),
           };
           buf.writeln(
               '"$clean","$role",${e.status.label},'

@@ -277,9 +277,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
   }
 
   bool get _profileValid =>
-      _name.text.trim().isNotEmpty &&
-      _email.text.trim().isNotEmpty &&
-      _phone.text.trim().isNotEmpty;
+      _name.text.trim().isNotEmpty && _email.text.trim().isNotEmpty;
 
   bool get _canSave => _profileValid && _roleId != null && _pinValid;
 
@@ -387,7 +385,7 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                             hint: 'name@example.com'),
                         NumpadField(
                             controller: _phone,
-                            label: 'Phone *',
+                            label: 'Phone',
                             hint: '09XX XXX XXXX',
                             decimal: false,
                             onChanged: (_) => setState(() {})),
@@ -1081,6 +1079,14 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
         CompensationType.hourly => _hourlyRateField(),
         CompensationType.daily => _dailyRateField(),
         CompensationType.salaried => _monthlySalaryField(),
+        // Fixed rate shares the monthly-amount field, but it's guaranteed each
+        // cutoff (never docked for undertime/absence).
+        CompensationType.fixed => NumpadField(
+            controller: _monthlySalary,
+            label: 'Fixed rate (per month)',
+            prefix: '₱',
+            hint: 'e.g., 15000',
+          ),
       };
 
   /// The template (if any) tied to the currently selected employment type —
