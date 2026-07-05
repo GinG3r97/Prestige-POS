@@ -50,7 +50,7 @@ class WelcomeView extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'POS',
+                    'CAFÉ',
                     style: YFont.titleLG().copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
