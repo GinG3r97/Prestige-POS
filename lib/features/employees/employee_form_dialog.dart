@@ -385,12 +385,12 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog> {
                             required: true,
                             keyboardType: TextInputType.emailAddress,
                             hint: 'name@example.com'),
-                        _field(
-                            label: 'Phone',
+                        NumpadField(
                             controller: _phone,
-                            required: true,
-                            keyboardType: TextInputType.phone,
-                            hint: '+63 9XX XXX XXXX'),
+                            label: 'Phone *',
+                            hint: '09XX XXX XXXX',
+                            decimal: false,
+                            onChanged: (_) => setState(() {})),
                       ),
                       const SizedBox(height: 12),
                       _genderPicker(),
