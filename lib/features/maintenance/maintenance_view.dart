@@ -1914,7 +1914,7 @@ Future<void> showSubTypeEditor(BuildContext context,
     final capMsg = context.read<AppState>().planCapMessage('categories');
     if (capMsg != null) {
       PushToast.show(context,
-          title: 'Upgrade needed',
+          title: 'Plan limit reached',
           subtitle: capMsg,
           leadingIcon: Icons.workspace_premium_outlined);
       return;

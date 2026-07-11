@@ -558,14 +558,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Friendly upgrade message if adding another [entity] would exceed the plan
-  /// cap, else null. Pro (null cap) never blocks.
+  /// Friendly plan-limit message if adding another [entity] would exceed the
+  /// plan cap, else null. Pro (null cap) never blocks. Informational only — no
+  /// purchase wording, so it stays App Store / Play Store compliant.
   String? planCapMessage(String entity) {
     final cap = _planCaps[entity];
     if (cap == null) return null;
     if (planCount(entity) >= cap) {
       return 'Your $planLabel plan allows up to $cap ${_entityLabel(entity)}. '
-          'Upgrade to add more.';
+          'See other plans in Subscription.';
     }
     return null;
   }
@@ -574,7 +575,7 @@ class AppState extends ChangeNotifier {
     try {
       final sub = await supabase
           .from('tenant_subscriptions')
-          .select('plan, status, current_period_end')
+          .select('plan, status, current_period_end, extra_branches')
           .eq('tenant_id', tid)
           .maybeSingle();
       var plan = (sub?['plan'] as String?) ?? 'trial';
@@ -599,6 +600,9 @@ class AppState extends ChangeNotifier {
           .eq('id', tid)
           .maybeSingle();
       _storeCode = tRow?['store_code'] as String?;
+      // Pro includes 1 branch; each paid add-on (extra_branches) adds one more.
+      // Free/Basic use their flat cap. Mirrors public.tenant_cap in the DB.
+      final extraBranches = (sub?['extra_branches'] as int?) ?? 0;
       _plan = plan;
       _planCaps = {
         'orders': pl?['daily_order_limit'] as int?,
@@ -606,7 +610,9 @@ class AppState extends ChangeNotifier {
         'products': pl?['max_products'] as int?,
         'categories': pl?['max_categories'] as int?,
         'inventory': pl?['max_inventory'] as int?,
-        'branches': pl?['max_branches'] as int?,
+        'branches': plan == 'pro'
+            ? ((pl?['max_branches'] as int?) ?? 1) + extraBranches
+            : pl?['max_branches'] as int?,
       };
     } catch (_) {
       // Never block selling because a caps fetch failed — default to unlimited.
@@ -2920,6 +2926,7 @@ class AppState extends ChangeNotifier {
     required DateTime since,
     DateTime? until,
     int limit = 100,
+    int offset = 0,
     bool openOnly = false,
   }) async {
     final tenantId = _currentTenantDbId;
@@ -2950,7 +2957,7 @@ class AppState extends ChangeNotifier {
       }
       final rows = await query
           .order('created_at', ascending: false)
-          .limit(limit);
+          .range(offset, offset + limit - 1);
 
       return (rows as List).map((r) {
         final row = r as Map<String, dynamic>;

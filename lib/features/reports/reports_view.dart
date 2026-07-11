@@ -131,19 +131,14 @@ class _ReportsViewState extends State<ReportsView> {
     try {
       // Run current + prior fetches in parallel so a 7d/7d compare
       // is two round-trips at once instead of serial. Each query is
-      // tenant-scoped via RLS in fetchOrders.
+      // tenant-scoped via RLS in fetchOrders, and paginated so a long
+      // range at a busy store is never silently truncated (which would
+      // undercount orders and sales).
       final results = await Future.wait<List<o.Order>>([
-        state.fetchOrders(
-          since: _range.start.toUtc(),
-          until: _range.end.toUtc(),
-          limit: 5000,
-        ),
+        _fetchAllOrders(state, _range.start.toUtc(), _range.end.toUtc()),
         if (_comparePrior)
-          state.fetchOrders(
-            since: _range.prior.start.toUtc(),
-            until: _range.prior.end.toUtc(),
-            limit: 5000,
-          ),
+          _fetchAllOrders(
+              state, _range.prior.start.toUtc(), _range.prior.end.toUtc()),
       ]);
       if (!mounted) return;
       setState(() {
@@ -164,6 +159,24 @@ class _ReportsViewState extends State<ReportsView> {
     }
   }
 
+  /// Fetches every order in [since, until) by paging, so no report is ever
+  /// capped by a single query's row limit.
+  Future<List<o.Order>> _fetchAllOrders(
+      AppState state, DateTime since, DateTime until) async {
+    const page = 1000;
+    final all = <o.Order>[];
+    var offset = 0;
+    while (true) {
+      final batch = await state.fetchOrders(
+          since: since, until: until, limit: page, offset: offset);
+      all.addAll(batch);
+      if (batch.length < page) break; // last page reached
+      offset += page;
+      if (offset > 200000) break; // hard safety stop
+    }
+    return all;
+  }
+
   void _setLens(_ReportLens lens) {
     setState(() => _lens = lens);
     // Pull fresh orders when switching back to an orders-driven
@@ -181,30 +194,46 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   Future<void> _pickCustomRange() async {
-    // The internal `_range.end` is exclusive (the day *after* the
-    // last sales day), but `showDateRangePicker` expects the
-    // INCLUSIVE last day and asserts `end <= lastDate`. Subtract a
-    // day for the seed, and clamp anything in the future back to
-    // today so chip ranges that include "today" (e.g. last 7 days)
-    // don't trip the assertion when we open the picker.
+    // `_range.end` is exclusive (the day AFTER the last sales day), but the
+    // picker wants the INCLUSIVE last day and asserts firstDate <= start <=
+    // end <= lastDate. Clamp every seed into [firstDate, today] so opening
+    // the picker from any preset (incl. ones that include today) can't trip
+    // an assertion — a silent crash there reads to the user as "not working".
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final endInclusive = _range.end
-        .subtract(const Duration(days: 1));
-    final seedEnd = endInclusive.isAfter(today) ? today : endInclusive;
-    final seedStart =
-        _range.start.isAfter(seedEnd) ? seedEnd : _range.start;
+    final firstDate = today.subtract(const Duration(days: 365 * 3));
+    DateTime clamp(DateTime d) =>
+        d.isAfter(today) ? today : (d.isBefore(firstDate) ? firstDate : d);
+    final seedEnd = clamp(_range.end.subtract(const Duration(days: 1)));
+    var seedStart = clamp(_range.start);
+    if (seedStart.isAfter(seedEnd)) seedStart = seedEnd;
+
     final picked = await showDateRangePicker(
       context: context,
       initialDateRange: DateTimeRange(start: seedStart, end: seedEnd),
-      firstDate: today.subtract(const Duration(days: 365 * 2)),
+      firstDate: firstDate,
       lastDate: today,
-      builder: (_, child) => Theme(
+      // Calendar-only: no keyboard entry, so a locale/format mismatch can't
+      // disable "Apply". Tapping two days always works.
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: 'Select a date range',
+      saveText: 'Apply',
+      builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
                 primary: YColor.brand,
                 onPrimary: Colors.white,
+                surface: YColor.surface1,
+                onSurface: YColor.ink,
               ),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: YColor.brand,
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: YColor.brandDeep),
+          ),
         ),
         child: child!,
       ),
@@ -319,6 +348,16 @@ class _ReportsViewState extends State<ReportsView> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [
+          const Icon(Icons.date_range_rounded,
+              size: 15, color: YColor.brandDeep),
+          const SizedBox(width: 7),
+          Text('PERIOD',
+              style: YFont.caption().copyWith(
+                  color: YColor.brandDeep,
+                  fontSize: 10.5,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(width: 14),
           for (final preset in _DateRange.presets()) ...[
             _chip(
               label: preset.label,
@@ -335,7 +374,9 @@ class _ReportsViewState extends State<ReportsView> {
             onTap: _pickCustomRange,
             icon: Icons.calendar_month,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
+          Container(width: 1, height: 22, color: YColor.hairline),
+          const SizedBox(width: 12),
           _toggle(
             label: 'Compare to previous',
             on: _comparePrior,
@@ -792,11 +833,31 @@ class _DateRange {
     );
   }
 
+  static _DateRange thisWeek() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    return _DateRange(
+      start: monday,
+      end: today.add(const Duration(days: 1)),
+      label: 'This week',
+    );
+  }
+
   static _DateRange thisMonth() {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, 1);
     final end = DateTime(now.year, now.month + 1, 1);
     return _DateRange(start: start, end: end, label: 'This month');
+  }
+
+  static _DateRange lastMonth() {
+    final now = DateTime.now();
+    return _DateRange(
+      start: DateTime(now.year, now.month - 1, 1),
+      end: DateTime(now.year, now.month, 1),
+      label: 'Last month',
+    );
   }
 
   static _DateRange custom(DateTime s, DateTime e) {
@@ -814,9 +875,11 @@ class _DateRange {
   static List<_DateRange> presets() => [
         today(),
         yesterday(),
+        thisWeek(),
         last7(),
         last30(),
         thisMonth(),
+        lastMonth(),
       ];
 }
 
@@ -894,8 +957,13 @@ class _ReportData {
 
     totalCents = paid.fold(0, (a, ord) => a + ord.totalCents);
     orderCount = paid.length;
+    // A voided/refunded line is not a sale — count active lines only.
     itemCount = paid.fold(
-        0, (a, ord) => a + ord.lines.fold(0, (b, l) => b + l.quantity));
+        0,
+        (a, ord) => a +
+            ord.lines
+                .where((l) => !l.status.isReversed)
+                .fold(0, (b, l) => b + l.quantity));
     avgTicketCents =
         orderCount == 0 ? 0 : totalCents ~/ orderCount;
     priorTotalCents = priorPaid.fold(0, (a, ord) => a + ord.totalCents);
@@ -919,6 +987,7 @@ class _ReportData {
     final itemAgg = <String, _TopItem>{};
     for (final ord in paid) {
       for (final l in ord.lines) {
+        if (l.status.isReversed) continue; // a pulled item isn't sold
         final cur = itemAgg[l.name];
         if (cur == null) {
           itemAgg[l.name] = _TopItem(
@@ -941,17 +1010,26 @@ class _ReportData {
       ..sort((a, b) => b.qty.compareTo(a.qty));
     if (topItems.length > 50) topItems = topItems.sublist(0, 50);
 
-    // Payments
+    // Payments — skip fully-refunded tenders; and when a partial line
+    // refund has trimmed the order below what was tendered, scale the
+    // tenders down to the net total so the payment mix still sums to
+    // revenue (the refund's method isn't recorded per line).
     payments = <o.OrderPaymentMethod, _PayBucket>{};
     for (final ord in paid) {
-      for (final p in ord.payments) {
+      final live = ord.payments.where((p) => !p.refunded).toList();
+      final gross = live.fold<int>(0, (a, p) => a + p.amountCents);
+      final net = ord.totalCents;
+      for (final p in live) {
+        final cents = (gross > net && gross > 0)
+            ? (p.amountCents * net / gross).round()
+            : p.amountCents;
         final cur = payments[p.method];
         if (cur == null) {
-          payments[p.method] = _PayBucket(count: 1, cents: p.amountCents);
+          payments[p.method] = _PayBucket(count: 1, cents: cents);
         } else {
           payments[p.method] = _PayBucket(
             count: cur.count + 1,
-            cents: cur.cents + p.amountCents,
+            cents: cur.cents + cents,
           );
         }
       }
@@ -989,6 +1067,7 @@ class _ReportData {
     final catAgg = <String, _CategoryRow>{};
     for (final ord in paid) {
       for (final l in ord.lines) {
+        if (l.status.isReversed) continue;
         final name = (l.categoryName ?? '').trim().isEmpty
             ? 'Uncategorised'
             : l.categoryName!.trim();
@@ -1034,6 +1113,7 @@ class _ReportData {
     final agg = <String, Map<String, _TopItem>>{};
     for (final ord in orders) {
       for (final l in ord.lines) {
+        if (l.status.isReversed) continue;
         final cat = (l.categoryName ?? '').trim().isEmpty
             ? 'Uncategorised'
             : l.categoryName!.trim();

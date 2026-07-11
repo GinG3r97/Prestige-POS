@@ -944,10 +944,21 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _addBranch(BuildContext context, AppState state) async {
+    // Only Pro can open additional branches; Free/Basic keep their single
+    // store. Informational + handled off-app (App Store / Play safe — no price,
+    // no purchase button). Each extra branch is a paid add-on managed on the web.
+    if (state.plan != 'pro') {
+      PushToast.show(context,
+          title: 'A Pro feature',
+          subtitle: 'Opening additional branches is available on the Pro plan. '
+              'See plans in Subscription.',
+          leadingIcon: Icons.workspace_premium_outlined);
+      return;
+    }
     final capMsg = state.planCapMessage('branches');
     if (capMsg != null) {
       PushToast.show(context,
-          title: 'Upgrade needed',
+          title: 'Branch limit reached',
           subtitle: capMsg,
           leadingIcon: Icons.workspace_premium_outlined);
       return;

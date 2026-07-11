@@ -386,7 +386,7 @@ class _InventoryViewState extends State<InventoryView> {
       final capMsg = state.planCapMessage('inventory');
       if (capMsg != null) {
         PushToast.show(context,
-            title: 'Upgrade needed',
+            title: 'Plan limit reached',
             subtitle: capMsg,
             leadingIcon: Icons.workspace_premium_outlined);
         return;

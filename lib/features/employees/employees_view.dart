@@ -118,7 +118,7 @@ class _EmployeesViewState extends State<EmployeesView> {
       final capMsg = context.read<AppState>().planCapMessage('employees');
       if (capMsg != null) {
         PushToast.show(context,
-            title: 'Upgrade needed',
+            title: 'Plan limit reached',
             subtitle: capMsg,
             leadingIcon: Icons.workspace_premium_outlined);
         return;
