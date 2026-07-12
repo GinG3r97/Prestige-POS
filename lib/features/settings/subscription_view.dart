@@ -39,21 +39,21 @@ class _SubscriptionViewState extends State<SubscriptionView> {
     });
   }
 
-  /// The product info page (live marketing site). Informational only: no
-  /// prices and no checkout here or on the page it opens, so nothing steers
-  /// the customer to an external purchase (App Store guideline 3.1.1 / Play
-  /// billing safe). Keep that page free of prices.
+  /// The plans info page (live). Informational only: it is a standalone
+  /// cul-de-sac with no prices, no checkout, and no nav into the site's
+  /// pricing, so nothing steers the customer to an external purchase (App
+  /// Store guideline 3.1.1 / Play billing safe). Keep that page price-free.
   static final Uri _learnMoreUri =
-      Uri.parse('https://www.prestigeitsolutions.tech');
+      Uri.parse('https://pos.prestigeitsolutions.tech/plans');
 
-  /// Opens the product info page in the browser. No in-app purchase ever.
+  /// Opens the plans info page in the browser. No in-app purchase ever.
   Future<void> _openLearnMore(BuildContext context) async {
     final ok =
         await launchUrl(_learnMoreUri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       PushToast.show(context,
           title: 'Could not open',
-          subtitle: 'Visit prestigeitsolutions.tech',
+          subtitle: 'Visit pos.prestigeitsolutions.tech/plans',
           leadingIcon: Icons.error_outline);
     }
   }

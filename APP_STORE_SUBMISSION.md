@@ -74,7 +74,7 @@ Data the app collects (all used **only** to operate the POS — not for tracking
 
 - **We do NOT use data for tracking** (answer "No" to the tracking question).
 - **No third-party advertising.**
-- Privacy Policy URL: `https://prestigeitsolutions.tech/privacy`
+- Privacy Policy URL: `https://pos.prestigeitsolutions.tech/privacy`
 
 ---
 
@@ -86,7 +86,7 @@ Data the app collects (all used **only** to operate the POS — not for tracking
 | In-app **Delete Account** (Guideline 5.1.1(v)) | ✅ Done | Settings → Account → Delete account |
 | Export compliance | ✅ Done | Info.plist key |
 | Location purpose strings | ✅ Done | `NSLocationWhenInUseUsageDescription` etc. |
-| Privacy Policy URL | 🟡 Deploy | website repo → Vercel → prestigeitsolutions.tech |
+| Privacy Policy URL | ✅ Live | `https://pos.prestigeitsolutions.tech/privacy` |
 | Screenshots (iPad) | ⬜ To do | see §5 |
 | Description / keywords / support URL | ⬜ To do | see §6 |
 | Payments = physical goods (no IAP) | ✅ N/A | cash/GCash/QR for real-world goods |
@@ -119,8 +119,8 @@ Sizes: 2048 × 2732 (portrait) or 2732 × 2048 (landscape). 3–10 screenshots.
 - **Description:** fast, BIR-ready point-of-sale — selling, inventory, shifts,
   payroll, receipts, and reports on your iPad. (Expand from the website copy.)
 - **Keywords:** pos, point of sale, cafe, retail, inventory, bir, receipt, cashier
-- **Support URL:** `https://prestigeitsolutions.tech`
-- **Marketing URL (optional):** `https://prestigeitsolutions.tech`
+- **Support URL:** `https://pos.prestigeitsolutions.tech`
+- **Marketing URL (optional):** `https://pos.prestigeitsolutions.tech`
 - **Pricing:** Free
 - **Availability:** Philippines (+ anywhere else you choose)
 
