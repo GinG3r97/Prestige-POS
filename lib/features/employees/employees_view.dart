@@ -118,7 +118,7 @@ class _EmployeesViewState extends State<EmployeesView> {
       final capMsg = context.read<AppState>().planCapMessage('employees');
       if (capMsg != null) {
         PushToast.show(context,
-            title: 'Upgrade needed',
+            title: 'Plan limit reached',
             subtitle: capMsg,
             leadingIcon: Icons.workspace_premium_outlined);
         return;
@@ -824,6 +824,7 @@ class _DetailPaneState extends State<_DetailPane> {
       CompensationType.hourly => e.hourlyRate,
       CompensationType.daily => e.dailyRate,
       CompensationType.salaried => e.monthlySalary,
+      CompensationType.fixed => e.monthlySalary,
     };
     final headline = '₱${amount.toStringAsFixed(2)}';
     final subtitle = switch (e.compensationType) {
@@ -833,6 +834,7 @@ class _DetailPaneState extends State<_DetailPane> {
         'per day · est. ₱${(e.dailyRate * 22).toStringAsFixed(0)} / mo',
       CompensationType.salaried =>
         'per month · ${e.compensationType.label}',
+      CompensationType.fixed => 'per month · ${e.compensationType.label}',
     };
     final hasPay = amount > 0;
     return _SectionCard(

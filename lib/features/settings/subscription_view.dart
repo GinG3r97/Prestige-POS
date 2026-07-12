@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -11,9 +9,10 @@ import '../../design_system/spacing.dart';
 import '../../design_system/typography.dart';
 import '../widgets/push_toast.dart';
 
-/// Plan & usage screen. Apple-safe: shows the current plan, live usage meters,
-/// the Store ID, and a plan comparison — but NO in-app purchase or payment.
-/// Upgrades happen on the website using the Store ID.
+/// Plan & usage screen. App Store / Play Store safe: shows the current plan,
+/// live usage meters, the Store ID, and a plan comparison — with NO prices, NO
+/// in-app purchase, and NO purchase buttons. A "Learn more" link opens an
+/// informational plans page on the web; plan changes are handled off-app.
 class SubscriptionView extends StatefulWidget {
   const SubscriptionView({super.key});
 
@@ -29,7 +28,7 @@ class _SubscriptionViewState extends State<SubscriptionView> {
     ('Products', '25', '100', 'Unlimited'),
     ('Categories', '6', '15', 'Unlimited'),
     ('Inventory items', '15', '60', 'Unlimited'),
-    ('Branches', '1', '1', 'Multiple'),
+    ('Branches', '1', '1', '1 + add-ons'),
   ];
 
   @override
@@ -40,20 +39,21 @@ class _SubscriptionViewState extends State<SubscriptionView> {
     });
   }
 
-  /// Opens the secure web payment page with the Store ID + owner email
-  /// pre-filled, so the owner doesn't have to copy/paste anything. Payment
-  /// happens on the web (never in-app).
-  Future<void> _openUpgrade(BuildContext context, AppState state) async {
-    final email = state.currentOwner?.email ?? '';
-    final uri = Uri.https('pos.prestigeitsolutions.tech', '/upgrade', {
-      if (state.storeCode != null) 'code': state.storeCode!,
-      if (email.isNotEmpty) 'email': email,
-    });
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  /// The plans info page. Informational only: no prices and no checkout here or
+  /// on the page it opens, so nothing steers the customer to an external
+  /// purchase (App Store guideline 3.1.1 / Play billing safe). Change this if
+  /// your info page lives elsewhere — just keep that page free of prices.
+  static final Uri _learnMoreUri =
+      Uri.parse('https://pos.prestigeitsolutions.tech/plans');
+
+  /// Opens the plans info page in the browser. No in-app purchase ever.
+  Future<void> _openLearnMore(BuildContext context) async {
+    final ok =
+        await launchUrl(_learnMoreUri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       PushToast.show(context,
           title: 'Could not open',
-          subtitle: 'Visit pos.prestigeitsolutions.tech/upgrade',
+          subtitle: 'Visit pos.prestigeitsolutions.tech/plans',
           leadingIcon: Icons.error_outline);
     }
   }
@@ -80,8 +80,7 @@ class _SubscriptionViewState extends State<SubscriptionView> {
           const SizedBox(height: 16),
           _compareCard(state, isPro),
           const SizedBox(height: 16),
-          if (!isPro && !Platform.isIOS) _upgradeCta(context, state),
-          if (!isPro && Platform.isIOS) _iosNote(),
+          if (!isPro) _learnMore(context),
         ],
       ),
     );
@@ -142,7 +141,7 @@ class _SubscriptionViewState extends State<SubscriptionView> {
           Text(
             isPro
                 ? 'Everything unlocked, unlimited.'
-                : 'Upgrade for higher limits and more features.',
+                : 'Higher limits and more features come with the Basic and Pro plans.',
             style: YFont.body()
                 .copyWith(color: Colors.white.withValues(alpha: 0.72)),
           ),
@@ -377,48 +376,55 @@ class _SubscriptionViewState extends State<SubscriptionView> {
     );
   }
 
-  // ── Upgrade CTA (Android) / iOS note ──────────────────────────────────────
-  Widget _upgradeCta(BuildContext context, AppState state) {
+  // ── Learn more (informational only — App Store / Play Store safe) ─────────
+  // No prices, no purchase button, no payment wording. Just a link to the web
+  // plans page; plan changes are handled off-app via Prestige IT Solutions.
+  Widget _learnMore(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [YColor.brand, YColor.brandDeep],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: YColor.surface1,
         borderRadius: BorderRadius.circular(YRadius.lg),
+        border: Border.all(color: YColor.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.rocket_launch_outlined,
-                size: 18, color: Colors.white),
-            const SizedBox(width: 8),
-            Text('Upgrade your plan',
-                style: YFont.bodyStrong()
-                    .copyWith(color: Colors.white, fontSize: 15)),
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: YColor.brandTint,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(Icons.workspace_premium_outlined,
+                  size: 19, color: YColor.brandDeep),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Explore Basic & Pro',
+                  style: YFont.bodyStrong().copyWith(fontSize: 15.5)),
+            ),
           ]),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           Text(
-            'Opens your secure GCash payment page with your Store ID and email '
-            'already filled in — no copy/paste needed.',
-            style: YFont.body().copyWith(
-                color: Colors.white.withValues(alpha: 0.85), height: 1.4),
+            'See what each plan includes on our website. To move to a higher '
+            'plan, contact Prestige IT Solutions and share your Store ID above.',
+            style: YFont.body().copyWith(color: YColor.inkMuted, height: 1.45),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _openUpgrade(context, state),
+            child: OutlinedButton.icon(
+              onPressed: () => _openLearnMore(context),
               icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Open payment page'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
+              label: const Text('Learn more'),
+              style: OutlinedButton.styleFrom(
                 foregroundColor: YColor.brandDeep,
+                side: BorderSide(color: YColor.brand.withValues(alpha: 0.6)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(YRadius.md)),
               ),
@@ -426,26 +432,6 @@ class _SubscriptionViewState extends State<SubscriptionView> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _iosNote() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: YColor.brandTint,
-        borderRadius: BorderRadius.circular(YRadius.md),
-      ),
-      child: Row(children: [
-        const Icon(Icons.info_outline, size: 18, color: YColor.brandDeep),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Your plan is managed by Prestige IT Solutions. Contact us to change it.',
-            style: YFont.body().copyWith(color: YColor.ink, height: 1.4),
-          ),
-        ),
-      ]),
     );
   }
 }

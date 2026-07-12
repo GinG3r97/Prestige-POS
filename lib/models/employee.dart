@@ -32,8 +32,10 @@ extension EmploymentTypeX on EmploymentType {
 /// How an employee is paid.
 ///  * hourly   — tracked hours × [Employee.hourlyRate]
 ///  * daily    — days worked × [Employee.dailyRate]
-///  * salaried — fixed [Employee.monthlySalary] regardless of hours/days
-enum CompensationType { hourly, daily, salaried }
+///  * salaried — [Employee.monthlySalary] ÷ cutoffs, docked for absence/undertime
+///  * fixed    — [Employee.monthlySalary] ÷ cutoffs, GUARANTEED (never docked for
+///               undertime or absence). Shares the monthly-amount field.
+enum CompensationType { hourly, daily, salaried, fixed }
 
 /// One employee's MONTHLY statutory contributions (employee share, pesos).
 typedef PhStatutory = ({double sss, double philHealth, double pagIbig});
@@ -62,12 +64,14 @@ extension CompensationTypeX on CompensationType {
         CompensationType.hourly => 'Hourly',
         CompensationType.daily => 'Daily',
         CompensationType.salaried => 'Salaried',
+        CompensationType.fixed => 'Fixed rate',
       };
 
   String get dbValue => switch (this) {
         CompensationType.hourly => 'hourly',
         CompensationType.daily => 'daily',
         CompensationType.salaried => 'salaried',
+        CompensationType.fixed => 'fixed',
       };
 
   /// Suffix shown next to a money amount in this comp mode.
@@ -75,11 +79,13 @@ extension CompensationTypeX on CompensationType {
         CompensationType.hourly => '/hr',
         CompensationType.daily => '/day',
         CompensationType.salaried => '/mo',
+        CompensationType.fixed => '/mo',
       };
 
   static CompensationType fromDb(String? v) => switch (v) {
         'daily' => CompensationType.daily,
         'salaried' => CompensationType.salaried,
+        'fixed' => CompensationType.fixed,
         _ => CompensationType.hourly,
       };
 }

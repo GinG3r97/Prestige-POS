@@ -402,7 +402,7 @@ class _ProductsViewState extends State<ProductsView> {
       final capMsg = state.planCapMessage('products');
       if (capMsg != null) {
         PushToast.show(context,
-            title: 'Upgrade needed',
+            title: 'Plan limit reached',
             subtitle: capMsg,
             leadingIcon: Icons.workspace_premium_outlined);
         return;

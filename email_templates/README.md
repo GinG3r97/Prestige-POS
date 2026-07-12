@@ -1,6 +1,6 @@
-# Prestige POS — Email templates
+# Prestige Café — Email templates
 
-Branded HTML emails for Supabase Auth. Designed to match the Prestige POS theme
+Branded HTML emails for Supabase Auth. Designed to match the Prestige Café theme
 (warm gold / cream palette, italic tagline, monospace code chip).
 
 ## How to apply
@@ -8,7 +8,7 @@ Branded HTML emails for Supabase Auth. Designed to match the Prestige POS theme
 ### Which Supabase templates do we update? — **all three of these**
 
 `signInWithOtp(shouldCreateUser: true)` (used by both signup and login in
-Prestige POS) routes through *different* Supabase templates depending on the
+Prestige Café) routes through *different* Supabase templates depending on the
 user's state:
 
 | Template            | When Supabase uses it                                            |
@@ -50,7 +50,7 @@ If you don't want a PAT, you can paste in the dashboard instead:
    1. Replace the **Source** with the full contents of [`magic_link.html`](./magic_link.html)
    2. Set the **Subject** to:
       ```
-      Your Prestige POS sign-in code
+      Your Prestige Café sign-in code
       ```
       *Do not include `{{ .Token }}` in the subject — it would leak the code on
       lock-screen banners and inbox previews.*
@@ -59,8 +59,8 @@ If you don't want a PAT, you can paste in the dashboard instead:
 
 ### Subject alternatives
 
-- `Your verification code for Prestige POS`
-- `Prestige POS · Verify your sign-in`
+- `Your verification code for Prestige Café`
+- `Prestige Café · Verify your sign-in`
 
 ### Variables available in the template
 

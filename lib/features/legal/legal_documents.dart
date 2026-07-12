@@ -1,5 +1,5 @@
 /// Plain-data definitions of the Terms & Conditions and Privacy Policy that
-/// ship with Prestige POS. Rendered by [LegalDocumentView].
+/// ship with Prestige Café. Rendered by [LegalDocumentView].
 ///
 /// IMPORTANT: These are starter templates suitable for development. Before
 /// going to production you should:
@@ -10,7 +10,7 @@ library;
 
 const _effectiveDate = '2026-05-20';
 const _companyLegalName = 'Prestige IT Solutions';
-const _productName = 'Prestige POS';
+const _productName = 'Prestige Café';
 const _contactEmail = 'hello@prestigeitsolutions.tech';
 const _contactSupportEmail = 'hello@prestigeitsolutions.tech';
 const _companyAddress =

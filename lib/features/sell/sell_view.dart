@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
 import '../../app/stores/catalog_store.dart';
+import '../../app/stores/inventory_store.dart';
 import '../../design_system/colors.dart';
 import '../../design_system/glass.dart';
 import '../../design_system/icons.dart';
@@ -11,6 +12,7 @@ import '../../design_system/typography.dart';
 import '../../models/catalog.dart';
 import '../../models/category.dart' as cat;
 import '../cafe/product_detail_sheet.dart';
+import '../widgets/confirm_dialog.dart';
 import '../maintenance/maintenance_view.dart'
     show showProductTypeEditor, showSubTypeEditor;
 import '../products/products_view.dart'
@@ -70,14 +72,19 @@ class _SellViewState extends State<SellView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    // Catalog data (products / types / sub-types) lives in CatalogStore; the
-    // coordinator bits (arrangeMode, shift, cart, buildableCount) stay on
-    // AppState.
+    // Read AppState non-reactively, then subscribe ONLY to the two flags the
+    // grid depends on. This stops a post-sale notifyListeners (ordersToday++,
+    // refreshOrders) from rebuilding the whole product grid every time.
+    final state = context.read<AppState>();
+    final arrangeMode = context.select<AppState, bool>((s) => s.arrangeMode);
+    final hasOpenShift = context.select<AppState, bool>((s) => s.hasOpenShift);
+    final activeTab = context.select<AppState, String?>((s) => s.activeTabName);
+    // Catalog data (products / types / sub-types) lives in CatalogStore.
     final catalog = context.watch<CatalogStore>();
-    // Arrange mode is shared via AppState so the cart panel can react; mirror
-    // it into the local flag the build + helpers read.
-    _editMode = state.arrangeMode;
+    // Keep tile "Not available" badges + buildable counts live when stock moves.
+    context.watch<InventoryStore>();
+    // Mirror arrange mode into the local flag the build + helpers read.
+    _editMode = arrangeMode;
     // Show everything the owner marked Available. We no longer hide items
     // that are short on ingredient stock — instead the tile stays visible
     // with a "Not available" badge so the cashier can answer "do you have
@@ -180,10 +187,13 @@ class _SellViewState extends State<SellView> {
       color: YColor.surface2,
       child: Column(
         children: [
+          // Adding to a customer's tab — banner reminds the cashier; checkout's
+          // "Pay later" fires straight onto this tab.
+          if (activeTab != null) _tabBanner(context, activeTab),
           // While a shift is OPEN the float/sales/orders + Close Cashier live
           // in the TopBar (see ShiftHeaderBar). Only the closed-state bar — the
           // Open Cashier entry point — stays on the page.
-          if (!state.hasOpenShift) ...[
+          if (!hasOpenShift) ...[
             const ShiftBar(),
             _hairline,
             Expanded(child: _cashierClosed(context)),
@@ -568,6 +578,83 @@ class _SellViewState extends State<SellView> {
   }
 
   // ───── Arrange mode: handlers + shared bits ───────────────────────────
+
+  /// Banner shown while building another order for a pay-later customer.
+  /// Deliberately loud (filled + glow) so the cashier can't confuse this
+  /// with a normal cash sale.
+  Widget _tabBanner(BuildContext context, String name) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: YColor.brandDeep,
+        borderRadius: BorderRadius.circular(YRadius.md),
+        boxShadow: [
+          BoxShadow(
+              color: YColor.brand.withValues(alpha: 0.55),
+              blurRadius: 16,
+              spreadRadius: 1),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.schedule_outlined,
+                size: 17, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Adding order for $name',
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.bodyStrong()
+                        .copyWith(color: Colors.white, fontSize: 14)),
+                Text('No payment now — finish with “Add to $name”',
+                    overflow: TextOverflow.ellipsis,
+                    style: YFont.caption().copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 11.5)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => _cancelAdding(context),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cancel out of add-mode. If the cashier has already built up a cart,
+  /// warn first — cancelling clears those un-fired items.
+  Future<void> _cancelAdding(BuildContext context) async {
+    final state = context.read<AppState>();
+    if (state.cart.lines.isNotEmpty) {
+      final ok = await showConfirm(
+        context,
+        title: 'Cancel this order?',
+        message: 'The items in the cart haven\'t been added yet. '
+            'Cancelling will clear them.',
+        confirmLabel: 'Clear cart',
+        cancelLabel: 'Keep adding',
+        danger: true,
+      );
+      if (!ok || !context.mounted) return;
+    }
+    state.cart.clear();
+    state.clearActiveTab();
+  }
+
 
   /// Enter arrange mode — but only with an empty cart, so reordering can't
   /// disturb a sale in progress.
@@ -1026,19 +1113,12 @@ class _CafeCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
-                  Row(children: [
-                    Text(
-                        item.openPrice
-                            ? 'Custom price'
-                            : item.basePrice.formatted,
-                        style: YFont.bodyStrong().copyWith(
-                            fontSize: 12.5, color: YColor.brandDeep)),
-                    if (item.openPrice) ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.edit_outlined,
-                          size: 11, color: YColor.brandDeep),
-                    ],
-                  ]),
+                  Text(
+                      item.openPrice
+                          ? 'Custom price'
+                          : item.basePrice.formatted,
+                      style: YFont.bodyStrong().copyWith(
+                          fontSize: 12.5, color: YColor.brandDeep)),
                 ],
               ),
             ),

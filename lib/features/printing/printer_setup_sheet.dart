@@ -67,7 +67,7 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
         _btOn = false;
         _status = 'Bluetooth permission is needed to find printers. '
             'Allow it when prompted, or enable it in Settings → Apps → '
-            'Prestige POS → Permissions, then tap rescan.';
+            'Prestige Café → Permissions, then tap rescan.';
       });
       return;
     }
@@ -121,7 +121,7 @@ class _PrinterSetupDialogState extends State<_PrinterSetupDialog> {
       setState(() {
         _working = false;
         _status = 'Bluetooth permission is needed. Enable it in Settings → '
-            'Apps → Prestige POS → Permissions, then try again.';
+            'Apps → Prestige Café → Permissions, then try again.';
       });
       return;
     }

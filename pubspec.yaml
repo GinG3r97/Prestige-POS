@@ -71,10 +71,17 @@ flutter_launcher_icons:
   android: true
   remove_alpha_ios: true            # iOS icons must be opaque
   min_sdk_android: 21
+  # Adaptive icon (Android 8+) so the tile is filled edge-to-edge like iOS
+  # instead of a shrunk, padded legacy icon. Background = brand brown, the
+  # foreground is the full-bleed opaque cup art (corners filled with brown).
+  adaptive_icon_background: "#6B432A"
+  adaptive_icon_foreground: "assets/brand/app_icon_fg.png"
+  adaptive_icon_foreground_inset: 0   # fill the tile edge-to-edge (no padding)
 
 # Launch / splash screen — run: dart run flutter_native_splash:create
-# Transparent cream cup (no tile) on the brand brown so the logo isn't a
-# floating square. The android_12 variant is padded to fit the circular mask.
+# Transparent cream cup on the brand brown. The android_12 variant is a crisp
+# square (1152²) with the cup sized inside the OS circular mask — a non-square
+# source was being scaled to fit, which is what made it look soft.
 flutter_native_splash:
   color: "#6B432A"                  # brand brown background
   image: "assets/brand/splash_cup.png"
@@ -82,7 +89,7 @@ flutter_native_splash:
   android: true
   android_12:
     color: "#6B432A"
-    image: "assets/brand/splash_cup_android12.png"
+    image: "assets/brand/splash_a12.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

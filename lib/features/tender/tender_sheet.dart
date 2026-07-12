@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +12,7 @@ import '../../models/cart.dart';
 import '../../models/money.dart';
 import '../../models/order.dart' as o;
 import '../auth/otp_numpad.dart';
+import 'pay_later.dart';
 import '../printing/drawer_prefs.dart';
 import '../printing/print_jobs.dart';
 import '../printing/receipt_builder.dart';
@@ -174,6 +177,10 @@ class _TenderSheetState extends State<TenderSheet> {
     );
   }
   bool completed = false;
+  bool _settled = false; // completed via tab-settle (no new order created)
+  int _settledTotalCents = 0; // captured before the settle clears the cart
+  List<o.Order> _settledOrders = const []; // the now-paid orders, for receipts
+  bool _settleReceiptPrinted = false;
   bool _busy = false;
   String? _error;
   int? _orderNumber;
@@ -258,7 +265,8 @@ class _TenderSheetState extends State<TenderSheet> {
               children: [
                 Row(
                   children: [
-                    Text('Payment', style: YFont.titleMD()),
+                    Text(cart.isSettling ? 'Settle' : 'Payment',
+                        style: YFont.titleMD()),
                     if (state.ordersCap != null) ...[
                       const Spacer(),
                       Container(
@@ -345,8 +353,67 @@ class _TenderSheetState extends State<TenderSheet> {
                       style: YFont.titleMD()
                           .copyWith(color: YColor.brand, fontSize: 22)),
                 ]),
+                // Discounts and the pay-later control don't apply while
+                // settling an existing tab — the cashier is only collecting
+                // payment for orders that were already fired.
+                if (!cart.isSettling) ...[
                 const SizedBox(height: 12),
                 _scPwdControl(state),
+                const SizedBox(height: 12),
+                // Pay later — fire the order to the kitchen/barista NOW but
+                // leave it unpaid; the customer settles from the Pay Later
+                // page. Same dashed treatment as the Senior/PWD control.
+                // When adding onto an existing pay-later customer, the label
+                // names them and the control glows so it can't be missed.
+                SizedBox(
+                  width: double.infinity,
+                  child: GestureDetector(
+                    onTap: (_busy || state.atOrderCap)
+                        ? null
+                        : () => _payLater(state),
+                    child: CustomPaint(
+                      painter: _DashedRRectPainter(
+                          color: YColor.brandDeep.withValues(alpha: 0.6),
+                          radius: YRadius.md),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        decoration: state.activeTabName == null
+                            ? null
+                            : BoxDecoration(
+                                color: YColor.brandTint,
+                                borderRadius:
+                                    BorderRadius.circular(YRadius.md),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: YColor.brand
+                                          .withValues(alpha: 0.5),
+                                      blurRadius: 14,
+                                      spreadRadius: 1),
+                                ],
+                              ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.schedule_outlined,
+                                size: 18, color: YColor.brandDeep),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                  state.activeTabName == null
+                                      ? 'Pay later'
+                                      : 'Add to ${state.activeTabName}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: YFont.bodyStrong().copyWith(
+                                      color: YColor.brandDeep, fontSize: 14)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                ],
               ],
             ),
           ),
@@ -647,7 +714,10 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || !isEnough || entered <= 0 || state.atOrderCap)
+              onPressed: (_busy ||
+                      !isEnough ||
+                      entered <= 0 ||
+                      (state.atOrderCap && !state.cart.isSettling))
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -667,10 +737,10 @@ class _TenderSheetState extends State<TenderSheet> {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      state.atOrderCap
+                      (state.atOrderCap && !state.cart.isSettling)
                           ? 'Daily limit reached'
                           : isEnough
-                              ? 'Complete'
+                              ? (state.cart.isSettling ? 'Settle' : 'Complete')
                               : 'Enter at least ${total.formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white),
@@ -771,7 +841,9 @@ class _TenderSheetState extends State<TenderSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_busy || _reference.trim().isEmpty || state.atOrderCap)
+              onPressed: (_busy ||
+                      _reference.trim().isEmpty ||
+                      (state.atOrderCap && !state.cart.isSettling))
                   ? null
                   : () { _complete(state); },
               style: ElevatedButton.styleFrom(
@@ -791,9 +863,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           strokeWidth: 2, color: Colors.white),
                     )
                   : Text(
-                      state.atOrderCap
+                      (state.atOrderCap && !state.cart.isSettling)
                           ? 'Daily limit reached'
-                          : 'Charge ${_amountDue(state).formatted}',
+                          : state.cart.isSettling
+                              ? 'Settle ${_amountDue(state).formatted}'
+                              : 'Charge ${_amountDue(state).formatted}',
                       style:
                           YFont.bodyStrong().copyWith(color: Colors.white)),
             ),
@@ -935,11 +1009,187 @@ class _TenderSheetState extends State<TenderSheet> {
     });
   }
 
+  /// Stable idempotency key for THIS charge attempt. Generated once; reused on
+  /// retry so a lost response can't create a duplicate order. Cleared on a
+  /// successful sale so the next sale gets a fresh key.
+  String? _chargeRequestId;
+
+  String _newRequestId() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; // v4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant
+    String h(int i) => b[i].toRadixString(16).padLeft(2, '0');
+    return '${h(0)}${h(1)}${h(2)}${h(3)}-${h(4)}${h(5)}-${h(6)}${h(7)}-'
+        '${h(8)}${h(9)}-${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
+  }
+
+  /// Ask for the customer/table name a tab is charged to. Uses the same
+  /// blurred keyboard accessory field as the rest of the app (proven in a
+  /// Dialog + Column layout — an AlertDialog crams the accessory field).
+  Future<String?> _askCustomerName() async {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: YColor.surface1,
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Text('Who is paying later?',
+                      style: YFont.titleLG().copyWith(fontSize: 22)),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                KeyboardAccessoryField(
+                  controller: ctrl,
+                  accessoryLabel: 'Customer name',
+                  hint: 'e.g. Mr. Santos · Table 4',
+                  fillColor: YColor.surface2,
+                  borderColor: YColor.hairline,
+                ),
+                const SizedBox(height: 20),
+                Row(children: [
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, ctrl.text),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: YColor.brand,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(YRadius.md))),
+                    child: const Text('Confirm'),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Fire the current cart to the kitchen/barista NOW but leave it unpaid —
+  /// added to the named customer's tab, settled later from the Tabs screen.
+  Future<void> _payLater(AppState state) async {
+    if (_busy) return;
+    final stockError = state.validateCartStock();
+    if (stockError != null) {
+      setState(() => _error = stockError);
+      return;
+    }
+    // If we're already adding to a customer's tab, use that name; otherwise ask.
+    final active = state.activeTabName;
+    final name = active ?? await _askCustomerName();
+    if (name == null || name.trim().isEmpty || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    _chargeRequestId ??= _newRequestId();
+    final cart = state.cart;
+
+    final lines = cart.lines.map((line) {
+      String? categoryName;
+      if (line.kind case CartLineCafe(:final item)) {
+        categoryName = item.categoryName.isNotEmpty
+            ? item.categoryName
+            : item.category.title;
+      }
+      return (
+        sellableId: null as String?,
+        name: line.title,
+        categoryName: categoryName,
+        emoji: line.emoji,
+        unitPriceCents: line.unitPrice.centavos,
+        quantity: line.quantity,
+        lineTotalCents: line.lineTotal.centavos,
+        modifiers: _modifiersSnapshot(line),
+        recipeDeductions: state.recipeDeductionsForCartLine(line),
+      );
+    }).toList();
+
+    // Empty payments → the DB records an OPEN (unpaid) order. The payment
+    // method is only chosen later, when the tab is settled.
+    final result = await state.createPaidOrder(
+      lines: lines,
+      payments: const [],
+      customerName: name.trim(),
+      clientRequestId: _chargeRequestId,
+      unpaid: true,
+    );
+    if (!mounted) return;
+    if (result.error != null) {
+      setState(() {
+        _busy = false;
+        _error = result.error;
+      });
+      PushToast.show(context,
+          title: 'Could not save pay-later order',
+          subtitle: result.error!,
+          leadingIcon: Icons.error_outline);
+      return;
+    }
+    _chargeRequestId = null;
+    state.deductCartFromInventory();
+
+    o.Order? order;
+    try {
+      await state.refreshOrders();
+      final fresh = state.recentOrders.where((x) => x.id == result.id);
+      if (fresh.isNotEmpty) order = fresh.first;
+    } catch (_) {/* best-effort */}
+
+    if (!mounted) return;
+    // Show the saved-order sheet so the cashier can print the barista /
+    // kitchen tickets — same modal as adding to an existing tab.
+    if (order != null) {
+      await showSavedOrderPrintSheet(context, order: order, name: name.trim());
+    } else {
+      PushToast.show(context,
+          title: 'Order saved for ${name.trim()}',
+          subtitle: 'Collect from the Pay Later page.',
+          leadingIcon: Icons.schedule_outlined);
+    }
+
+    if (!mounted) return;
+    state.cart.clear();
+    state.clearActiveTab();
+    Navigator.of(context).pop();
+    // If they were building onto an existing tab, jump back to Tabs to see it.
+    if (active != null) state.selectRoute(AppRoute.tabs);
+  }
+
   /// Persists the cart as a paid order in Supabase, then deducts inventory
   /// and shows the success screen. The DB write is the source of truth —
   /// we don't claim "completed" until the RPC returns an order id.
   Future<void> _complete(AppState state) async {
     if (_busy) return;
+
+    // Settling an existing tab — no new order, no stock deduction (stock was
+    // taken when each order was fired). Just mark those orders paid.
+    if (state.cart.isSettling) return _completeSettle(state);
 
     // Stock guard — refuses the sale up-front if any inventory item would
     // be pushed below zero by this cart (taking modifier multipliers +
@@ -950,6 +1200,10 @@ class _TenderSheetState extends State<TenderSheet> {
       setState(() => _error = stockError);
       return;
     }
+
+    // One idempotency key per charge; reused if the cashier retries after a
+    // network hiccup so the DB returns the original order instead of a dupe.
+    _chargeRequestId ??= _newRequestId();
 
     setState(() {
       _busy = true;
@@ -1033,6 +1287,7 @@ class _TenderSheetState extends State<TenderSheet> {
       scPwdType: _scType,
       scPwdName: _scType == null ? null : _scName,
       scPwdId: _scType == null ? null : _scId,
+      clientRequestId: _chargeRequestId,
     );
 
     if (!mounted) return;
@@ -1043,6 +1298,8 @@ class _TenderSheetState extends State<TenderSheet> {
       });
       return;
     }
+    // Sale succeeded — retire this idempotency key so the next sale is fresh.
+    _chargeRequestId = null;
 
     // Order persisted ✅. Now deduct in-memory inventory for the recipe-built
     // items so the local cache stays consistent. (Inventory itself migrates
@@ -1147,6 +1404,76 @@ class _TenderSheetState extends State<TenderSheet> {
     return null;
   }
 
+  /// Settle the loaded tab: mark its unpaid orders paid with the chosen
+  /// method. No new order and no stock deduction (both happened when the
+  /// orders were fired). Shows the same success screen with change.
+  Future<void> _completeSettle(AppState state) async {
+    if (_busy) return;
+    final m = method ?? TenderMethod.cash;
+    final totalCents = state.cart.total.centavos;
+    _settledTotalCents = totalCents;
+    // Capture before the settle clears the session, so the success screen
+    // always has orders to print even if the refresh below returns nothing.
+    final settledIds = state.settleOrderIds;
+    final capturedOrders = state.settleOrders;
+
+    int? tenderedCents;
+    int? changeCents;
+    if (m == TenderMethod.cash) {
+      final entered = double.tryParse(cashReceived) ?? 0;
+      tenderedCents = Money.pesos(entered).centavos;
+      changeCents = tenderedCents - totalCents;
+      if (changeCents < 0) changeCents = 0;
+    }
+
+    final dbMethod = switch (m) {
+      TenderMethod.cash => 'cash',
+      TenderMethod.gcash => 'gcash',
+      TenderMethod.bank => 'bank_transfer',
+      TenderMethod.qrph => 'qrph',
+    };
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final err = await state.completeSettle(dbMethod);
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _busy = false;
+        _error = err;
+      });
+      return;
+    }
+    // completeSettle refreshed the order cache — pull the now-paid orders so
+    // the receipt shows the tender. Fall back to the captured orders if the
+    // refresh hasn't surfaced them yet, so the receipt button never vanishes.
+    var settled = state.recentOrders
+        .where((x) => settledIds.contains(x.id))
+        .toList();
+    if (settled.isEmpty) settled = capturedOrders;
+    setState(() {
+      _busy = false;
+      _settled = true;
+      _settledOrders = settled;
+      _paidTenderedCents = tenderedCents;
+      _paidChangeCents = changeCents;
+      completed = true;
+    });
+
+    // Cash settle → pop the drawer so the cashier can make change.
+    final printer = state.printerConfig;
+    if (m == TenderMethod.cash && printer != null) {
+      await PrintJobs.openDrawer(printer, pin5: await DrawerPrefs.usesPin5());
+    }
+    // Auto-print the customer receipt when a printer is set (the button then
+    // reads "Reprint receipt"). With no printer we skip the auto-print — the
+    // button still shows so the cashier can print once a printer is paired.
+    if (mounted && printer != null) await _printSettleReceipts();
+  }
+
   Widget _payRow(String label, String value, {bool big = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1180,7 +1507,8 @@ class _TenderSheetState extends State<TenderSheet> {
                 size: 40, color: YColor.success),
           ),
           const SizedBox(height: 10),
-          Text('Payment Complete', style: YFont.titleLG()),
+          Text(_settled ? 'Pay Later settled' : 'Payment Complete',
+              style: YFont.titleLG()),
           if (_orderNumber != null) ...[
             const SizedBox(height: 4),
             Text('Order #${_orderNumber.toString().padLeft(4, '0')}',
@@ -1196,30 +1524,33 @@ class _TenderSheetState extends State<TenderSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // LEFT — buzzer / table number input above the number pad.
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('BUZZER / TABLE NO. (optional)',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: YColor.brandDeep)),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(width: 190, child: _buzzerDisplay()),
-                    const SizedBox(height: 12),
-                    OtpNumpad(
-                      onDigit: _onBuzzerDigit,
-                      onBackspace: _onBuzzerBackspace,
-                      keyWidth: 58,
-                      keyHeight: 44,
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 28),
+                // Settling has no prep ticket to number, so it's hidden then.
+                if (!_settled) ...[
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('BUZZER / TABLE NO. (optional)',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: YColor.brandDeep)),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(width: 190, child: _buzzerDisplay()),
+                      const SizedBox(height: 12),
+                      OtpNumpad(
+                        onDigit: _onBuzzerDigit,
+                        onBackspace: _onBuzzerBackspace,
+                        keyWidth: 58,
+                        keyHeight: 44,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 28),
+                ],
                 // RIGHT — totals + prints on top; finish + printer-down pinned
                 // to the bottom so the column matches the numpad's height.
                 Expanded(
@@ -1235,7 +1566,12 @@ class _TenderSheetState extends State<TenderSheet> {
                         ),
                         child: Column(
                           children: [
-                            _payRow('Total', _amountDue(state).formatted),
+                            _payRow(
+                                'Total',
+                                (_settled
+                                        ? Money(_settledTotalCents)
+                                        : _amountDue(state))
+                                    .formatted),
                             if (_paidTenderedCents != null) ...[
                               const SizedBox(height: 10),
                               _payRow('Amount received',
@@ -1253,6 +1589,7 @@ class _TenderSheetState extends State<TenderSheet> {
                       ),
                       const SizedBox(height: 16),
                       _printActions(state),
+                      if (_settled) _settleReceiptActions(state),
                       const Spacer(),
                       ElevatedButton(
                         onPressed: pending
@@ -1260,6 +1597,12 @@ class _TenderSheetState extends State<TenderSheet> {
                             : () {
                                 state.cart.clear();
                                 Navigator.of(context).pop();
+                                // After settling, drop back to the Pay Later
+                                // page so the cashier sees the tab is gone.
+                                if (_settled) {
+                                  state.clearSettle();
+                                  state.selectRoute(AppRoute.tabs);
+                                }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: YColor.brand,
@@ -1270,8 +1613,11 @@ class _TenderSheetState extends State<TenderSheet> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(YRadius.md)),
                         ),
-                        child:
-                            Text(pending ? 'Print to continue' : 'New Order'),
+                        child: Text(pending
+                            ? 'Print to continue'
+                            : _settled
+                                ? 'Done'
+                                : 'New Order'),
                       ),
                       if (pending)
                         Center(
@@ -1392,6 +1738,76 @@ class _TenderSheetState extends State<TenderSheet> {
       ),
       const SizedBox(height: 16),
     ]);
+  }
+
+  /// Receipt print/reprint for a settled tab. Settling covers one or more
+  /// orders, so this prints each order's receipt (post-payment, so they show
+  /// the tender). Shown only on the settle success screen.
+  Widget _settleReceiptActions(AppState state) {
+    if (_settledOrders.isEmpty) return const SizedBox.shrink();
+    if (_printBusy) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Text(_printStatus ?? 'Printing…',
+              style: YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
+        ]),
+      );
+    }
+    final n = _settledOrders.length;
+    final label = _settleReceiptPrinted
+        ? (n > 1 ? 'Reprint receipts' : 'Reprint receipt')
+        : (n > 1 ? 'Print receipts' : 'Print receipt');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Center(
+        child: _prepBtn(label, Icons.receipt_long_outlined,
+            _printSettleReceipts,
+            done: _settleReceiptPrinted),
+      ),
+    );
+  }
+
+  Future<void> _printSettleReceipts() async {
+    if (_printBusy) return;
+    final state = context.read<AppState>();
+    final printer = state.printerConfig;
+    final tenant = state.tenant;
+    if (_settledOrders.isEmpty) return;
+    if (printer == null) {
+      PushToast.show(context,
+          title: 'No printer connected',
+          subtitle: 'Pair a printer in Settings to print the receipt.',
+          leadingIcon: Icons.print_disabled_outlined);
+      return;
+    }
+    if (tenant == null) return;
+    setState(() {
+      _printBusy = true;
+      _printStatus = 'Printing receipt…';
+    });
+    var ok = true;
+    for (final order in _settledOrders) {
+      final r =
+          await PrintJobs.receipt(order: order, tenant: tenant, config: printer);
+      ok = ok && r;
+    }
+    if (!mounted) return;
+    setState(() {
+      _printBusy = false;
+      _printStatus = null;
+      if (ok) _settleReceiptPrinted = true;
+    });
+    PushToast.show(context,
+        title: ok ? 'Receipt printed' : 'Receipt didn\'t print',
+        subtitle: ok ? null : 'Check the printer is on and nearby.',
+        leadingIcon:
+            ok ? Icons.check_circle_outline : Icons.print_disabled_outlined);
   }
 
   /// True when a printer is set and something still needs printing (and the

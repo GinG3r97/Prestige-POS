@@ -37,6 +37,7 @@ enum AppRoute {
   sessions,
   members,
   orders,
+  tabs,
   reports,
   employees,
   payroll,
@@ -318,25 +319,22 @@ class AppState extends ChangeNotifier {
         inv.hydrate(tid as String),
       ]);
 
-      // Configured receipt printer (single default).
-      await _loadPrinter();
-      // Open cashier shift (Z-reading), if any.
-      await _loadShift();
-      // Parked / held orders for this store (device-local).
-      await _loadHeldOrders();
-
-      // Bookable resources (rooms, hot desks, event spaces) live in
-      // BookingsStore. The actual [Booking] rows are loaded per-day on
-      // demand from BookingsView.
-      await bookings.hydrate(_currentTenantDbId!);
-
-      // Member plan templates + member roster live in MembersStore.
-      await members.hydrate(_currentTenantDbId!);
-
-      // Payroll — time entries + payroll runs live in HrStore. The per-tenant
-      // cache key is the in-memory Tenant id (matches what we initialised at
-      // the top of this method); the queries are scoped by the DB id.
-      await hr.hydratePayrollCache(_currentTenantDbId!, tenant!.id);
+      // These six are independent round-trips — run them concurrently instead
+      // of serially so login latency isn't the sum of all of them.
+      //   * _loadPrinter — configured receipt printer (single default)
+      //   * _loadShift — open cashier shift (Z-reading), if any
+      //   * _loadHeldOrders — parked / held orders (device-local)
+      //   * bookings.hydrate — bookable resources (rooms, desks, spaces)
+      //   * members.hydrate — member plan templates + roster
+      //   * hr.hydratePayrollCache — time entries + payroll runs
+      await Future.wait([
+        _loadPrinter(),
+        _loadShift(),
+        _loadHeldOrders(),
+        bookings.hydrate(_currentTenantDbId!),
+        members.hydrate(_currentTenantDbId!),
+        hr.hydratePayrollCache(_currentTenantDbId!, tenant!.id),
+      ]);
 
       _isHydrating = false;
       notifyListeners();
@@ -518,7 +516,7 @@ class AppState extends ChangeNotifier {
 
   String get plan => _plan;
   String get planLabel => _plan == 'trial'
-      ? 'Free'
+      ? 'Trial'
       : _plan == 'basic'
           ? 'Basic'
           : _plan == 'pro'
@@ -560,14 +558,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Friendly upgrade message if adding another [entity] would exceed the plan
-  /// cap, else null. Pro (null cap) never blocks.
+  /// Friendly plan-limit message if adding another [entity] would exceed the
+  /// plan cap, else null. Pro (null cap) never blocks. Informational only — no
+  /// purchase wording, so it stays App Store / Play Store compliant.
   String? planCapMessage(String entity) {
     final cap = _planCaps[entity];
     if (cap == null) return null;
     if (planCount(entity) >= cap) {
       return 'Your $planLabel plan allows up to $cap ${_entityLabel(entity)}. '
-          'Upgrade to add more.';
+          'See other plans in Subscription.';
     }
     return null;
   }
@@ -576,10 +575,20 @@ class AppState extends ChangeNotifier {
     try {
       final sub = await supabase
           .from('tenant_subscriptions')
-          .select('plan')
+          .select('plan, status, current_period_end, extra_branches')
           .eq('tenant_id', tid)
           .maybeSingle();
-      final plan = (sub?['plan'] as String?) ?? 'trial';
+      var plan = (sub?['plan'] as String?) ?? 'trial';
+      // A paid plan that has lapsed or isn't active behaves as Trial until it's
+      // renewed on the web. This mirrors immediately (the nightly job also flips
+      // the DB row), so the store can't keep paid caps past its paid period.
+      final status = (sub?['status'] as String?) ?? 'trialing';
+      final endStr = sub?['current_period_end'] as String?;
+      final end = endStr == null ? null : DateTime.tryParse(endStr);
+      final expired = end != null && end.toUtc().isBefore(DateTime.now().toUtc());
+      if (plan != 'trial' && (expired || status != 'active')) {
+        plan = 'trial';
+      }
       final pl = await supabase
           .from('plan_limits')
           .select()
@@ -591,6 +600,9 @@ class AppState extends ChangeNotifier {
           .eq('id', tid)
           .maybeSingle();
       _storeCode = tRow?['store_code'] as String?;
+      // Pro includes 1 branch; each paid add-on (extra_branches) adds one more.
+      // Free/Basic use their flat cap. Mirrors public.tenant_cap in the DB.
+      final extraBranches = (sub?['extra_branches'] as int?) ?? 0;
       _plan = plan;
       _planCaps = {
         'orders': pl?['daily_order_limit'] as int?,
@@ -598,7 +610,9 @@ class AppState extends ChangeNotifier {
         'products': pl?['max_products'] as int?,
         'categories': pl?['max_categories'] as int?,
         'inventory': pl?['max_inventory'] as int?,
-        'branches': pl?['max_branches'] as int?,
+        'branches': plan == 'pro'
+            ? ((pl?['max_branches'] as int?) ?? 1) + extraBranches
+            : pl?['max_branches'] as int?,
       };
     } catch (_) {
       // Never block selling because a caps fetch failed — default to unlimited.
@@ -880,26 +894,17 @@ class AppState extends ChangeNotifier {
     // currentOwner is cleared by the auth listener.
   }
 
-  /// Permanently deletes the owner's account and ALL their store data via the
-  /// `delete_my_account` RPC, then tears down the local session. Required by
-  /// Apple for any app that lets users create an account. Returns null on
-  /// success, or a user-safe error message.
+  /// Permanently deletes the signed-in owner's account and all their store
+  /// data (server-side `delete_my_account`), then signs out. Required by
+  /// Apple 5.1.1(v): account deletion must be initiated from within the app.
   Future<String?> deleteAccount() async {
     try {
       await supabase.rpc('delete_my_account');
-    } on sb.PostgrestException catch (e) {
-      return 'Could not delete your account: ${e.message}';
     } catch (_) {
-      return 'Could not reach the server. Please try again.';
+      return 'Could not delete your account. Please check your connection '
+          'and try again, or contact Prestige IT Solutions.';
     }
-    // Account is gone server-side; clear the local session. The token is now
-    // invalid, so signOut may throw — the auth listener routes back to Welcome
-    // either way.
-    _pendingOtpEmail = null;
-    cart.clear();
-    try {
-      await supabase.auth.signOut();
-    } catch (_) {/* token already invalid — listener handles cleanup */}
+    await signOutAccount();
     return null;
   }
 
@@ -1130,6 +1135,25 @@ class AppState extends ChangeNotifier {
   /// Verifies a 4-digit owner PIN against the stored bcrypt hash. The RPC
   /// throttles brute force: 5 wrong attempts in a row → 5-minute lockout.
   /// Returns null on success, or a user-safe error message.
+  /// Pure owner-PIN check with NO session side effects — used to gate a
+  /// sensitive screen (e.g. Payroll) on a shared, already-signed-in tablet.
+  Future<bool> confirmOwnerPin(String pin) async {
+    final tenantId = _currentTenantDbId;
+    if (tenantId == null) return false;
+    final clean = pin.trim();
+    if (clean.length != 4 || int.tryParse(clean) == null) return false;
+    try {
+      final ok = await supabase.rpc('verify_owner_pin', params: {
+        'p_tenant_id': tenantId,
+        'p_pin': clean,
+        'p_count_failure': true,
+      });
+      return ok == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<String?> verifyOwnerPin(String pin) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return 'No store selected.';
@@ -2692,11 +2716,15 @@ class AppState extends ChangeNotifier {
     String? scPwdType,
     String? scPwdName,
     String? scPwdId,
+    String? clientRequestId,
+    bool unpaid = false,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return (id: null, error: 'No store selected.');
     if (lines.isEmpty) return (id: null, error: 'Cart is empty.');
-    if (payments.isEmpty) {
+    // A tab (pay-later) order is intentionally unpaid — the payment method is
+    // chosen when it's settled, not now.
+    if (!unpaid && payments.isEmpty) {
       return (id: null, error: 'At least one payment is required.');
     }
     try {
@@ -2770,6 +2798,12 @@ class AppState extends ChangeNotifier {
         'p_sc_pwd_type': scPwdType,
         'p_sc_pwd_name': scPwdName,
         'p_sc_pwd_id': scPwdId,
+        // Idempotency: a retry of the same charge (e.g. after a lost response)
+        // returns the original order instead of creating a duplicate.
+        'p_client_request_id': clientRequestId,
+        // A pay-later tab must stay 'open' even at ₱0, so it shows under Tabs
+        // instead of being auto-closed as paid.
+        'p_unpaid': unpaid,
       });
       _ordersToday += 1; // keep the top-bar usage meter live after each sale
       notifyListeners();
@@ -2933,6 +2967,8 @@ class AppState extends ChangeNotifier {
     required DateTime since,
     DateTime? until,
     int limit = 100,
+    int offset = 0,
+    bool openOnly = false,
   }) async {
     final tenantId = _currentTenantDbId;
     if (tenantId == null) return const [];
@@ -2954,12 +2990,15 @@ class AppState extends ChangeNotifier {
               'change_cents, reference, refunded)')
           .eq('tenant_id', tenantId)
           .gte('created_at', since.toIso8601String());
+      if (openOnly) {
+        query = query.eq('status', 'open');
+      }
       if (until != null) {
         query = query.lt('created_at', until.toIso8601String());
       }
       final rows = await query
           .order('created_at', ascending: false)
-          .limit(limit);
+          .range(offset, offset + limit - 1);
 
       return (rows as List).map((r) {
         final row = r as Map<String, dynamic>;
@@ -2979,6 +3018,128 @@ class AppState extends ChangeNotifier {
       if (kDebugMode) debugPrint('fetchOrders failed: $e');
       return const [];
     }
+  }
+
+  /// All unpaid (open) orders for the store — these are the customer tabs.
+  Future<List<o.Order>> fetchOpenOrders() =>
+      fetchOrders(since: DateTime(2000), openOnly: true, limit: 500);
+
+  /// Settle a tab: mark the given open orders paid (one payment per order at
+  /// its total, with [method]). Returns null on success, else a message.
+  Future<String?> settleTab(List<String> orderIds, String method) async {
+    if (orderIds.isEmpty) return 'Nothing to settle.';
+    try {
+      await supabase.rpc('settle_orders', params: {
+        'p_order_ids': orderIds,
+        'p_method': method,
+      });
+      return null;
+    } on sb.PostgrestException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Could not reach the server. Please try again.';
+    }
+  }
+
+  // ── Adding items to an existing tab ──
+  String? _activeTabName;
+
+  /// When set, the Sell screen shows a banner and checkout's "Pay later" fires
+  /// straight onto this customer's tab (no re-typing the name).
+  String? get activeTabName => _activeTabName;
+
+  /// Start another order for [name]'s tab — clears the cart and jumps to Sell
+  /// with the tab context set.
+  void startTabOrder(String name) {
+    _settleOrderIds = const [];
+    _settleName = null;
+    _activeTabName = name;
+    cart.clear();
+    selectRoute(AppRoute.sell); // notifies
+  }
+
+  void clearActiveTab() {
+    if (_activeTabName != null) {
+      _activeTabName = null;
+      notifyListeners();
+    }
+  }
+
+  // ── Settling a tab through the Sell screen ──
+  // The cashier taps "Settle" on the Pay Later page; we load the customer's
+  // unpaid orders into the cart as read-only lines and jump to Sell so they
+  // can pay through the normal tender flow. The orders stay OPEN in the DB
+  // (still visible on Pay Later) until the payment actually completes.
+  List<String> _settleOrderIds = const [];
+  List<o.Order> _settleOrders = const [];
+  String? _settleName;
+
+  /// True while the cart holds a tab being settled (read-only lines).
+  bool get isSettling => cart.isSettling && _settleOrderIds.isNotEmpty;
+  String? get settleName => _settleName;
+  List<String> get settleOrderIds => List.unmodifiable(_settleOrderIds);
+
+  /// The full orders being settled — captured so the success screen can print
+  /// their receipts even if the post-settle refresh hasn't landed yet.
+  List<o.Order> get settleOrders => List.unmodifiable(_settleOrders);
+
+  /// Load [orders] (one customer's unpaid tab) into the cart as read-only
+  /// settle lines. The caller (Pay Later page) then opens the tender modal
+  /// right there to collect payment — no navigation to Sell.
+  void startSettleTab(String name, List<o.Order> orders) {
+    _activeTabName = null; // settling is not the same as adding
+    _settleOrderIds = orders.map((x) => x.id).toList();
+    _settleOrders = List.of(orders);
+    _settleName = name;
+    final settleLines = <CartLine>[
+      for (final ord in orders)
+        for (final l in ord.lines)
+          CartLine(
+            kind: CartLineSettle(
+              name: l.name,
+              detail: _settleLineDetail(l),
+              emojiChar: l.emoji,
+              unitPriceCents: l.unitPriceCents,
+            ),
+            quantity: l.quantity,
+          ),
+    ];
+    cart.loadForSettle(settleLines); // notifies
+  }
+
+  String? _settleLineDetail(o.OrderLine l) {
+    final mods = l.modifiers;
+    if (mods == null) return null;
+    final opts = mods['options'];
+    if (opts is Map && opts.isNotEmpty) {
+      return opts.values.map((v) => v.toString()).join(' · ');
+    }
+    return null;
+  }
+
+  /// Cancel a settle in progress (cart cleared / cashier backed out). The
+  /// orders remain open on the Pay Later page.
+  void clearSettle() {
+    if (_settleOrderIds.isEmpty && _settleName == null) return;
+    _settleOrderIds = const [];
+    _settleOrders = const [];
+    _settleName = null;
+    if (cart.isSettling) cart.clear();
+    notifyListeners();
+  }
+
+  /// Settle the loaded tab with the chosen [method]. Marks the orders paid
+  /// server-side (via [settleTab]) and resets the settle session. Returns
+  /// null on success, else an error message.
+  Future<String?> completeSettle(String method) async {
+    if (_settleOrderIds.isEmpty) return 'Nothing to settle.';
+    final err = await settleTab(_settleOrderIds, method);
+    if (err != null) return err;
+    _settleOrderIds = const [];
+    _settleName = null;
+    cart.clear();
+    await refreshOrders();
+    return null;
   }
 
   // ───── shell ─────

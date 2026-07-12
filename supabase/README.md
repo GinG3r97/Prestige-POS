@@ -1,6 +1,6 @@
 # Supabase
 
-Source-controlled schema and config for the Prestige POS Supabase project.
+Source-controlled schema and config for the Prestige Café Supabase project.
 
 ## `migrations/`
 

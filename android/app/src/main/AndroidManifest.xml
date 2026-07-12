@@ -38,7 +38,7 @@
         android:requiresSmallestWidthDp="600"/>
 
     <application
-        android:label="Prestige POS"
+        android:label="Prestige Café"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

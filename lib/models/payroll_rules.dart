@@ -257,6 +257,7 @@ class EmploymentTemplate {
         CompensationType.hourly => defaultHourlyRate,
         CompensationType.daily => defaultDailyRate,
         CompensationType.salaried => defaultMonthlySalary,
+        CompensationType.fixed => defaultMonthlySalary,
       };
 
   factory EmploymentTemplate.fromRow(Map<String, dynamic> row) {

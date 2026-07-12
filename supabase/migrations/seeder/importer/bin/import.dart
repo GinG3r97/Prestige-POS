@@ -7,7 +7,7 @@ import 'package:prestige_seeder/parser.dart';
 import 'package:prestige_seeder/validator.dart';
 import 'package:prestige_seeder/writer.dart';
 
-/// One-shot client onboarding importer for Prestige POS.
+/// One-shot client onboarding importer for Prestige Café.
 ///
 /// Usage:
 ///   dart run bin/import.dart \
@@ -44,7 +44,7 @@ Future<void> main(List<String> argv) async {
     exit(2);
   }
 
-  print('━━━ Prestige POS importer ━━━');
+  print('━━━ Prestige Café importer ━━━');
   print('File:   $filePath');
   print('Mode:   ${args["apply"] as bool ? "APPLY (will write)" : "dry-run (no DB writes)"}');
   print('');
@@ -139,7 +139,7 @@ Future<void> main(List<String> argv) async {
 
 void _printHelp() {
   print('''
-Prestige POS — client onboarding importer
+Prestige Café — client onboarding importer
 
 Usage:
   dart run bin/import.dart --file <canonical.xlsx> [options]

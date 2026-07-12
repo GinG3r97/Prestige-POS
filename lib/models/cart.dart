@@ -15,6 +15,23 @@ class CartAddOn {
   CartAddOn(this.addOn, this.quantity);
 }
 
+/// A read-only line loaded from an existing unpaid (pay-later) order so the
+/// cashier can settle it through the normal checkout. Not editable, never
+/// merges, and carries no recipe — stock was already deducted when the
+/// order was fired.
+class CartLineSettle extends CartLineKind {
+  final String name;
+  final String? detail;
+  final String emojiChar;
+  final int unitPriceCents;
+  CartLineSettle({
+    required this.name,
+    this.detail,
+    this.emojiChar = '',
+    required this.unitPriceCents,
+  });
+}
+
 class CartLineCafe extends CartLineKind {
   final CafeItem item;
   final Map<String, String> selections; // groupId -> optionId
@@ -47,6 +64,7 @@ class CartLine {
 
   String get title => switch (kind) {
         CartLineCafe(:final item) => item.name,
+        CartLineSettle(:final name) => name,
       };
 
   String? get subtitle => switch (kind) {
@@ -73,18 +91,22 @@ class CartLine {
             if (n.isEmpty) return base;
             return base.isEmpty ? '📝 $n' : '$base · 📝 $n';
           }(),
+        CartLineSettle(:final detail) => detail,
       };
 
   String get emoji => switch (kind) {
         CartLineCafe(:final item) => item.emoji,
+        CartLineSettle(:final emojiChar) => emojiChar,
       };
 
   String? get imageUrl => switch (kind) {
         CartLineCafe(:final item) => item.imageUrl,
+        CartLineSettle() => null,
       };
 
   String? get iconName => switch (kind) {
         CartLineCafe(:final item) => item.iconName,
+        CartLineSettle() => null,
       };
 
   Money get unitPrice => switch (kind) {
@@ -118,6 +140,7 @@ class CartLine {
             }
             return total;
           }(),
+        CartLineSettle(:final unitPriceCents) => Money(unitPriceCents),
       };
 
   Money get lineTotal => unitPrice * quantity;
@@ -140,6 +163,20 @@ class CartStore extends ChangeNotifier {
 
   int get itemCount => lines.fold(0, (acc, l) => acc + l.quantity);
 
+  /// True while the cart holds lines loaded from unpaid orders being
+  /// settled — the cart is then read-only until paid or cleared.
+  bool get isSettling => lines.any((l) => l.kind is CartLineSettle);
+
+  /// Replaces the cart with read-only lines from the unpaid orders being
+  /// settled (pay-later flow). The cashier pays through normal checkout.
+  void loadForSettle(List<CartLine> settleLines) {
+    lines
+      ..clear()
+      ..addAll(settleLines);
+    customer = null;
+    notifyListeners();
+  }
+
   void addCafe(
     CafeItem item,
     Map<String, String> selections, {
@@ -149,6 +186,8 @@ class CartStore extends ChangeNotifier {
     String? note,
   }) {
     if (quantity < 1) return;
+    // A settle cart is frozen — finish or cancel settling before selling.
+    if (isSettling) return;
     final cleanAddOns = (addOns ?? <CartAddOn>[])
         .where((a) => a.quantity > 0)
         .toList();
@@ -193,11 +232,15 @@ class CartStore extends ChangeNotifier {
   }
 
   void remove(CartLine line) {
+    // Settle carts are all-or-nothing — the cashier either pays the whole
+    // tab or clears it. Removing one line would desync the settle order ids.
+    if (isSettling) return;
     lines.removeWhere((l) => l.id == line.id);
     notifyListeners();
   }
 
   void setQuantity(CartLine line, int qty) {
+    if (isSettling) return;
     final idx = lines.indexWhere((l) => l.id == line.id);
     if (idx < 0) return;
     if (qty <= 0) {

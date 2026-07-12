@@ -1,7 +1,7 @@
 # Payroll, Attendance & HR System — Architecture & Spec
 
 > A self-contained Philippine-payroll + time-&-attendance + employee-portal module
-> built inside the Prestige POS app (Flutter) and its companion web app (Next.js),
+> built inside the Prestige Café app (Flutter) and its companion web app (Next.js),
 > backed by Supabase (Postgres + Auth + RLS). This doc is the source of truth for
 > the feature wiring so it can be understood, audited, or rebuilt standalone.
 

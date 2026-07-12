@@ -9,8 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('harness renders a basic widget', (WidgetTester tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: Text('Prestige POS'))),
+      const MaterialApp(home: Scaffold(body: Text('Prestige Café'))),
     );
-    expect(find.text('Prestige POS'), findsOneWidget);
+    expect(find.text('Prestige Café'), findsOneWidget);
   });
 }

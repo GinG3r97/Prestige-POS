@@ -23,16 +23,18 @@ class _Quote {
 }
 
 const _quotes = <_Quote>[
-  _Quote('A book is a dream that you hold in your hand.', 'Neil Gaiman'),
+  _Quote('Life happens, coffee helps.', 'Unknown'),
   _Quote('Coffee first. Schemes later.', 'Leanna Renee Hieber'),
-  _Quote('A reader lives a thousand lives before he dies.', 'George R.R. Martin'),
-  _Quote('Behind every great reader is a great cup of coffee.', 'Unknown'),
-  _Quote('So many books, so little time.', 'Frank Zappa'),
+  _Quote('But first, coffee.', 'Unknown'),
   _Quote('I have measured out my life with coffee spoons.', 'T.S. Eliot'),
-  _Quote('One can never read too many books, nor drink too much coffee.', 'Unknown'),
-  _Quote('A good book and a cup of coffee make the perfect day.', 'Unknown'),
-  _Quote('There is no friend as loyal as a book.', 'Ernest Hemingway'),
-  _Quote("Rise and grind — the pages won't turn themselves.", "The Barista's Creed"),
+  _Quote('A morning without coffee is like sleep.', 'Unknown'),
+  _Quote('Coffee is a hug in a mug.', 'Unknown'),
+  _Quote('Behind every successful person is a substantial amount of coffee.',
+      'Unknown'),
+  _Quote('Espresso yourself.', 'Unknown'),
+  _Quote('May your coffee be strong and your Monday be short.', 'Unknown'),
+  _Quote("Rise and grind — the beans won't roast themselves.",
+      "The Barista's Creed"),
 ];
 
 class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMixin {

@@ -166,7 +166,7 @@ class TopBar extends StatelessWidget {
 }
 
 /// Top-bar chip: current plan + today's order usage as a green/amber/red bar.
-/// Free & Basic show an "Upgrade" affordance; Pro shows a full green bar.
+/// Free & Basic show a "See plans" affordance; Pro shows a full green bar.
 /// Tapping anywhere opens Settings → Subscription.
 class _PlanUsageChip extends StatelessWidget {
   const _PlanUsageChip();
@@ -210,15 +210,15 @@ class _PlanUsageChip extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.arrow_upward_rounded,
-                        size: 11, color: Colors.white),
-                    const SizedBox(width: 3),
-                    Text('Upgrade',
+                    Text('See plans',
                         style: YFont.bodyStrong().copyWith(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         )),
+                    const SizedBox(width: 2),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 13, color: Colors.white),
                   ]),
                 ),
               ],

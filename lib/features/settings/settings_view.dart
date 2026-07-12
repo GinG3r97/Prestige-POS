@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/app_state.dart';
+import 'coowners_view.dart';
 import 'subscription_view.dart';
 import '../../data/supabase_client.dart';
 import '../../design_system/colors.dart';
@@ -156,7 +157,7 @@ class _SettingsViewState extends State<SettingsView> {
                     leading: const Icon(Icons.delete_forever_outlined,
                         color: YColor.danger),
                     title: 'Delete account',
-                    subtitle: 'Permanently erase your account and all store data',
+                    subtitle: 'Permanently delete your account and store data',
                     titleColor: YColor.danger,
                     onTap: () => _confirmDeleteAccount(context, state),
                   ),
@@ -195,6 +196,17 @@ class _SettingsViewState extends State<SettingsView> {
                       leading: const Icon(Icons.schedule, color: YColor.brandDeep),
                       title: 'Timezone',
                       subtitle: tenant.timezone,
+                    ),
+                    const _Divider(),
+                    _Row(
+                      leading: const Icon(Icons.group_outlined,
+                          color: YColor.brandDeep),
+                      title: 'Co-owners',
+                      subtitle:
+                          'Let others sign in online to see this store\'s sales',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CoOwnersView()),
+                      ),
                     ),
                   ]),
 
@@ -383,13 +395,6 @@ class _SettingsViewState extends State<SettingsView> {
                   _SectionHeader(title: 'Tax & Receipts'),
                   _Card(children: [
                     _Row(
-                      leading: const Icon(Icons.percent, color: YColor.brandDeep),
-                      title: 'VAT rate',
-                      subtitle: '12% (Philippines)',
-                      onTap: () => _comingSoon(context, 'VAT rate editor'),
-                    ),
-                    const _Divider(),
-                    _Row(
                       leading: const Icon(Icons.receipt_outlined, color: YColor.brandDeep),
                       title: 'Receipt header & footer',
                       subtitle: (tenant.receiptHeader?.isNotEmpty ?? false) ||
@@ -455,13 +460,6 @@ class _SettingsViewState extends State<SettingsView> {
                         builder: (_) => const CashDrawerDialog(),
                       ),
                     ),
-                    const _Divider(),
-                    _Row(
-                      leading: const Icon(Icons.credit_card, color: YColor.brandDeep),
-                      title: 'Card terminal',
-                      subtitle: 'Not paired',
-                      onTap: () => _comingSoon(context, 'Card terminal'),
-                    ),
                   ]),
                 ],
 
@@ -511,7 +509,7 @@ class _SettingsViewState extends State<SettingsView> {
                   _Row(
                     leading: const Icon(Icons.info_outline, color: YColor.brandDeep),
                     title: 'Version',
-                    subtitle: 'Prestige POS · v1.0.0',
+                    subtitle: 'Prestige Café · v1.0.0',
                   ),
                   const _Divider(),
                   _Row(
@@ -634,6 +632,7 @@ class _SettingsViewState extends State<SettingsView> {
       (icon: Icons.logout, title: 'Sign out', section: 'Account', keywords: const ['logout','exit'], onTap: () => _confirmSignOut(context, state)),
       (icon: Icons.storefront, title: 'Business name', section: 'This Store', keywords: const ['store','shop','name'], onTap: () => _editStoreName(context, state)),
       (icon: Icons.place_outlined, title: 'Business address', section: 'This Store', keywords: const ['address','location'], onTap: () => _editStoreAddress(context, state)),
+      (icon: Icons.group_outlined, title: 'Co-owners', section: 'This Store', keywords: const ['co-owner','coowner','access','share','member','partner'], onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoOwnersView()))),
       (icon: Icons.badge_outlined, title: 'TIN', section: 'Tax / BIR', keywords: const ['tax','bir','tin'], onTap: () => _editBirField(context, state, title: 'TIN', current: t?.tin, save: (v) => state.updateBirInfo(tin: v))),
       (icon: Icons.account_tree_outlined, title: 'Branch code', section: 'Tax / BIR', keywords: const ['bir','branch'], onTap: () => _editBirField(context, state, title: 'Branch code', current: t?.branchCode, save: (v) => state.updateBirInfo(branchCode: v))),
       (icon: Icons.memory_outlined, title: 'Machine ID (MIN)', section: 'Tax / BIR', keywords: const ['bir','min','machine'], onTap: () => _editBirField(context, state, title: 'Machine ID (MIN)', current: t?.birMin, save: (v) => state.updateBirInfo(birMin: v))),
@@ -649,11 +648,6 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   // ── Actions ──
-  void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label · coming soon')),
-    );
-  }
 
   Future<void> _confirmSignOut(BuildContext context, AppState state) async {
     final ok = await showConfirm(
@@ -668,15 +662,55 @@ class _SettingsViewState extends State<SettingsView> {
     if (ok) await state.signOutAccount();
   }
 
-  /// Permanent account deletion (Apple-required). Strong confirm — the owner
-  /// must type DELETE — then calls the server. On success the root router
-  /// drops back to Welcome automatically (currentOwner becomes null).
-  Future<void> _confirmDeleteAccount(BuildContext context, AppState state) async {
+  /// Apple 5.1.1(v): in-app account deletion. Double-confirms (destructive),
+  /// then permanently deletes the account + all store data server-side.
+  Future<void> _confirmDeleteAccount(
+      BuildContext context, AppState state) async {
+    final ok = await showConfirm(
+      context,
+      title: 'Delete your account?',
+      message:
+          'This permanently deletes your account and ALL of this account’s '
+          'store data — sales, products, inventory, staff and reports. '
+          'This cannot be undone.',
+      confirmLabel: 'Continue',
+      danger: true,
+      icon: Icons.delete_forever_outlined,
+    );
+    if (!ok || !context.mounted) return;
+
+    // Second, explicit confirmation to type the word DELETE.
+    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => const _DeleteAccountDialog(),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: YColor.surface1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Type DELETE to confirm'),
+        content: KeyboardAccessoryField(
+          controller: controller,
+          accessoryLabel: 'Type DELETE',
+          hint: 'DELETE',
+          fillColor: YColor.surface2,
+          borderColor: YColor.hairline,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(
+                ctx, controller.text.trim().toUpperCase() == 'DELETE'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: YColor.danger, foregroundColor: Colors.white),
+            child: const Text('Delete forever'),
+          ),
+        ],
+      ),
     );
     if (confirmed != true || !context.mounted) return;
+
     final err = await state.deleteAccount();
     if (!context.mounted) return;
     if (err != null) {
@@ -684,6 +718,11 @@ class _SettingsViewState extends State<SettingsView> {
           title: 'Could not delete account',
           subtitle: err,
           leadingIcon: Icons.error_outline);
+    } else {
+      PushToast.show(context,
+          title: 'Account deleted',
+          subtitle: 'Your account and data have been removed.',
+          leadingIcon: Icons.check_circle_outline);
     }
   }
 
@@ -905,10 +944,21 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Future<void> _addBranch(BuildContext context, AppState state) async {
+    // Only Pro can open additional branches; Free/Basic keep their single
+    // store. Informational + handled off-app (App Store / Play safe — no price,
+    // no purchase button). Each extra branch is a paid add-on managed on the web.
+    if (state.plan != 'pro') {
+      PushToast.show(context,
+          title: 'A Pro feature',
+          subtitle: 'Opening additional branches is available on the Pro plan. '
+              'See plans in Subscription.',
+          leadingIcon: Icons.workspace_premium_outlined);
+      return;
+    }
     final capMsg = state.planCapMessage('branches');
     if (capMsg != null) {
       PushToast.show(context,
-          title: 'Upgrade needed',
+          title: 'Branch limit reached',
           subtitle: capMsg,
           leadingIcon: Icons.workspace_premium_outlined);
       return;
@@ -1361,113 +1411,6 @@ class _OtpDialogState extends State<_OtpDialog> {
                   right,
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Permanent account-deletion confirm. The owner must type DELETE to enable
-/// the destructive button — guards against accidental taps. Pops `true` only
-/// when confirmed.
-class _DeleteAccountDialog extends StatefulWidget {
-  const _DeleteAccountDialog();
-
-  @override
-  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
-}
-
-class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
-  final _confirm = TextEditingController();
-  bool get _armed => _confirm.text.trim().toUpperCase() == 'DELETE';
-
-  @override
-  void dispose() {
-    _confirm.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: YColor.surface1,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 100, vertical: 80),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                const Icon(Icons.delete_forever_outlined,
-                    color: YColor.danger, size: 24),
-                const SizedBox(width: 8),
-                Text('Delete account',
-                    style: YFont.titleLG().copyWith(fontSize: 22)),
-              ]),
-              const SizedBox(height: 12),
-              Text(
-                'This permanently deletes your account and ALL store data — '
-                'products, orders, inventory, employees, payroll, and reports. '
-                'This cannot be undone.',
-                style: YFont.body().copyWith(color: YColor.inkMuted),
-              ),
-              const SizedBox(height: 16),
-              Text('Type DELETE to confirm',
-                  style: YFont.caption().copyWith(
-                      color: YColor.inkMuted,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _confirm,
-                autofocus: true,
-                textCapitalization: TextCapitalization.characters,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'DELETE',
-                  filled: true,
-                  fillColor: YColor.surface2,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md),
-                    borderSide: const BorderSide(color: YColor.hairline),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(YRadius.md),
-                    borderSide: const BorderSide(color: YColor.danger, width: 1.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(children: [
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Cancel',
-                      style:
-                          YFont.bodyStrong().copyWith(color: YColor.inkMuted)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed:
-                      _armed ? () => Navigator.of(context).pop(true) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: YColor.danger,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(YRadius.md)),
-                  ),
-                  child: const Text('Delete forever'),
-                ),
-              ]),
             ],
           ),
         ),
@@ -2074,7 +2017,7 @@ class _PrintTemplateDialogState extends State<_PrintTemplateDialog> {
 }
 
 const String _kTermsText = '''
-By using Prestige POS ("the app"), provided by Prestige IT Solutions, you agree to these terms.
+By using Prestige Café ("the app"), provided by Prestige IT Solutions, you agree to these terms.
 
 1. Licence. The app is licensed to you to operate your point-of-sale. You are responsible for the accuracy of your products, prices, taxes, and the sales you record.
 
@@ -2148,7 +2091,7 @@ class _LegalDialog extends StatelessWidget {
           Container(height: 0.5, color: YColor.hairline),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text('Prestige POS · v1.0.0',
+            child: Text('Prestige Café · v1.0.0',
                 style: YFont.caption().copyWith(color: YColor.inkMuted)),
           ),
         ]),
