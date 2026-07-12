@@ -19,15 +19,22 @@ class CoOwnersView extends StatefulWidget {
 }
 
 class _CoOwner {
-  const _CoOwner(this.email, this.role);
+  const _CoOwner(this.email, this.role, this.isPrimary);
   final String email;
   final String role;
+
+  /// The store's primary owner (the account that created it). Shown at the top
+  /// of the list and can't be removed here.
+  final bool isPrimary;
 }
 
 class _CoOwnersViewState extends State<CoOwnersView> {
   bool _loading = true;
   bool _error = false;
   List<_CoOwner> _members = const [];
+
+  String get _myEmail =>
+      (supabase.auth.currentUser?.email ?? '').trim().toLowerCase();
 
   @override
   void initState() {
@@ -46,6 +53,7 @@ class _CoOwnersViewState extends State<CoOwnersView> {
           .map((r) => _CoOwner(
                 (r['email'] ?? '').toString(),
                 (r['role'] ?? 'owner').toString(),
+                r['is_primary'] == true,
               ))
           .where((m) => m.email.isNotEmpty)
           .toList();
@@ -142,9 +150,10 @@ class _CoOwnersViewState extends State<CoOwnersView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'People you add here can sign in on the web portal with their '
-                  'email to see this store\'s sales and dashboard — alongside you. '
-                  'They can\'t run the POS or change your store settings.',
+                  'Everyone with access to this store. The owner has full '
+                  'access. Co-owners sign in on the web portal with their email '
+                  'to see this store\'s sales and dashboard alongside you — they '
+                  'can\'t run the POS or change your store settings.',
                   style: YFont.body().copyWith(color: YColor.inkMuted, height: 1.4),
                 ),
                 const SizedBox(height: 20),
@@ -207,9 +216,14 @@ class _CoOwnersViewState extends State<CoOwnersView> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 32,
-            child: Icon(Icons.account_circle_outlined, color: YColor.brandDeep),
+            child: Icon(
+              m.isPrimary
+                  ? Icons.verified_user_outlined
+                  : Icons.account_circle_outlined,
+              color: YColor.brandDeep,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -219,17 +233,33 @@ class _CoOwnersViewState extends State<CoOwnersView> {
                 Text(m.email, style: YFont.bodyStrong()),
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Text('Co-owner · web portal access',
+                  child: Text(
+                      m.isPrimary
+                          ? 'Owner · full access'
+                          : 'Co-owner · web portal access',
                       style: YFont.caption()),
                 ),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline,
-                size: 20, color: YColor.inkMuted),
-            onPressed: () => _remove(m.email),
-          ),
+          if (m.email.trim().toLowerCase() == _myEmail)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: YColor.brand.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('You',
+                  style: YFont.caption().copyWith(color: YColor.brandDeep)),
+            )
+          else if (m.isPrimary)
+            const SizedBox.shrink()
+          else
+            IconButton(
+              icon: const Icon(Icons.delete_outline,
+                  size: 20, color: YColor.inkMuted),
+              onPressed: () => _remove(m.email),
+            ),
         ],
       ),
     );
