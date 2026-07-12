@@ -21,7 +21,7 @@ This app uses passwordless email login. To sign in:
 
 1. On the welcome screen, tap "Sign in".
 2. Enter email: appreview@prestigeitsolutions.tech
-3. Tap Continue. (No email is sent for this demo account.)
+3. Tap "Send verification code". (No email is actually sent for this demo account.)
 4. Enter the 6-digit code: 246810
 5. Enter the owner PIN: 1234
 

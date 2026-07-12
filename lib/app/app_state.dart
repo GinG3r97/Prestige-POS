@@ -848,6 +848,9 @@ class AppState extends ChangeNotifier {
   Future<String?> resendOtp() async {
     final email = _pendingOtpEmail;
     if (email == null) return 'No verification in progress.';
+    // Reviewer demo account: no email exists to resend — the fixed code from
+    // the App Review notes always works, so just no-op successfully.
+    if (email == reviewerEmail) return null;
     try {
       await supabase.auth.signInWithOtp(
         email: email,
