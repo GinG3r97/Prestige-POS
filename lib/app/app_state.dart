@@ -867,7 +867,19 @@ class AppState extends ChangeNotifier {
   /// Map Supabase auth errors to user-friendly text. We deliberately don't
   /// leak whether an email exists or not.
   String _humanizeAuthError(sb.AuthException e) {
+    // A device with no/flaky internet surfaces as AuthRetryableFetchError —
+    // still an AuthException, so without this check it fell through to the
+    // generic "Sign-in failed", hiding the real cause (this cost us a whole
+    // debugging session: the iPad simply had no WiFi).
+    if (e is sb.AuthRetryableFetchException) {
+      return 'No internet connection. Check the iPad\'s WiFi and try again.';
+    }
     final msg = e.message.toLowerCase();
+    if (msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('connection') && msg.contains('failed')) {
+      return 'No internet connection. Check the iPad\'s WiFi and try again.';
+    }
     if (msg.contains('rate limit') || msg.contains('over_email_send_rate')) {
       return 'Too many attempts. Please wait a minute before trying again.';
     }
