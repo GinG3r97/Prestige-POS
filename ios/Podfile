@@ -1,5 +1,9 @@
 # Required for supabase_flutter and shared_preferences plugins.
-platform :ios, '13.0'
+# Single source of truth — post_install reuses this rather than repeating the
+# number, which is how it silently went stale at 13.0 and broke the archive
+# once Flutter raised the supported floor to 15.0.
+IOS_MIN = '15.0'
+platform :ios, IOS_MIN
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,10 +43,10 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-    # Force every pod to the app's minimum (13.0) so dependencies that declare
-    # an older target (e.g. flutter_native_splash @ 9.0) don't warn.
+    # Force every pod to the app's minimum so dependencies that declare an
+    # older target (e.g. flutter_native_splash @ 9.0) don't warn.
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = IOS_MIN
     end
   end
 end

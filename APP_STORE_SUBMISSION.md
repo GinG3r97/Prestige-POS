@@ -88,11 +88,12 @@ Data the app collects (all used **only** to operate the POS — not for tracking
 | Location purpose strings | ✅ Done | `NSLocationWhenInUseUsageDescription` etc. |
 | Privacy Policy URL | ✅ Live | `https://pos.prestigeitsolutions.tech/privacy` |
 | Screenshots (iPad) | ⬜ To do | see §5 |
-| Description / keywords / support URL | ⬜ To do | see §6 |
+| Description / keywords / support URL | ✅ Ready | paste-ready copy in §6 |
 | Payments = physical goods (no IAP) | ✅ N/A | cash/GCash/QR for real-world goods |
 
-**Before submitting, upload a NEW build** (build 7+) so the reviewer login,
-Delete Account, and location strings are included.
+**Before submitting, upload build 9 (`1.0.0+9`)** so the reviewer login, Delete
+Account, location strings, the clearer offline/network message, and the Co-owners
+list all ship. (Xcode → Archive → Distribute → Upload.)
 
 ---
 
@@ -111,18 +112,77 @@ Sizes: 2048 × 2732 (portrait) or 2732 × 2048 (landscape). 3–10 screenshots.
 
 ---
 
-## 6. Store listing content
+## 6. Store listing content (paste-ready — within Apple's limits)
 
-- **App name:** Prestige POS
-- **Subtitle:** e.g. "POS for cafés & retail"
-- **Category:** Business
-- **Description:** fast, BIR-ready point-of-sale — selling, inventory, shifts,
-  payroll, receipts, and reports on your iPad. (Expand from the website copy.)
-- **Keywords:** pos, point of sale, cafe, retail, inventory, bir, receipt, cashier
-- **Support URL:** `https://pos.prestigeitsolutions.tech`
-- **Marketing URL (optional):** `https://pos.prestigeitsolutions.tech`
-- **Pricing:** Free
-- **Availability:** Philippines (+ anywhere else you choose)
+**App name** (≤30): `Prestige POS`
+
+**Subtitle** (≤30): `POS for cafés & retail`
+
+**Category:** Primary **Business**, Secondary **Finance** (optional)
+
+**Promotional text** (≤170, editable anytime without a new build):
+```
+Ring up sales, track stock, run shifts and payroll, and print BIR-ready
+receipts — all from your iPad. Built for Philippine cafés and shops.
+```
+
+**Keywords** (≤100 chars total, comma-separated, no spaces after commas):
+```
+pos,point of sale,cafe,retail,inventory,bir,receipt,cashier,sari sari,payroll,shift,sales report
+```
+
+**Description** (≤4000):
+```
+Prestige POS is a fast, easy point-of-sale built for Philippine cafés, shops,
+and sari-sari stores. Ring up a sale in seconds, take cash or GCash/QR, and hand
+over a BIR-ready receipt — all from your iPad.
+
+No complicated setup. Add your products, open a shift, and start selling.
+
+SELLING
+• Tap-to-add product grid with categories and quick search
+• Cash, GCash, and QR payments, with change calculation
+• Hold orders and come back to them later
+• Discounts, and BIR-compliant receipts you can print or share
+
+INVENTORY
+• Track stock levels and get low-stock alerts
+• Stock is deducted automatically as you sell
+• Simple product and category management
+
+STAFF & SHIFTS
+• Give each staff member a PIN to clock in and ring sales
+• Open and close cashier shifts with over/short tracking
+• Optional location check-in for attendance
+
+PAYROLL
+• Attendance flows straight into payroll
+• Daily-rate and hourly computation, overtime, and payslips
+
+DASHBOARD & REPORTS
+• See today's revenue, orders, and best sellers at a glance
+• Sales reports by date range and payment method
+• Co-owners can view the store's sales from the web portal
+
+MADE FOR THE PHILIPPINES
+• BIR-ready receipts (TIN, business details, receipt numbering)
+• Peso pricing and GCash/QR-friendly checkout
+
+Prestige POS processes in-person payments for real-world goods sold in your café
+or shop. There are no in-app purchases.
+
+Questions? Email hello@prestigeitsolutions.tech
+```
+
+**Support URL:** `https://pos.prestigeitsolutions.tech`
+**Marketing URL (optional):** `https://pos.prestigeitsolutions.tech`
+**Privacy Policy URL:** `https://pos.prestigeitsolutions.tech/privacy`
+**Copyright:** `© 2026 Prestige IT Solutions`
+**Pricing:** Free
+**Availability:** Philippines (+ anywhere else you choose)
+
+> Note: the description mentions "no in-app purchases" and that payments are for
+> real-world goods — this reinforces the 3.1.1 answer in §1's reviewer notes.
 
 ---
 
@@ -138,5 +198,11 @@ Sizes: 2048 × 2732 (portrait) or 2732 × 2048 (landscape). 3–10 screenshots.
 
 ---
 
-_Last updated: build 6 shipped; reviewer login + Delete Account committed on
-`android-ios` (pending build 7)._
+_Last updated: build 9 (`1.0.0+9`) archived on `android-ios` — same app content
+as the never-uploaded build 8 (clearer offline/network message, Co-owners list,
+on top of build 7's reviewer login + Delete Account + location strings), bumped
+only because a TestFlight build had expired and App Store Connect rejects a
+duplicate build number. Listing copy is paste-ready (§6).
+Remaining before submit: upload the build 9 archive (Xcode → Organizer →
+Distribute; needs an Apple account signed in under Xcode → Settings → Accounts),
+capture iPad screenshots (§5), paste the listing, submit for review._
